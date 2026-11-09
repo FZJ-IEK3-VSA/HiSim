@@ -1,10 +1,11 @@
 """The matplotlib Sankey figure of a run's ``overall`` energy view (the matplotlib Sankey spec).
 
 The graph half reads a run's inputs (``inputs``), folds the view into the drawn graph with roles, chain and trees
-(``graph``), computes the values on the figure (``metrics``) and holds the presentation table (``style``). The
-renderer draws the library's parameters (``parameters``) with ``matplotlib.sankey`` (``drawing``), joins the
-cross-links with connectors (``connectors``), places the labels and checks for overlaps (``labels``, ``texts``,
-``search``) and writes the figure and the layout file (``render``); ``pins`` reads a complete pin file.
+(``graph``), gives every flow its side (``orientation``), computes the values on the figure (``metrics``) and holds
+the presentation table (``style``). The layout builds the library's parameters (``parameters``) and repairs them
+round by round (``search``); the renderer draws them with ``matplotlib.sankey`` (``drawing``), joins the
+cross-links with connectors (``connectors``), places the labels and checks for overlaps (``labels``, ``texts``) and
+writes the figure and the layout file (``render``); ``pins`` reads a complete pin file drawn instead.
 ``draw_overall`` is the entry the post-processing and the command call.
 """
 
@@ -13,10 +14,10 @@ from typing import List, Optional, Tuple
 
 from hisim.postprocessing.energy_balance.figure.graph import DrawnGraph, GraphBuilder, Role
 from hisim.postprocessing.energy_balance.figure.inputs import SankeyInputError, SankeyInputs
-from hisim.postprocessing.energy_balance.figure.parameters import LayoutConstants, Parameters
+from hisim.postprocessing.energy_balance.figure.parameters import LayoutConstants
 from hisim.postprocessing.energy_balance.figure.pins import PinFile
 from hisim.postprocessing.energy_balance.figure.render import SankeyFigure
-from hisim.postprocessing.energy_balance.figure.search import Fault, Layout
+from hisim.postprocessing.energy_balance.figure.search import Fault, Layout, PlacementSearch
 
 
 class FigureFiles:
@@ -24,20 +25,17 @@ class FigureFiles:
 
     #: The sub-directory of a result directory the figure goes to (beside the plotly Sankeys).
     SUBDIRECTORY: str = "energy_sankeys"
-    #: The fault of a run drawn without a pin file before the automatic layout exists.
-    NO_LAYOUT: str = "no pin file given, and this version has no automatic layout yet (Sankey PR 5)"
 
     @staticmethod
     def draw_overall(inputs: SankeyInputs, directory: Path, pins: Optional[Path] = None, constants: Optional[LayoutConstants] = None) -> Tuple[Layout, List[Path]]:
-        """Draw a run's overall view from a pin file and write the figure and the layout file into a directory.
+        """Lay out a run's overall view (or draw it from a pin file) and write the figure and the layout file.
 
         Example: ``FigureFiles.draw_overall(SankeyInputs.from_result_directory(result), result / "energy_sankeys", pins)``.
 
         Args:
             inputs: The run's inputs.
             directory: Where the files go; created if missing.
-            pins: A complete pin file (a hand layout); without one the layout has a fault and only the fault file is
-                written.
+            pins: A complete pin file (a hand layout) drawn instead of the computed layout, or None.
             constants: The layout constants (the defaults when omitted).
 
         Returns:
@@ -45,14 +43,7 @@ class FigureFiles:
             view has nothing to draw.
         """
         constants = constants or LayoutConstants()
-        graph = GraphBuilder.build(inputs)
-        if pins is None:
-            title = f"{inputs.title}: energy flows over the run"
-            layout = Layout(title, graph, Parameters(1.0, 0.0, [], []), None, [], [Fault("layout", FigureFiles.NO_LAYOUT)], (0.0, 1.0, 0.0, 1.0))
-            if layout.nothing_to_draw:
-                return layout, []
-            return layout, [SankeyFigure.write_faults(directory, SankeyFigure.fault_sentences(layout), [])]
-        layout = PinFile.draw(inputs, pins, constants)
+        layout = PinFile.draw(inputs, pins, constants) if pins is not None else PlacementSearch.run(inputs, constants)
         if layout.nothing_to_draw:
             return layout, []
         return layout, SankeyFigure.write(layout, directory, constants)

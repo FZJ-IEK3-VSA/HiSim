@@ -358,6 +358,16 @@ def test_results_line(house: DrawnGraph) -> None:
 
 
 @pytest.mark.base
+def test_results_line_says_when_the_run_wrote_no_kpi_file(house: DrawnGraph) -> None:
+    """A result directory without ``all_kpis.json`` gets a caption that says so, not one that quietly shows only the heat."""
+    inputs = SankeySystems.inputs({}, [], kpis={})
+    assert Metrics.results_line(house, inputs) == (
+        "Run results: grid exchange and self-consumption unavailable: the result directory has no all_kpis.json"
+        " · heat delivered to the rooms 150 kWh."
+    )
+
+
+@pytest.mark.base
 def test_style_from_document_and_lookups() -> None:
     """A class entry wins, a meter falls back to its role's title, a port name may differ by direction."""
     style = SankeyStyle.from_document(

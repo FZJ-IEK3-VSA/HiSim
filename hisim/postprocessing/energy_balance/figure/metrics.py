@@ -159,10 +159,12 @@ class Metrics:
     def results_line(graph: DrawnGraph, inputs: SankeyInputs) -> str:
         """Return the caption's line of key results: grid exchange, self-consumption and self-sufficiency, heat delivered.
 
-        A KPI the run lacks is left out; the heat to the rooms is the space-heating heat the buildings receive, the
-        heat removed the cooling the buildings give off, both from the drawn flows.
+        A KPI the run lacks is left out; when the result directory holds no ``all_kpis.json`` at all, the line says so
+        instead of silently showing only the heat (a run with ``PLOT_SANKEY`` always writes the file; a directory
+        redrawn from an older run may lack it). The heat to the rooms is the space-heating heat the buildings receive,
+        the heat removed the cooling the buildings give off, both from the drawn flows.
         """
-        parts = []
+        parts = [] if inputs.kpis else ["grid exchange and self-consumption unavailable: the result directory has no all_kpis.json"]
         for prefix, label in (("Total energy from grid", "grid import"), ("Total energy to grid", "grid export")):
             value = inputs.kpi(prefix)
             if value is not None:

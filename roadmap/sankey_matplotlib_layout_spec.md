@@ -470,10 +470,10 @@ compass directions of the page.
 
 | Role | Axis | Tree connection in at | Links in | Terminal in (boundary) | Links out | Boundary out | Losses | Storage change |
 |---|---|---|---|---|---|---|---|---|
-| `ELECTRICITY_METER` | E | tail (W), from the source upstream (`PV`, a transformer) when there is one; else no tree connection and grid import takes the tail | storage discharge: S; other production (a CHP, a fuel cell): S | grid import: N (tail when nothing is upstream) | to the chain's next node (`GENERATOR`, `CONVERTER`, `HOUSEHOLD` on the chain): head (E), a second flow to the same node stacked below the first; to `HOUSEHOLD`, `ELECTRIC_STORAGE`, `VEHICLE_STORAGE`: S; to `SOLAR_COLLECTOR` (pump) and `COOLER`: N (both sit above or after the chain; from the south the band would U-turn) | grid export: N when the meter is the chain root, else head (E) | – | – |
-| `FUEL_METER` | E | – (root): the supply boundary flow takes the tail (W) | – | tail (W) | to its generator: head (E), a second flow to the same generator stacked below | – | – | – |
+| `ELECTRICITY_METER` | E | tail (W), from the source upstream (`PV`, a transformer) when there is one; else no tree connection and grid import takes the tail | storage discharge: S; other production (a CHP, a fuel cell): S | grid import: N (tail when nothing is upstream) | to the chain's next node (`GENERATOR`, `CONVERTER`, `HOUSEHOLD` on the chain): head (E), a second flow to the same node S, farthest from the trunk (rule 7); to `HOUSEHOLD`, `ELECTRIC_STORAGE`, `VEHICLE_STORAGE`: S; to `SOLAR_COLLECTOR` (pump) and `COOLER`: N (both sit above or after the chain; from the south the band would U-turn) | grid export: N when the meter is the chain root, else head (E) | – | – |
+| `FUEL_METER` | E | – (root): the supply boundary flow takes the tail (W) | – | tail (W) | to its generator: head (E), a second flow to the same generator S, farthest from the trunk (rule 7) | – | – | – |
 | `PV` | E | – (root): the cut takes the tail (W), flat | – | tail (W) | to the meter: head (E) | – | (cut) | – |
-| `GENERATOR` | E | tail (W); a second input from the same source: tail, stacked below | – | `AMBIENT_HEAT`, `SOLAR`: S | `SPACE_HEATING_HEAT` to the chain's next node: head (E); `DOMESTIC_HOT_WATER_HEAT`: N | – | S | S |
+| `GENERATOR` | E | tail (W); a second input from the same source: S, farthest from the trunk (rule 7) | – | `AMBIENT_HEAT`, `SOLAR`: S | `SPACE_HEATING_HEAT` to the chain's next node: head (E); `DOMESTIC_HOT_WATER_HEAT`: N | – | S | S |
 | `BUFFER`, `DISTRIBUTION` | E | tail (W) | a second heat source (collector): S | – | chain successor: head (E) | – | N; residual: S | S |
 | `BUILDING` | E | tail (W) | `ROOM_HEAT` from `HOUSEHOLD`: S | `SOLAR`: N | `COOLING` to a `COOLER`: head (E) | – | by rank: largest head (E), second N, third and further S | S |
 | `HOT_WATER_TANK` | E | S (from the generator below) | a second heat source (collector): tail (W) | – | – | taps: head (E); not delivered (§8.1): N | N | N (released: an input from N; stored: an output to N) |
@@ -489,7 +489,8 @@ Context rules, applied after the table:
 
 1. **A chain node enters at its tail**, whatever its role's tree-connection side: the household on the chain of the
    air-conditioner twin takes the meter's band at its tail (W), not at its north side, else the whole chain turns
-   vertical.
+   vertical. The prototype's hand layout of that twin drew the household as a lateral child instead; the owner
+   kept the chain rule for now (D24).
 2. **A connected sub-diagram's frame comes from its connection**, never from `rotation` (the library ignores
    `rotation` for a connected sub-diagram, `Sankey.add`). The engine therefore chooses the child's connecting
    orientation from the axis the table wants and the direction the parent's flow leaves in: with `d` the page
@@ -508,11 +509,29 @@ Context rules, applied after the table:
 4. **Slot rank overrides value order**: on the meter's south side the `ELECTRIC_STORAGE` is leftmost, the
    `VEHICLE_STORAGE` next, the `HOUSEHOLD` rightmost, whatever their values (in the electric-heating twin's January
    week the battery's charge exceeds the household's electricity; by value the battery would take the household's
-   place and block its bands to the building). Everywhere else links are stacked by value descending.
+   place and block its bands to the building). Everywhere else links are stacked by value descending, except the
+   cross-link *inputs* on a lateral side, which go smallest first: the source stacks its larger output nearest its
+   trunk, so for two connectors that share a corridor (the household's two heat bands into the building) to nest
+   without crossing, the target must take the larger farthest from its trunk. Rule 5 of §6.7 ("the same order at
+   both ends") means this geometric order, not the same list order (finding of the second try).
 5. **Storage changes whose sign flipped between runs** (the tank stored heat in the gas twin and released it in the
    heat-pump twin) keep their side; only the arrow's direction and the display name change (`{in: "Stored heat
    released", out: "Heat stored"}` in the style table).
-6. **Children**: a `GENERATOR`, `CONVERTER` or `HOUSEHOLD` that is the chain's next node is a continuation child
+7. **A second link to the same node is a second arrow** (D24, `Orientation.parallel_seconds`): a link that runs
+   between the same two nodes as a tree connection leaves its source on the frame's bottom side and enters its
+   target on the frame's bottom side, at both ends farthest from the trunk, and is drawn as a connector with a
+   visible gap below the tree connection, keeping the target's notch and entering it with an arrowhead (§6.7 step
+   1). A stub stacked under the tree connection reads as a graphical error because of the library's justification
+   of head outputs and tail inputs (§6.11): it is drawn as long as the tree connection plus a joint. Merging both
+   into one band was considered and rejected by the owner (2026-11-08). A second link between two nodes that are
+   not parent and child (the household's two heat flows into the building) is an ordinary pair of connectors.
+8. **A hot-water tank in a summer week** (found by the golden July week, PR 5): when the collector covers most of
+   the hot water, the tank's largest heat input is the collector and the tank hangs from the collector's tree.
+   The collector then continues into the tank's tail (`Orientation.tree_side`), and the generator's heat keeps the
+   south side (`Orientation.tank_rule`); a tank on the chain (a system without a building) whose tail holds the
+   generator's heat takes the collector's from the north. Stacked at the tail beside the tree connection, the
+   second heat source is enclosed by the tree connection's arrow and no route reaches it.
+9. **Children**: a `GENERATOR`, `CONVERTER` or `HOUSEHOLD` that is the chain's next node is a continuation child
    (E); a `HOT_WATER_TANK` hangs above its generator; `HOUSEHOLD`, `ELECTRIC_STORAGE` and `VEHICLE_STORAGE` hang
    below the meter in the slot rank of rule 4; a `VEHICLE` hangs below its storage; a `COOLER` continues the
    building (E); a `CONVERTER`'s children continue it for the largest and hang below for the others.
@@ -595,33 +614,54 @@ unconnected root sits at the origin until moved. Placement is therefore an itera
 1. **Initial parameters** from §6.4 and §6.5: the sub-diagram list in tree order (the chain's tree, then the further
    trees), the `flows` lists in the emitted side order, the orientations, the initial trunk and path lengths, the
    `at` of each further tree at the nearest position of its quadrant: a `SOLAR_COLLECTOR` above and left of the node
-   it feeds (the tank), so its head faces the tank's tail with a Z route; an `ELECTRICITY_METER` that is not the
+   it feeds (the tank), so its head faces the tank's tail with a Z route; a collector that carries the tank in its
+   own tree (§6.4 rule 8) a further `MIN_CONNECTION` (2 u) higher, so the generator's heat has room to enter the
+   tank's south side; an `ELECTRICITY_METER` that is not the
    chain root (fuel systems) below the chain, its tail at the chain root's x; any other root below the chain, right
    of the trees already placed there. A pin (§6.10) replaces any of these before the first round.
 2. **Build**: `Sankey(ax, scale, unit=None, format="", tolerance=1e-6, gap, radius, shoulder, offset, head_angle)`,
    one `add` per sub-diagram with `patchlabel=""` and empty labels, `finish()`, then the further trees moved by
    their `at` (the prototype's `place_trees`: the whole tree's patch vertices, tips and text anchors shifted so the
-   anchor sub-diagram's centre lands on `at`), the stacked second input's seam flattened
-   (`flatten_parallel_connections`), the connectors routed (§6.7), the labels placed (§6.8), and the axes limits
+   anchor sub-diagram's centre lands on `at`), a pinned stacked second input's seam flattened
+   (`Connecting.flatten_parallel`; the automatic layout draws a second link as its own arrow, §6.4 rule 7), the
+   connectors routed (§6.7) around the patches, the connectors placed before, the last round's labels and the
+   reserved label spots (§6.7 rule 7), the labels placed (§6.8), and the axes limits
    set to the canvas (the library's `finish()` fits the axes to its own extents, which must not win).
 3. **Check**: `OverlapCheck` on the drawn patches' paths, the connector outlines and the label boxes, reporting the
    findings of §3; 0 findings ends the search.
 4. **Repair**, one deterministic move per finding, applied in this order within a round, then back to step 2:
    - a label on a label or a band: the label's next candidate (§6.8), no rebuild needed;
-   - a label with no clear candidate on a lateral branch: the branch's path length grows by `GROW` (0.5 u); on a
-     tree connection: the connection length grows by `GROW` (the child's whole subtree moves away);
+   - a label on a connector: no move; the next round routes around the label, which is an obstacle (§6.7 rule 7);
+     unless the connector is *cornered* (blind, and both its ends in the chain's tree, which never slides): the
+     label's branch then grows past it (a summer week's body heat to the building beside the household's appliance
+     loss, `Repair.cornered`);
+   - the label of a parallel connector squeezed between it and a band (two seconds into one child, the heat pump's
+     heating-rod and hot-water electricity): the outer second, routed first because it is wider, gets a longer stub,
+     which opens room under the inner one (`FigureTexts.outer_sibling`). The initial parameters already space them:
+     a second's stubs are `SECOND_GAP` (1.5 u) longer per narrower second inside it
+     (`ParameterBuilder.seconds_inside`), so the inner route and its label fit from the first round;
+   - a label with no clear candidate on a lateral branch: the branch's path length grows by the label's height, at
+     least `GROW` (0.5 u: too slow for a label squeezed between siblings, the car charging band, within 12 rounds);
+     on a tree connection: the connection length grows the same way (the child's whole subtree moves away);
    - a band of one subtree on a band of another subtree that hangs from the same parent side: the deeper child in
      slot rank gets its connection length raised until its subtree clears the other's extent along the axis plus
      `NODE_MARGIN` (1 u) — siblings are staggered in depth, as the hand layouts staggered the household (5.6 u),
      the battery (9.6 u) and the car battery (17.5 u) under the meter;
-   - a band of a further tree on anything, or a connector of it that found no route: the tree's `at` slides away
-     from the chain by `SLIDE` (0.5 u) along its quadrant's direction;
+   - a band of a further tree on anything, or a connector of it that found no route or found one only by ignoring
+     the reserved label spots (a *blind* route, §6.7 rule 7): a tree's `at` slides away from the chain by `SLIDE`
+     (0.5 u) along its quadrant's direction, the **source's** further tree first (the electricity meter's tree below
+     the chain opens the corridor for the solar pump's electricity; sliding the collector up, the target's tree,
+     made it worse; finding of the second try);
    - a title wider than its trunk: the trunk length grows to fit (the title is wrapped to two lines first when it is
      wider than 2 × `MAX_TITLE_WIDTH`, 6 u).
    The flow order along a side is not a search move: it is fixed by §6.4 (the prototype's hand orderings all
-   follow those rules).
-5. **Bound**: `MAX_ROUNDS` (12) rounds; a round that changes no parameter and still has findings, or the twelfth
-   round, ends the search with the findings as faults (§6.12). The first try needed 2 to 5 rounds per system with
+   follow those rules). Siblings under the meter are staggered only when their bands overlap; the hand layouts
+   staggered them on purpose (household shallow, battery deeper, car battery deepest), which gives labels room. A
+   proactive depth order by slot rank would follow the hand figures more closely; v1 does not need it (every twin is
+   clean without it) and leaves it open.
+5. **Bound**: `MAX_ROUNDS` (12) rounds; a round that changes no parameter, moves no label and still has findings,
+   or the twelfth round, ends the search with the findings as faults (§6.12). The labels count: a round whose only
+   change is a label moved off a connector must not end the search, since the next round routes around it. The first try needed 2 to 5 rounds per system with
    a comparable loop.
 
 The search is deterministic: the findings are sorted by (kind, first element name, second element name), the moves
@@ -654,7 +694,14 @@ width descending:
    target's.
 3. **Grid search** otherwise: A* over a grid of `GRID` (0.25 u) on the canvas inflated by 3 u, orthogonal moves,
    cost = length + `BEND_COST` (3 u) per turn, a cell blocked when the band (its full width plus `CLEARANCE`,
-   0.3 u) would intersect a drawn patch, a placed connector or a placed label. The route is the cell path
+   0.3 u) would intersect a drawn patch, a placed connector or a placed label. The blocked cells are grown by a
+   square neighbourhood, diagonals included: grown by the four neighbours only (a diamond) a route turns beside a
+   label's corner, and the clearance check on the found route then refuses it (found by the golden July week).
+   A cell is covered by an obstacle when its centre lies inside it *or its outline passes through it*: a hairline
+   stub narrower than a cell holds no cell centre, vanished from the grid, and the route found across it was then
+   refused by the clearance check. The
+   titles of the connector's own two nodes are no obstacle to it: a hairline node's title sits on the stub the route
+   leaves from, and the overlap check still reports a route that crosses one. The route is the cell path
    simplified to its corners, written as `turns`.
 4. **Corners** are rounded with `CONNECTOR_RADIUS` (0.64 u), reduced to half of the shortest adjacent segment when
    that is smaller, down to `MIN_RADIUS` (0.24 u); a grid route of a narrow band may go down to half its width plus
@@ -674,8 +721,13 @@ width descending:
 7. **Routes and labels** (open item of the first try): a label cannot move a route, and in the first try routes did
    not avoid labels; in `dynamic_components` six hairline labels of two tiny batteries end on a discharge route
    that loops around the second battery, 3 overlaps that the search cannot repair. The obstacle map of step 3
-   therefore includes the labels placed so far, and a connector is re-routed in the round after a label of another
-   node was placed on it; until that lands, that file is the one known failure (§6.14).
+   therefore includes the labels of the last round (a connector's own labels and its stubs' labels left out) and,
+   from the first round, the **reserved spot** of every terminal flow's label (its first candidate, beyond the arrow
+   tip, `PlacementSearch.reserved_labels`): routes come before labels, and without the spots a connector may hug a
+   branch so closely that none of its label's candidates is free (the gas + solar pump line round the gas supply's
+   arrow tip, third try). A connector that finds no route around the labels is routed around patches and
+   connectors only and marked *blind*; the repair then slides a tree to open a corridor (§6.6 step 4) instead of
+   pushing the label off the figure. `dynamic_components` is clean since the second try.
 
 ### 6.8 Labels and the note block
 
@@ -776,7 +828,7 @@ text widths are the same on every machine. Colours and titles come from one styl
 class (`kinds`), with a title and a colour per role as the fallback (meters have no class in the balance report, and
 a composed file names its meter `grid-ElectricityMeter`, so a key by instance name breaks); a class without an
 entry and a role without one take the instance name. Two instances of one class get the instance name appended to
-the title. Display names of flows are keyed `<class>.<port>` (`port_names`), never by the instance's port label,
+the title (not built in v1: `dynamic_components` shows two titles "Battery"; a later bead). Display names of flows are keyed `<class>.<port>` (`port_names`), never by the instance's port label,
 with `SankeyDrawing.words` as the fallback; a storage change has an `{in, out}` pair. Class-keyed colours and names
 are presentation, not a layout dependence; the layout engine reads roles only.
 
@@ -853,7 +905,7 @@ feature.
 | systems without PV (`simple_air_conditioner_household_building_sizer`) | the meter is a root with its grid import at the tail (W); the role table's "from the source upstream when there is one" falls through |
 | cooling-only systems | the chain runs meter → household → building; the cooler is the building's continuation child; the ambient sink is its head. In a January week the cooler has no flow and drops out (empty flows) |
 | a cooling flow of a heat pump into a buffer (hisim-energy-sankeys-9uoo.17) | a negative loop heat turns the edge round: it is drawn as a `COOLING` input of the generator from the buffer, side S; untested until that bead lands |
-| systems without a building (`electrolyzer_with_renewables`, `dynamic_components`) | the fallback chain of §6.2 from the largest meter; every node a `CONVERTER` or a meter; acceptance requires 0 faults, not a reviewed picture. The first try laid `electrolyzer_with_renewables` out cleanly (meter → electrolyzer → hydrogen meter, the wind transformer upstream of the meter); `dynamic_components` kept 3 label overlaps (§6.7 rule 7) and is the one open item of PR 5 |
+| systems without a building (`electrolyzer_with_renewables`, `dynamic_components`) | the fallback chain of §6.2 from the largest meter; every node a `CONVERTER` or a meter; acceptance requires 0 faults, not a reviewed picture. The first try laid `electrolyzer_with_renewables` out cleanly (meter → electrolyzer → hydrogen meter, the wind transformer upstream of the meter); `dynamic_components` kept 3 label overlaps in the first try and is clean since labels are routing obstacles (§6.7 rule 7) |
 | a storage without a discharge link in the run's period | it is not an `ELECTRIC_STORAGE` by §6.2 and falls to `CONVERTER`; the picture is still correct, the role only steers placement |
 | systems with nothing declared (`simple_system_setup_one`, `_two`: verdict `nothing_declared`) | no figure; `export_sankeys` logs that there is nothing to draw; not a fault |
 | several buildings, multi-family or district systems | out of scope for v1: the chain is the largest building's, the other buildings hang as children of their parents by the generic rules; no acceptance test; the pin file is the escape hatch. A rule set for siblings on one row is a later bead |
@@ -1035,7 +1087,10 @@ system without a building (a wind transformer upstream of the meter), two genera
 collector with its pump, an undeclared component with a gap, a car. The graph tests (PR 4a) check every case's roles,
 chain, trees and residuals; the renderer tests (PR 4b) draw two of them, the heat-pump house and the boiler fed twice
 (its second fuel link a `parallel` connector), from hand-written pin files with 0 faults and 0 overlaps; the layout tests
-(PR 5) lay each out automatically and assert 0 faults and 0 overlaps. Each case lays out in well under a second.
+(PR 5) lay each out automatically and assert 0 faults and 0 overlaps. PR 5 adds two cases found by the golden July
+week: a summer week of a gas and solar-thermal house (the tank hung from its collector, the boiler's heat into its
+south side) and a hot-water system without a building (the tank on the chain). Each case lays out in well under a
+second.
 
 ### 9.3 Determinism (`base`)
 
@@ -1090,7 +1145,7 @@ branch on top of the previous and green on its own. Bead hisim-sankey-mpl-band-r
 | 3 | hisim-sankey-mpl-plausibility-table-b4d9 | §7.3 the table with its first entries and the `base` test of its rules; §7.1 `metrics.py` with every formula (the first try's module, with the round trip and the no-extrapolation rule corrected and the performance ratio added) and the evaluation against the table (no drawing); the D21 workflow started for the Fraunhofer ISE range | every metric and rule tested; the table's estimates are marked; no `checked` written by an agent |
 | 4a | hisim-sankey-mpl-band-renderer-5a8c (stays open) | §4.1, §6.1 to §6.3, §7.1's metrics of the first try: `inputs.py`, the drawn graph, roles, main chain, trees and residuals (`graph.py`), `metrics.py`, the style table with role fallbacks (`style.py`, `sankey_style.yaml`), the command frame `hisim energy-system sankey <result dir>` (prints the drawn graph); `tests/sankey_test_systems.py` | every static function tested directly on synthetic systems (§9.2); the roles, chains and trees of every synthetic case |
 | 4b | hisim-sankey-mpl-band-renderer-5a8c (closed) | §4.2 to §4.4, §6.5's parameters as data, §6.7, §6.9 to §6.11: the `matplotlib.sankey` drawing from pin parameters (`parameters.py` data, `drawing.py`), the connectors (`connectors.py`), the labels and the overlap check (`labels.py`, `texts.py`), the files of §4.2 (`render.py`), complete pin files (`pins.py`), `PLOT_SANKEY` (D14) and its fault handling (D15), the redraw command with `--pins`; the golden check reads `overall.layout_error.json` (status `layout_fault`) | the synthetic systems draw from hand-written pin parameters with 0 overlaps; the twelve hand layouts drawn from local pin files beside the hand figures in the PR description (§9.6); semgrep clean |
-| 5 | hisim-sankey-mpl-auto-layout-9e2b | §6.4, §6.6, §6.8, §6.12, §6.14: the orientation table with the frame rule and the side orders, the second link as its own arrow (D24), the library parameters (`ParameterBuilder`), the repair search, label spots and labels as routing obstacles (§6.7 rule 7), the automatic `draw_overall`; `PLOT_SANKEY` in the golden check's week parameter sets (§9.5) | §9.2 and §9.3 on the synthetic systems; every twin laid out with 0 faults and 0 overlaps in the golden jobs (§9.5); the owner reviews one figure per family |
+| 5 | hisim-sankey-mpl-auto-layout-9e2b (closed) | §6.4, §6.6, §6.8, §6.12, §6.14: the orientation table with the frame rule and the side orders, the second link as its own arrow (D24), the library parameters (`ParameterBuilder`), the repair search, label spots and labels as routing obstacles (§6.7 rule 7), the automatic `draw_overall`; `PLOT_SANKEY` in the golden check's week parameter sets (§9.5) | §9.2 and §9.3 on the synthetic systems; every twin laid out with 0 faults and 0 overlaps in the golden jobs (§9.5); the owner reviews one figure per family |
 | 6 | hisim-sankey-mpl-warnings-panel-c6f3 | §8: markers, the warnings box, the data panel, the unmet stub, loop temperatures on the bands, the caption's second line | the heat-pump recording reproduces the trial's nine warnings in its order (the PV's entry now the performance ratio); 0 overlaps on all twelve with the notes and the panel; the owner reviews the heat-pump figure against the trial's |
 | 7 | hisim-sankey-mpl-report-integration-2d7a | `PLOT_SANKEY` in the full-year golden parameter set (§9.5), no PDF report (D23), `energy_systems/README.md` and `simulation_parameters/README.md` updated, the D4 amendment and status lines written into `roadmap/complete_energy_sankeys_spec.md`, beads hisim-energy-sankeys-9uoo.19 and hisim-4hed closed with a note, the owner's decision on the plotly `overall.html` (D13) taken and applied | `golden-year.yml` renders every twin with 0 faults |
 

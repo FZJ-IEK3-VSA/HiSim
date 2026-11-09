@@ -4,7 +4,8 @@ Covered: the orientation table with its context rules and the second link to the
 frame rule, the side orders, the adjustments and the parameter builder (``parameters``), the tree placement, the
 repair moves and the search (``search``), and the acceptance rules of the matplotlib Sankey spec on the synthetic
 systems of ``tests/sankey_test_systems.py``: every system lays out with no fault and no overlap (§9.2), also with
-every flow 25 % larger, and the layout file is the same twice in one process and in a second process (§9.3).
+every flow 25 % larger, and the layout file is the same twice in one process and in a second process (§9.3); a
+connector between two nodes of the chain's tree, which no tree slide can clear, is turned to one side and routed.
 """
 
 import dataclasses
@@ -60,6 +61,7 @@ SYSTEMS: List[Callable[[], SankeyInputs]] = [
     SankeySystems.car,
     SankeySystems.summer_tank,
     SankeySystems.hot_water_only,
+    SankeySystems.heat_inside_chain_tree,
 ]
 
 
@@ -250,6 +252,21 @@ def test_adjustments() -> None:
     adjustments.shift("T", 0.0, -1.0)
     assert adjustments.pathlength == {"f": 1.0} and adjustments.tree_shift == {"T": (0.0, -2.0)}
     assert adjustments.signature() != before
+    turned = adjustments.signature()
+    adjustments.sides["g"] = Side.LEFT
+    assert adjustments.signature() != turned
+
+
+def test_a_side_adjustment_replaces_the_tables_side(house: DrawnGraph) -> None:
+    """A flow the search turned attaches to the turned side; the node's other flows keep the table's."""
+    styles = {node.name: (node.name, "#888888") for node in house.nodes}
+    plain = ParameterBuilder.build(house, TextSizes({}, {}), Adjustments(), CONSTANTS, styles)
+    adjustments = Adjustments(sides={"Household|Building.HeatingByDevices": Side.LEFT})
+    turned = ParameterBuilder.build(house, TextSizes({}, {}), adjustments, CONSTANTS, styles)
+    assert plain.diagram("Household").flow("Household|Building.HeatingByDevices").orientation != 1
+    assert turned.diagram("Household").flow("Household|Building.HeatingByDevices").orientation == 1
+    others = [f.flow_id for f in plain.diagram("Household").flows if f.flow_id != "Household|Building.HeatingByDevices"]
+    assert all(turned.diagram("Household").flow(k).orientation == plain.diagram("Household").flow(k).orientation for k in others)
 
 
 def test_sub_diagram_order_puts_the_pv_first(house: DrawnGraph) -> None:
@@ -401,6 +418,54 @@ def test_cornered_connectors_move_the_label(layout: Layout) -> None:
     layout.drawing.blind[:] = []
     assert not Repair.cornered(layout.parameters, layout.drawing, discharge.link_id)
     layout.drawing.blind[:] = keep
+
+
+def test_facing() -> None:
+    """A flow's side faces the head or tail along the axis, else the frame's top or bottom, inputs and outputs alike."""
+    assert Repair.facing(Direction.E, 0, is_input=False) is Direction.E
+    assert Repair.facing(Direction.E, 0, is_input=True) is Direction.W
+    assert Repair.facing(Direction.E, 1, is_input=True) is Direction.N
+    assert Repair.facing(Direction.E, -1, is_input=False) is Direction.S
+    assert Repair.facing(Direction.S, 1, is_input=False) is Direction.E
+
+
+def test_turned_sides() -> None:
+    """Both ends move to the page side opposite the target's lateral side, else the source's, else the axis's left."""
+    head, south, north, tail = (Direction.E, Direction.E), (Direction.S, Direction.E), (Direction.N, Direction.E), (Direction.W, Direction.E)
+    assert Repair.turned_sides(head, south) == (Side.LEFT, Side.LEFT)
+    assert Repair.turned_sides(south, north) == (Side.RIGHT, Side.RIGHT)
+    assert Repair.turned_sides(north, tail) == (Side.RIGHT, Side.RIGHT)
+    assert Repair.turned_sides(head, tail) == (Side.LEFT, Side.LEFT)
+    # Relative to each end's own axis: west is the right side of a southward trunk and the tail of an eastward one.
+    assert Repair.turned_sides((Direction.E, Direction.S), tail) == (Side.RIGHT, Side.TAIL)
+
+
+def test_a_connector_inside_the_chain_tree_is_turned_once() -> None:
+    """A failed connector between two nodes of the chain's tree gets both ends on one side, and only once."""
+    graph = GraphBuilder.build(SankeySystems.heat_inside_chain_tree())
+    styles = {node.name: (node.name, "#888888") for node in graph.nodes}
+    parameters = ParameterBuilder.build(graph, TextSizes({}, {}), Adjustments(), CONSTANTS, styles)
+    heat = next(c for c in parameters.connectors if c.label == "Building.HeatToHeatedZoneInWattFromPV")
+    adjustments = Adjustments()
+    Repair.turn(parameters, heat, adjustments)
+    assert adjustments.sides == {heat.source_flow: Side.LEFT, heat.target_flow: Side.LEFT}
+    adjustments.sides[heat.target_flow] = Side.RIGHT
+    Repair.turn(parameters, heat, adjustments)
+    assert adjustments.sides[heat.target_flow] is Side.RIGHT
+
+
+def test_a_connector_inside_the_chain_tree_finds_a_route() -> None:
+    """The PV's heat to the building, both ends in the chain's tree, is routed over the chain after one turn.
+
+    Without the turn its stub ends against the meter's tail and the building's south side is enclosed by the
+    household's heat: the route failed and no tree slide could help.
+    """
+    layout = PlacementSearch.run(SankeySystems.heat_inside_chain_tree())
+    assert layout.drawing is not None and not layout.faults and not layout.overlaps
+    heat = next(c for c in layout.parameters.connectors if c.label == "Building.HeatToHeatedZoneInWattFromPV")
+    assert layout.drawing.routes[heat.link_id].shape != "failed"
+    assert layout.parameters.diagram("PV").flow(heat.source_flow).orientation == 1
+    assert layout.parameters.diagram("Building").flow(heat.target_flow).orientation == 1
 
 
 def test_outer_sibling() -> None:

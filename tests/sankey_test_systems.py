@@ -341,6 +341,58 @@ class SankeySystems:
         return SankeySystems.inputs(kinds, edges)
 
     @staticmethod
+    def heat_inside_chain_tree() -> SankeyInputs:
+        """Return a cooled house whose PV releases heat into the building: a connector inside the chain's tree.
+
+        The PV feeds the meter, the meter an air conditioner and a household, the air conditioner the building, and
+        the household heats the building twice. The PV's 5.7 kWh of heat to the building join two nodes of the
+        chain's tree, which never slides: from the PV's head the stub ends against the meter's tail, and the
+        building's south side is enclosed by the household's heat. No route exists until the repair turns both ends.
+        """
+        kinds = {
+            "sun": "boundary",
+            "grid import": "boundary",
+            "grid export": "boundary",
+            "ambient heat source": "boundary",
+            "body heat": "boundary",
+            "outdoors": "boundary",
+            "PV": "component",
+            "PV · Loss": "loss",
+            "Meter": "meter",
+            "AirConditioner": "component",
+            "Household": "component",
+            "Household · Rest": "loss",
+            "Building": "component",
+            "Building · Opaque": "loss",
+            "Building · Vent": "loss",
+            "Building · Windows": "loss",
+            "Building · stored": "storage",
+        }
+        edges: List[Edge] = [
+            ("sun", "PV", 1041.2, "solar", "boundary", "PV.Sun"),
+            ("PV", "PV · Loss", 900.9, "solar", "loss", "PV.Loss"),
+            ("PV · Loss", "outdoors", 900.9, "solar", "loss", "PV.Loss"),
+            ("PV", "Meter", 134.6, "electricity", "metered", "PV.ElectricityOutput"),
+            ("grid import", "Meter", 202.7, "electricity", "meter_boundary", "Meter.ElectricityFromGridInWatt"),
+            ("Meter", "grid export", 62.1, "electricity", "meter_boundary", "Meter.ElectricityToGridInWatt"),
+            ("Meter", "AirConditioner", 216.6, "electricity", "metered", "AirConditioner.ElectricalPowerConsumption"),
+            ("ambient heat source", "AirConditioner", 525.3, "ambient_heat", "boundary", "AirConditioner.HeatFromAmbientInWatt"),
+            ("AirConditioner", "Building", 741.9, "space_heating_heat", "transfer", "Building.HeatReceivedInWatt"),
+            ("Meter", "Household", 58.5, "electricity", "metered", "Household.ElectricalPowerConsumption"),
+            ("body heat", "Household", 32.4, "room_heat", "boundary", "Household.BodyHeat"),
+            ("Household", "Building", 53.4, "room_heat", "transfer", "Building.HeatingByDevices"),
+            ("Household", "Building", 32.4, "room_heat", "transfer", "Building.HeatingByResidents"),
+            ("Household", "Household · Rest", 5.1, "electricity", "loss", "Household.Rest"),
+            ("PV", "Building", 5.7, "room_heat", "transfer", "Building.HeatToHeatedZoneInWattFromPV"),
+            ("sun", "Building", 58.1, "solar", "boundary", "Building.SolarGainThroughWindows"),
+            ("Building · stored", "Building", 38.5, "room_heat", "storage", "Building.Stored"),
+            ("Building", "Building · Opaque", 710.1, "room_heat", "loss", "Building.Opaque"),
+            ("Building", "Building · Vent", 134.1, "room_heat", "loss", "Building.Vent"),
+            ("Building", "Building · Windows", 84.9, "room_heat", "loss", "Building.Windows"),
+        ]
+        return SankeySystems.inputs(kinds, edges)
+
+    @staticmethod
     def nothing_to_draw() -> SankeyInputs:
         """Return a view without a component, meter or undeclared node."""
         return SankeySystems.inputs({"sun": "boundary"}, [])

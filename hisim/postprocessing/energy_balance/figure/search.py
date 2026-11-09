@@ -3,7 +3,8 @@
 The library places every connected sub-diagram implicitly (a child's connecting tip on its parent's), so placement is a
 search over the parameters: build the diagram from the parameters, move the further trees, route the connectors,
 place the labels, check for overlaps; each finding gets one deterministic repair move (a longer branch, a longer tree
-connection, a further tree slid away, a longer trunk), and the next round builds again. At most ``max_rounds`` rounds;
+connection, a further tree slid away, a longer trunk, a failed connector inside the chain's tree turned to one side of
+it), and the next round builds again. At most ``max_rounds`` rounds;
 a round that changes nothing, or the last round, ends the search with the findings as faults. The parameters of a
 complete pin file are drawn in one round without repair moves (``PlacementSearch.draw``).
 """
@@ -19,11 +20,11 @@ from matplotlib.figure import Figure
 
 from hisim.postprocessing.energy_balance.figure.connectors import Bands, Obstacle, Port, Route, RouteRequest, Router
 from hisim.postprocessing.energy_balance.figure.drawing import DrawnDiagram, SankeyBuild, SankeyBuildError
-from hisim.postprocessing.energy_balance.figure.geometry import Box, Direction
+from hisim.postprocessing.energy_balance.figure.geometry import Box, Direction, Side
 from hisim.postprocessing.energy_balance.figure.graph import DrawnGraph, FlowKind, GraphBuilder, Role
 from hisim.postprocessing.energy_balance.figure.inputs import SankeyInputs
 from hisim.postprocessing.energy_balance.figure.labels import LabelPlacer, Overlap, OverlapCheck, PlacedLabel, Shape, TextBlock, TextMeasure
-from hisim.postprocessing.energy_balance.figure.parameters import Adjustments, LayoutConstants, ParameterBuilder, Parameters, TextSizes
+from hisim.postprocessing.energy_balance.figure.parameters import Adjustments, ConnectorParams, FrameRule, LayoutConstants, ParameterBuilder, Parameters, TextSizes
 from hisim.postprocessing.energy_balance.figure.style import SankeyStyle
 from hisim.postprocessing.energy_balance.figure.texts import FigureTexts, TextContext
 
@@ -354,8 +355,91 @@ class Repair:
         return all(flow_id.split("|", 1)[0] in first for flow_id in (connector.source_flow, connector.target_flow))
 
     @staticmethod
+    def facing(axis: Direction, orientation: int, is_input: bool) -> Direction:
+        """Return the page direction the side a flow attaches to faces, from its trunk's axis and its orientation.
+
+        An output along the axis leaves the head, an input along the axis enters the tail; a lateral flow faces the
+        frame's top (orientation 1) or bottom (-1), whichever way it travels. Example: on an eastward trunk an input
+        of orientation -1 enters from the south, so its side faces south; an input of orientation 0 faces west.
+
+        Args:
+            axis: The page direction of the flow's trunk.
+            orientation: The library's orientation of the flow: 0 along the axis, 1 the frame's top, -1 its bottom.
+            is_input: Whether the flow enters the trunk.
+
+        Returns:
+            The page direction the flow's side faces.
+        """
+        if orientation == 0 and is_input:
+            return axis.opposite()
+        return FrameRule.direction(axis, orientation)
+
+    @staticmethod
+    def turned_sides(source: Tuple[Direction, Direction], target: Tuple[Direction, Direction]) -> Tuple[Side, Side]:
+        """Return the sides a failed connector's two ends move to: both on the page side opposite the target's.
+
+        Each end is given as (the page direction its side faces, its trunk's axis). Both ends of a connector inside
+        the chain's tree stay where the tree puts them, and no tree slide opens a way between them; on one common
+        side of the tree, the far side from where the target failed, the route runs along the tree's outside instead.
+        The page side is the opposite of the target's side when that is lateral, else of the source's when that is,
+        else the left of the target's axis (north of an eastward chain). The sides returned are relative to each end's
+        own axis; where the page side lies along an end's axis, that end goes to its head or tail (the parameter
+        builder moves an output at the tail or an input at the head to a lateral side). Example: the PV's heat to the
+        building leaves the PV's head and enters the building's south side, enclosed by the household's heat; both
+        ends move north, ``(Side.LEFT, Side.LEFT)`` on eastward trunks.
+
+        Args:
+            source: The source end: the page direction its side faces and its trunk's axis.
+            target: The target end, alike.
+
+        Returns:
+            The new side of the source end and of the target end.
+        """
+
+        def lateral(facing: Direction, axis: Direction) -> bool:
+            return facing not in (axis, axis.opposite())
+
+        if lateral(*target):
+            page = target[0].opposite()
+        elif lateral(*source):
+            page = source[0].opposite()
+        else:
+            page = target[1].turned_left()
+        return Side.facing(page, source[1]), Side.facing(page, target[1])
+
+    @staticmethod
+    def turn(parameters: Parameters, connector: ConnectorParams, adjustments: Adjustments) -> None:
+        """Move both ends of a failed connector inside the chain's tree to one common side, once (``turned_sides``).
+
+        The chain's tree never slides, so a connector between two of its nodes that finds no route stays failed under
+        every other move: its stubs face a band the tree encloses them with (the PV's heat stub stacked against the
+        meter's tail, the building's input under the household's heat). A connector whose end was turned before is
+        left as it is, so the search cannot flip it back and forth. Example: the PV's heat to the building gets
+        ``adjustments.sides`` entries of ``Side.LEFT`` for its PV end and its building end.
+
+        Args:
+            parameters: The library's parameters of the round in which the route failed.
+            connector: The failed connector.
+            adjustments: The search's adjustments; its ``sides`` gain the connector's two ends.
+        """
+        ends = ((connector.source_flow, False), (connector.target_flow, True))
+        if any(flow_id in adjustments.sides for flow_id, _ in ends):
+            return
+        faces = []
+        for flow_id, is_input in ends:
+            diagram = parameters.diagram(flow_id.split("|", 1)[0])
+            faces.append((Repair.facing(diagram.axis, diagram.flow(flow_id).orientation, is_input), diagram.axis))
+        source_side, target_side = Repair.turned_sides(faces[0], faces[1])
+        adjustments.sides[connector.source_flow] = source_side
+        adjustments.sides[connector.target_flow] = target_side
+
+    @staticmethod
     def apply(graph: DrawnGraph, parameters: Parameters, drawing: Drawing, findings: Sequence[Overlap], adjustments: Adjustments, constants: LayoutConstants) -> None:
-        """Apply one move per finding, in the findings' order; a label or tree moves once per round."""
+        """Apply one move per finding, in the findings' order; a label or tree moves once per round.
+
+        A failed or blind connector slides a further tree at one of its ends; a failed one with both ends in the chain's
+        tree, which never slides, is turned to one side of it instead (``turn``).
+        """
         moved: set = set()
         labels = {label.key: label for label in drawing.labels}
         for finding in findings:
@@ -387,6 +471,9 @@ class Repair:
             if route.shape != "failed" and link_id not in drawing.blind:
                 continue
             connector = next(c for c in parameters.connectors if c.link_id == link_id)
+            if route.shape == "failed" and all(flow_id.split("|", 1)[0] in trees[0] for flow_id in (connector.source_flow, connector.target_flow)):
+                Repair.turn(parameters, connector, adjustments)
+                continue
             for flow_id in (connector.source_flow, connector.target_flow):
                 tree = next(t for t in trees if flow_id.split("|", 1)[0] in t)
                 if tree is not trees[0] and tree[0] not in moved:

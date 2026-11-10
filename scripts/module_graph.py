@@ -33,7 +33,7 @@ import yaml
 try:
     from scripts.ratchet import BaselineEntry, BaselineFile, BaselineLayout, BeadIds, EntryKey, Finding, FindingKind, Ratchet
 except ImportError:  # pragma: no cover - only when run as a plain script
-    from ratchet import (  # type: ignore[no-redef]  # the same module under its script-mode name
+    from ratchet import (  # type: ignore[no-redef, import-not-found]  # the same module under its script-mode name
         BaselineEntry, BaselineFile, BaselineLayout, BeadIds, EntryKey, Finding, FindingKind, Ratchet,
     )
 

@@ -124,8 +124,8 @@ violations are fixed bead by bead, never in one big rewrite.
    was wrong, with which value, and what was expected. CI: part of hisim-repo-cleanup-o6a.13.
 7. **Explicit control flow.** No `importlib.import_module` or `getattr` by string to dodge a circular import: a
    circular import is a design error and is fixed. No attributes created at run time, no monkeypatching in
-   production code. The allowed import directions between packages are declared and checked. CI: import-linter
-   (hisim-repo-cleanup-o6a.15).
+   production code. The allowed import directions between packages are declared and checked
+   (`system_docs/module_graph.md`). CI: `tests/test_module_graph.py`, a ratchet; the workarounds are hisim-repo-cleanup-o6a.15.
 8. **Tests first for bugs, coverage for new code.** A bug fix starts with a test that fails without the fix. New
    and changed lines are covered by tests (about 90 %). Tests are deterministic and independent of each other and
    of their order. Pure functions (§1) are tested in fast unit tests; system tests check only the wiring. CI:

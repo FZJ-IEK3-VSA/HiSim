@@ -32,6 +32,7 @@ authority. It changes by pull request, with the owner's agreement.
 | `component_design_principles.md` | The component kinds, black boxes, who decides what, what crosses a port. |
 | `modelling_guide.md` | Energy at every port, signs, the 60 s reference, clamp or fail, parameter sources. |
 | `results_and_interfaces.md` | How a result-changing change is made; which names are public interfaces. |
+| `module_graph.md` | Which module group may import which; the graph is `module_graph.yaml`, its baseline `tests/module_graph_baseline.yaml`. |
 | `testing.md` | Markers, the `base` budget, what a test must prove, test only what changed. |
 | `documentation_map.md` | This page. |
 

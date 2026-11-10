@@ -1,0 +1,121 @@
+# HiSim's module graph: which module group may import which. Read by tests/test_module_graph.py and
+# scripts/module_graph.py; explained in system_docs/module_graph.md. Today's violations are listed, each with its
+# bead, in tests/module_graph_baseline.yaml.
+#
+# Status: a first draft of the seams design (drawing v5, 2026-11-10), not yet approved by the owner. Changing an
+# allowed edge is a change of one `may_import` line.
+#
+# Rules:
+# - A module belongs to the group of the longest prefix in `modules` that is the module or a package above it, so a
+#   moved file follows its new package. A module that matches no prefix fails the check.
+# - A module may import its own group and the groups in its group's `may_import`; the edges must be acyclic.
+# - Imports by string (importlib.import_module, __import__, a module name passed to a call) are allowed only in a
+#   registry, and there only of its own group's edges and the groups in `may_load`.
+# - A private name (leading underscore) of another group is never imported, if forbid_private_names_across_groups.
+
+package: hisim
+package_root_group: leaves   # hisim/__init__.py, empty
+excluded: [hisim.inputs]     # data and its provenance scripts, not part of the code graph
+forbid_private_names_across_groups: true
+
+groups:
+  leaves:
+    description: plain helpers and vocabularies that import nothing of HiSim
+    modules: [hisim.loadtypes, hisim.units, hisim.log, hisim.utils, hisim.hydronics]
+    may_import: []
+  physics_constants:
+    description: physical constants (PhysicsConfig, today in components.configuration); empty until it moves
+    modules: [hisim.physics_constants]
+    may_import: []
+  infrastructure:
+    description: the run's file system, caches, write guard and progress
+    modules: [hisim.caching, hisim.write_guard, hisim.result_path_provider, hisim.calculation_scope, hisim.calculation_progress]
+    may_import: [leaves, physics_constants]
+  parameters:
+    description: the simulation parameters and post-processing options
+    modules: [hisim.simulationparameters, hisim.postprocessingoptions, hisim.simulation_day, hisim.window_offset, hisim.hisim_commit]
+    may_import: [leaves, physics_constants, infrastructure]
+  config:
+    description: the configuration layer (identity, declaration API, construction API)
+    modules: [hisim.config]
+    may_import: [leaves, physics_constants]
+  contracts:
+    description: the types that cross the seams (run record, KPI types, cost facts); empty until created
+    modules: [hisim.contracts]
+    may_import: [leaves, physics_constants, config, parameters]
+  shared_code:
+    description: types, enums and pure helpers two or more components use; empty until created
+    modules: [hisim.components.shared]
+    may_import: [leaves, physics_constants, config]
+  subcomponents:
+    description: plain device parts with behaviour that components embed; no component class
+    modules: [hisim.subcomponents]
+    may_import: [leaves, physics_constants, config, shared_code]
+  component_model:
+    description: the component base classes, ports, simulation repository and fluid-loop walk
+    modules: [hisim.component, hisim.dynamic_component, hisim.energy_port, hisim.sim_repository, hisim.part_load, hisim.explicit_state_controller, hisim.fluid_loops]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure]
+  components:
+    description: the components, one folder or module each
+    modules: [hisim.components]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure, component_model, subcomponents, shared_code]
+  postprocessing:
+    description: KPIs, charts, energy balance; reads the run record, nothing live
+    modules: [hisim.postprocessing]
+    may_import: [leaves, physics_constants, parameters, contracts, infrastructure]
+  economics:
+    description: the lifecycle cost engine and its reports
+    modules: [hisim.economics]
+    may_import: [leaves, physics_constants, parameters, contracts, infrastructure]
+  simulator:
+    description: runs the components and hands the run record to post-processing and economics
+    modules: [hisim.simulator, hisim.component_wrapper, hisim.evaluation_order]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure, component_model, postprocessing, economics]
+  setup_rules:
+    description: the rules engine and the system-level rules
+    modules: [hisim.setup_rules]
+    may_import: [leaves, physics_constants, config, parameters, contracts, component_model, postprocessing]
+  energy_system:
+    description: reads the YAML, binds classes, configures, wires and hands the system to the simulator
+    modules: [hisim.energy_system]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure, component_model, simulator, setup_rules]
+  building_sizer_utils:
+    description: the interface configurations of the building sizer
+    modules: [hisim.building_sizer_utils, hisim.system_setup_configuration]
+    may_import: [leaves, physics_constants, config, parameters, components]
+  cli:
+    description: the entry points
+    modules: [hisim.cli, hisim.cli_exit, hisim.cli_grouping, hisim.cli_render, hisim.cli_setup_rules, hisim.hisim_main, hisim.hisim_with_profiler, hisim.project_code_overview_generator]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure, component_model, simulator, energy_system, setup_rules, postprocessing, economics]
+  renovisor:
+    description: the RenoVisor translation layer; nothing else imports it
+    modules: [hisim.renovisor]
+    may_import: [leaves, physics_constants, config, parameters, contracts, infrastructure, component_model, components, energy_system, economics, postprocessing]
+
+# Modules that load modules by a name known only at run time. Their unreadable dynamic imports are allowed, and their
+# imports by string of the `may_load` groups too.
+registries:
+  hisim.energy_system.classes:
+    may_load: [components]
+    reason: the class loader binds the component class an energy-system file names by its dotted path
+  hisim.setup_rules.registry:
+    may_load: []
+    reason: the rules registry discovers the rule modules of its own package by name
+  hisim.cli:
+    may_load: [components]
+    reason: "`hisim energy-system describe <class>` imports the class it is asked about"
+  hisim.hisim_main:
+    may_load: []
+    reason: the imperative mode imports the setup file given on the command line, which lies outside hisim
+  hisim.config.base:
+    may_load: [components]
+    reason: a configuration resolves its component class from MAIN_CLASS, a dotted path
+  hisim.energy_system.schema_classes:
+    may_load: [components]
+    reason: the schema export walks the component package to list every configuration class
+  hisim.energy_system.recording.probes:
+    may_load: [components]
+    reason: a recorded builder is named by its dotted path in the recording
+  hisim.components.weather:
+    may_load: []
+    reason: the package's lazy facade (PEP 562) imports its own submodules on first access

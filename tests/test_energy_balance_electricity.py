@@ -3,10 +3,11 @@
 Beads hisim-energy-sankeys-9uoo.5 and .8.
 
 Complete Sankey spec, §5.3 and §4.4 (``roadmap/complete_energy_sankeys_spec.md``, owner decision Q-J). The PV system
-takes the sun on its modules and gives its AC power to the electricity meter, the rest is unconverted sunlight (Q-D); the
-battery charges from the meter and discharges to it, loses in its inverter and in its cells, and stores the change
-(its two losses leave it together on the released-heat output of where it stands, device-location spec D-h: in these
-twins its unheated cellar, so out of the house);
+takes the sun on its modules and gives its AC power to the electricity meter, losing the rest (Q-D): the modules' loss
+as unconverted sunlight, the inverter's loss, standing in the twins' unheated cellar, as electricity out of the house
+(bead hisim-device-location-820d.5); the battery charges from the meter and discharges to it, loses in its inverter and
+in its cells, and stores the change (its two losses leave it together on the released-heat output of where it stands,
+device-location spec D-h: in these twins its unheated cellar, so out of the house);
 the occupancy takes the appliances' electricity from the meter and the residents' body heat from the residents,
 releases the device heat gains and the body heat into the building, and loses the electricity the device heat gains
 do not account for. In both households the meter reads every device's electricity port directly, by its role
@@ -41,7 +42,9 @@ class Expected:
         "PVSystem": {
             "ElectricityOutput": ("production", "electricity"),
             "SolarPowerOnModulesInWatt": ("consumption", "solar"),
-            "ModuleAndInverterLossInWatt": ("loss", "solar"),
+            "ModuleLossInWatt": ("loss", "solar"),
+            "HeatToHeatedZoneInWatt": ("production", "room_heat"),
+            "HeatLossInWatt": ("loss", "electricity"),
         },
         "Battery": {
             "ChargingPower": ("consumption", "electricity"),
@@ -73,8 +76,10 @@ class Expected:
     LINKS: ClassVar[Set[Tuple[str, str, str]]] = {
         ("solar", "sun", "PVSystem"),
         ("electricity", "PVSystem", "ElectricityMeter"),
-        ("solar", "PVSystem", "PVSystem · ModuleAndInverterLossInWatt"),
-        ("solar", "PVSystem · ModuleAndInverterLossInWatt", "unconverted sunlight"),
+        ("solar", "PVSystem", "PVSystem · ModuleLossInWatt"),
+        ("solar", "PVSystem · ModuleLossInWatt", "unconverted sunlight"),
+        ("electricity", "PVSystem", "PVSystem · HeatLossInWatt"),
+        ("electricity", "PVSystem · HeatLossInWatt", "heat loss to outdoors"),
         ("electricity", "ElectricityMeter", "Battery"),
         ("electricity", "Battery", "ElectricityMeter"),
         ("electricity", "Battery", "Battery · HeatLossInWatt"),
@@ -185,19 +190,21 @@ def test_the_connected_diagram_draws_the_electricity_devices(twin: Tuple[str, Pa
 def test_the_drawn_overall_view_starts_the_pv_at_its_electricity_and_merges_its_small_nodes(
     twin: Tuple[str, Path]
 ) -> None:
-    """The HTML of ``overall`` draws no PV loss and no node below half a percent of its largest flow (spec §4.8).
+    """The HTML of ``overall`` draws no PV module loss and no node below half a percent of its largest flow (spec §4.8).
 
     The JSON keeps the sunlight's split (:func:`test_the_connected_diagram_draws_the_electricity_devices`); the
-    drawing nets it, so sun -> PVSystem carries the PV's electricity. Every node left below the threshold is a
-    boundary, a meter or a node that shows a fault, which are never merged, or an "other" node.
+    drawing nets the modules' loss, so sun -> PVSystem carries the modules' DC power: the PV's electricity plus its
+    inverter loss, which stays drawn. Every node left below the threshold is a boundary, a meter or a node that shows
+    a fault, which are never merged, or an "other" node.
     """
     _, results = twin
     diagrams: Dict[str, Any] = json.loads((results / "energy_sankeys" / "energy_sankey.json").read_text("utf-8"))
     drawing = SankeyDrawing.of(diagrams["overall"], "overall")
     drawn = {(link.source, link.target): link for link in drawing.links}
-    assert "PVSystem · ModuleAndInverterLossInWatt" not in {node.name for node in drawing.nodes}
-    pv_electricity = balance_entry(results, "PVSystem")["carriers"]["electricity"]["production_kwh"]
-    assert drawn[("sun", "PVSystem")].kilowatt_hours == pytest.approx(pv_electricity, rel=1e-9)
+    assert "PVSystem · ModuleLossInWatt" not in {node.name for node in drawing.nodes}
+    pv_ports = {port["output"]: port["total_kwh"] for port in balance_entry(results, "PVSystem")["ports"]}
+    pv_dc = pv_ports["ElectricityOutput"] + pv_ports["HeatLossInWatt"] + pv_ports["HeatToHeatedZoneInWatt"]
+    assert drawn[("sun", "PVSystem")].kilowatt_hours == pytest.approx(pv_dc, rel=1e-9)
     assert (results / "energy_sankeys" / "overall.html").exists()
 
     kinds = {node["name"]: NodeKind(node["kind"]) for node in diagrams["overall"]["nodes"]}

@@ -119,6 +119,7 @@ components:
       module_database: CEC_MODULE_DATABASE
       inverter_database: CEC_INVERTER_DATABASE
       power_in_watt: 10000.0
+      installation_location: OUTDOORS
       azimuth: 180
       tilt: 30
       share_of_maximum_pv_potential: 1.0

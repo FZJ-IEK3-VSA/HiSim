@@ -2,7 +2,8 @@
 # Hand-written test fixture of tests/test_multiple_pv_arrays.py: a household with two PV arrays, a south one of 4 kWp
 # and a west one of 2 kWp, beside a battery sized to both and the energy manager maximising self-consumption. The
 # meter reads every electricity port by its role, never the manager's grid balance. Both arrays are ordinary
-# PVSystem entries with names of their own; the manager and the meter take one production input per array.
+# PVSystem entries with names of their own; the manager and the meter take one production input per array. With no
+# building to follow, their inverters stand outdoors.
 schema_version: 3
 name: two_pv_arrays
 setup_kind: demo
@@ -20,6 +21,7 @@ components:
     config:
       power_in_watt: 4000.0
       azimuth: 180
+      installation_location: OUTDOORS
     inputs:
       - Weather
   PVWest:
@@ -28,6 +30,7 @@ components:
     config:
       power_in_watt: 2000.0
       azimuth: 270
+      installation_location: OUTDOORS
     inputs:
       - Weather
   ElectricityMeter:

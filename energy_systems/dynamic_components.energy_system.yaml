@@ -93,6 +93,7 @@ components:
     preset: rooftop
     config:
       power_in_watt: 10000.0
+      installation_location: OUTDOORS
     inputs:
       - Weather
   ElectricityMeter:

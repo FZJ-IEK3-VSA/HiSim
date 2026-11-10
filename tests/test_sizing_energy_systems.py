@@ -150,7 +150,11 @@ def simulation_for_one_timestep(
     # No weather component in this sweep, so the weather identity -- which only enters the cache
     # key -- is a stand-in; the roof area is the fact under test.
     my_pv_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=my_residence_information.roof_area_in_m2, weather_identity="Aachen")
+        SizingContext(
+            roof_area_in_m2=my_residence_information.roof_area_in_m2,
+            weather_identity="Aachen",
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     # Set hplib

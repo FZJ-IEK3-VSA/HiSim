@@ -214,7 +214,7 @@ def test_a_small_group_that_only_takes_goes_to_one_sink_node_and_one_linked_to_n
 @pytest.mark.base
 def test_an_output_name_is_drawn_in_words() -> None:
     """Unit suffix left out, CamelCase split, words in lower case, acronyms kept; the overrides win."""
-    assert SankeyDrawing.words("ModuleAndInverterLossInWatt") == "module and inverter loss"
+    assert SankeyDrawing.words("ModuleLossInWatt") == "module loss"
     assert SankeyDrawing.words("StoredEnergyIncreaseInWattHour") == "stored energy increase"
     assert SankeyDrawing.words("HydrogenFlowInKilogramPerSecond") == "hydrogen flow"
     assert SankeyDrawing.words("ThermalPowerConsumptionDHW") == "thermal power consumption DHW"
@@ -233,7 +233,7 @@ def test_an_output_name_is_drawn_in_words() -> None:
 @pytest.mark.base
 def test_a_loss_node_shows_its_port_in_words_and_every_other_node_its_name() -> None:
     """Components keep the name they were given; only a loss node's port part changes."""
-    assert SankeyDrawing.display_name("PVSystem · ModuleAndInverterLossInWatt", K.L) == "PVSystem · module and inverter loss"
+    assert SankeyDrawing.display_name("PVSystem · ModuleLossInWatt", K.L) == "PVSystem · module loss"
     assert SankeyDrawing.display_name("MoreAdvancedHeatPumpHPLib", K.C) == "MoreAdvancedHeatPumpHPLib"
     assert SankeyDrawing.display_name("Battery · stored", K.S) == "Battery · stored"
     assert SankeyDrawing.display_name("LossWithoutSeparator", K.L) == "LossWithoutSeparator"

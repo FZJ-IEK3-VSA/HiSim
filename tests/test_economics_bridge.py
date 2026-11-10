@@ -103,7 +103,11 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         my_simulation_parameters=my_simulation_parameters,
     )
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=120, weather_identity=my_weather_config.identity())
+        SizingContext(
+            roof_area_in_m2=120,
+            weather_identity=my_weather_config.identity(),
+            technical_room_location=loadtypes.InstallationLocation.UNHEATED_SPACE,
+        )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

@@ -476,7 +476,7 @@ def test_derived_port_names_replace_the_address_separator_and_a_collision_is_ref
     assert "DispatchTobattery_Battery_LoadingPowerInput" in [output.field_name for output in ems.outputs]
     roof = (
         "pv_PVSystem: {class: hisim.components.generic_pv_system.PVSystem, preset: rooftop, "
-        "config: {power_in_watt: 3000}, inputs: [Weather]}"
+        "config: {power_in_watt: 3000, installation_location: OUTDOORS}, inputs: [Weather]}"
     )
     grid = "grid: {assembly: supply/electricity_grid, observes: [{component_type: PV}]}"
     message = refusal(site(Real.WEATHER, Real.OCCUPANCY, roof) + imports(Real.PV, grid), tmp_path / "b")

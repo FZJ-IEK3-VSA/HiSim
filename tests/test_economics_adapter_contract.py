@@ -99,6 +99,9 @@ class AdapterContractScan:
         # The array the rooftop law builds on the fleet's archetype roof of 168.9 m2; the
         # extractor reads it as the capacity it prices.
         "PVSystemConfig.power_in_watt": 22272.28,
+        # Where the array's inverter stands: the technical room of a house with an unheated cellar. The extractor
+        # does not read it, but the sweep resolves the whole configuration.
+        "PVSystemConfig.installation_location": InstallationLocation.UNHEATED_SPACE,
         # The battery the two bslib laws build beside that array: one kWh of storage per kWp,
         # and a C-rate of 0.5 on the array's peak power. The extractor reads the capacity as
         # the size it prices; the inverter power it does not read, but the sweep resolves the

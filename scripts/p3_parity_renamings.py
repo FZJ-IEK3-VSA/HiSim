@@ -299,17 +299,21 @@ class DeclaredPortRenamings:
             "Input_CondensingHydrogenBoiler_EnergyDemandDhw_1": "EnergyDemandDhwFromCondensingHydrogenBoiler",
         },
         # The building, which takes in the heat a device releases into its heated zone (device location, #1213):
-        # the buffer's and the hot-water tank's standby heat, inserted after the building's static inputs. The twins
-        # write these feeds as bare items, which test_p3_parity's cross-check accepts by their source.
+        # the PV inverter's heat (#1247) first, as the sizers add the PV system before the tanks, then the buffer's
+        # and the hot-water tank's standby heat, then the house battery's (#1233), all after the building's static
+        # inputs. The twins write these feeds as bare items, which test_p3_parity's cross-check accepts by their source.
         "Building": {
-            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
+            "Input_PVSystem_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromPVSystem",
+            # The tanks in the order a sizer adds them: the buffer first in the two solar-thermal sizers (16, 17), the
+            # hot-water tank first in the other sizers with a buffer (16, 17), the hot-water tank alone at 16 in the
+            # electric-heating and the district-heating sizer, which have no buffer.
+            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
+            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
             "Input_DHWStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromDHWStorage",
-            # The same tank one index earlier in the electric-heating sizer, which has no buffer.
-            "Input_DHWStorage_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromDHWStorage",
-            # The house battery's heat after the tanks' (device location, #1233): 16 in the electric-heating sizer,
-            # 17 in the solar-thermal heat-pump sizer.
-            "Input_Battery_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromBattery",
+            "Input_DHWStorage_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromDHWStorage",
+            # The house battery's heat after the tanks': 17 in the sizers without a buffer, 18 in the others.
             "Input_Battery_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromBattery",
+            "Input_Battery_HeatToHeatedZoneInWatt_18": "HeatToHeatedZoneInWattFromBattery",
         },
         # The fuel meter, which plays the same role for the solid-fuel and district-heating
         # sizers as the gas meter does for the gas ones.

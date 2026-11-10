@@ -77,10 +77,11 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: battery_heat}, {$port: buffer_heat}, "
+        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: battery_heat}, {$port: pv_heat}, {$port: buffer_heat}, "
         "{$port: cylinder_heat}], "
         "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}, "
         "battery_heat: {partner: Battery, optional: true}, "
+        "pv_heat: {partner: PVSystem, optional: true}, "
         "buffer_heat: {partner: SimpleHotWaterStorage, optional: true}, "
         "cylinder_heat: {partner: SimpleDHWStorage, optional: true}}}"
     )
@@ -89,6 +90,9 @@ class Real:
     BUILDING_FOR_EXPANSION: ClassVar[str] = (
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home}"
     )
+    #: :attr:`BUILDING` beside the PV import ``pv``, whose inverter heat its ``pv_heat`` port reads: an array's
+    #: ``HeatToHeatedZoneInWatt`` needs a reader in every location (D-h of ``roadmap/device_location_spec.md``).
+    BUILDING_BESIDE_PV: ClassVar[str] = BUILDING[:-1] + ", optional-bind: {pv_heat: pv}}"
     HEAT_DISTRIBUTION_CONTROLLER: ClassVar[str] = (
         "HeatDistributionController: "
         "{class: hisim.components.heat_distribution_system.HeatDistributionController, preset: building_derived}"
@@ -108,13 +112,14 @@ class Real:
     )
     METER_CLASS: ClassVar[str] = "hisim.components.electricity_meter.ElectricityMeter"
 
-    #: A site PV array of the real class at a stated power: a provider of the arrays' peak power by its class.
+    #: A site PV array of the real class at a stated power: a provider of the arrays' peak power by its class. Its
+    #: inverter stands outdoors, so it needs no building's technical room.
     ROOF: ClassVar[str] = (
         "Roof: {class: hisim.components.generic_pv_system.PVSystem, preset: rooftop, "
-        "config: {power_in_watt: 3000}, inputs: [Weather]}"
+        "config: {power_in_watt: 3000, installation_location: OUTDOORS}, inputs: [Weather]}"
     )
-    #: A PV array at a stated power, which a build sizes without a building.
-    PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000}}"
+    #: A PV array at a stated power with its inverter outdoors, which a build sizes without a building.
+    PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000, inverter_location: OUTDOORS}}"
     #: The energy manager, and the grid, whose meter reads every electricity port, beside a manager too.
     CONTROL: ClassVar[str] = "control: {assembly: control/ems_self_consumption}"
     GRID: ClassVar[str] = "grid: {assembly: supply/electricity_grid}"

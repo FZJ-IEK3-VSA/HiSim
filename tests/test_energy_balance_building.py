@@ -47,9 +47,9 @@ class Expected:
         "july": ("2021-07-27", "2021-08-03"),
     }
 
-    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first seven are inputs. Both tanks and
-    #: the battery stand in the unheated cellar of the twins' TABULA row, so the three ports of their heat into the
-    #: heated zone book zero.
+    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first eight are inputs. Both tanks, the
+    #: battery and the PV inverter stand in the unheated cellar of the twins' TABULA row, so the four ports of their heat
+    #: into the heated zone book zero.
     PORTS: ClassVar[Dict[str, Tuple[str, str, str, str]]] = {
         "HeatReceivedInWatt": ("consumption", "space_heating_heat", "component", "HeatDistributionSystem"),
         "HeatRemovedByCoolingInWatt": ("production", "cooling", "component", "HeatDistributionSystem"),
@@ -58,6 +58,7 @@ class Expected:
         "HeatToHeatedZoneInWattFromBattery": ("consumption", "room_heat", "component", "Battery"),
         "HeatToHeatedZoneInWattFromSimpleHotWaterStorage": ("consumption", "room_heat", "component", "SimpleHotWaterStorage"),
         "HeatToHeatedZoneInWattFromDHWStorage": ("consumption", "room_heat", "component", "DHWStorage"),
+        "HeatToHeatedZoneInWattFromPVSystem": ("consumption", "room_heat", "component", "PVSystem"),
         "SolarGainThroughWindows": ("consumption", "solar", "boundary", "sun"),
         "VentilationLossInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
         "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),

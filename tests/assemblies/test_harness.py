@@ -432,16 +432,15 @@ def test_the_test_building_reads_the_space_heating_of_the_one_heater_or_distribu
     resolver = AssemblyResolver([Real.LIBRARY])
     registry = TestPartnerRegistry.from_directories(resolver.directories)
     for path, expected in (
-        ("heating/electric_resistive", {"heating": SUBJECT}),
-        ("heating/gas_condensing_boiler", {"heating": "HeatDistributionSystem"}),
-        ("heating/district_heating", {"heating": "HeatDistributionSystemWithoutStorage"}),
-        ("supply/oil_tank", {"heating": "HeatDistributionSystem"}),
+        ("heating/electric_resistive", SUBJECT),
+        ("heating/gas_condensing_boiler", "HeatDistributionSystem"),
+        ("heating/district_heating", "HeatDistributionSystemWithoutStorage"),
+        ("supply/oil_tank", "HeatDistributionSystem"),
         ("pv/array", None),
     ):
         assembly = resolver.resolve(path, "test")
         document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
-        verbs = document["components"]["Building"].get("optional-bind") or {}
-        assert ({"heating": verbs["heating"]} if "heating" in verbs else None) == expected, path
+        assert (document["components"]["Building"].get("optional-bind") or {}).get("heating") == expected, path
 
 
 @pytest.mark.assemblies
@@ -453,8 +452,8 @@ def test_the_test_building_reads_the_heat_every_located_device_beside_it_release
 
     Beside a boiler the building's ``buffer_heat`` port binds the subject's buffer and its ``cylinder_heat`` port the
     partner cylinder; beside the cylinder under test the subject's cylinder and the heat pump's partner buffer; beside
-    the battery under test its ``battery_heat`` port binds the subject; beside a PV array there is no located device
-    and every port stays unbound.
+    the battery under test its ``battery_heat`` port binds the subject; beside a PV array none of these three ports
+    binds (its inverter's heat is the ``pv_heat`` port's, tested below).
     """
     resolver = AssemblyResolver([Real.LIBRARY])
     registry = TestPartnerRegistry.from_directories(resolver.directories)
@@ -470,6 +469,25 @@ def test_the_test_building_reads_the_heat_every_located_device_beside_it_release
         verbs = document["components"]["Building"].get("optional-bind") or {}
         ports = ("battery_heat", "buffer_heat", "cylinder_heat")
         assert {port: verbs[port] for port in ports if port in verbs} == expected, path
+
+
+@pytest.mark.assemblies
+def test_the_test_building_reads_the_heat_of_the_pv_inverter_beside_it() -> None:
+    """Catches a PV array whose ``HeatToHeatedZoneInWatt`` the test building does not read, which the run refuses (D-h).
+
+    Beside the PV array under test the building's ``pv_heat`` port binds the subject; beside a battery the partner
+    ``PVArray`` it is sized from; beside a boiler there is no array and the port stays unbound.
+    """
+    resolver = AssemblyResolver([Real.LIBRARY])
+    registry = TestPartnerRegistry.from_directories(resolver.directories)
+    for path, expected in (
+        ("pv/array", SUBJECT),
+        ("storage/battery", "PVArray"),
+        ("heating/gas_condensing_boiler", None),
+    ):
+        assembly = resolver.resolve(path, "test")
+        document = isolation_document(assembly, ParameterSpace(assembly.model).defaults(), registry)
+        assert (document["components"]["Building"].get("optional-bind") or {}).get("pv_heat") == expected, path
 
 
 @pytest.mark.assemblies
@@ -503,7 +521,8 @@ def test_the_test_building_reading_no_heat_beside_the_electric_heater_fails_both
     real = TestPartnerRegistry.from_directories(resolver.directories)
     unheated = dict(real.partners["Building"].component)
     unheated["inputs"] = [
-        "Weather", "UTSPConnector", {"$port": "battery_heat"}, {"$port": "buffer_heat"}, {"$port": "cylinder_heat"}
+        "Weather", "UTSPConnector", {"$port": "battery_heat"}, {"$port": "pv_heat"}, {"$port": "buffer_heat"},
+        {"$port": "cylinder_heat"}
     ]
     unheated["ports"] = {name: port for name, port in unheated["ports"].items() if name != "heating"}
     registry = TestPartnerRegistry(

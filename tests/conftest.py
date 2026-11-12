@@ -349,7 +349,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 def pytest_addoption(parser: pytest.Parser) -> None:
     """The options of the assembly test contracts (``tests/assemblies/test_library_contracts.py``, spec §9.4).
 
-    And those of the CI split, ``--ci-group``, ``--ci-durations-out`` and ``--ci-split-plan`` (``tests/ci_split.py``).
+    And those of the CI split, ``--ci-group``, ``--ci-durations-out`` and ``--ci-split-plan`` (``tests/ci_split.py``),
+    and ``--verification-timesteps`` of the verification suite (``tests/verification/test_suite_ashrae140.py``).
     """
     ci_split.add_options(parser)
     group = parser.getgroup("assemblies", "assembly test contracts (assemblies_spec.md §9.4)")
@@ -368,4 +369,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     group.addoption(
         "--seed", type=int, default=20261003, help="the seed of the nightly tier's Latin hypercube (default 20261003)"
+    )
+    verification = parser.getgroup("verification", "building-model verification suite (tests/verification/)")
+    verification.addoption(
+        "--verification-timesteps",
+        metavar="SECONDS",
+        default=None,
+        help="comma-separated step lengths in seconds the ashrae140 range tests run at (default 3600,900,60)",
     )

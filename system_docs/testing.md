@@ -46,7 +46,7 @@ split, and has no `renovisor_probes` job: its `pytest-others` takes those tests.
 | `mpc` | Model-predictive-control system tests. | `pytest (others)`; no test carries it today |
 | `hpcharness` | The HPC-harness tests. | `pytest (others)` |
 | `upstream_history` | Tests that need the unsquashed upstream history of `golden_references/`; carried instead of `base`. | `pytest (others)`, whose checkout fetches the full history |
-| `verification` | The building-model verification suite under `tests/verification/`: full-year runs of the ANSI/ASHRAE 140 cases at three step lengths, compared with reference ranges that stay outside the repository. Each test skips unless `HISIM_VERIFICATION_DATA` names that private folder. The unit tests of the suite's own helpers (schema, parameter derivation, aggregation) carry the base marker instead. | `pytest (others)`, where every test skips: the data is private; the suite runs where the folder is mounted |
+| `verification` | The building-model verification suite under `tests/verification/`: full-year runs of the ANSI/ASHRAE 140 cases at three step lengths, compared with reference ranges that stay outside the repository. Each test skips unless `HISIM_VERIFICATION_DATA` names that private folder; `--verification-timesteps 3600` restricts the step lengths of the range tests. The unit tests of the suite's own helpers (schema, parameter derivation, aggregation) carry the base marker instead. | `pytest (others)`, where every test skips: the data is private; the suite runs where the folder is mounted |
 
 Two markers select a group inside a job and are carried beside a job marker: `worked_examples` (the cost
 module's hand-computed examples, inside `base`) and `xdist_group` (pytest-xdist's grouping).

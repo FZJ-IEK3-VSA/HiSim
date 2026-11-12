@@ -4,8 +4,10 @@ The building is a TABULA building whose every value the 5R1C model reads is over
 case (decision D16): the carrier row is named because the configuration needs one, and
 :meth:`BuildingInformation.value_origins` proves afterwards that nothing of it is used. The weather
 is the catalogue station the case names, and the night setback of cases 640 and 940 is the existing
-controller with a step at the end of the night (decision D18). Everything derived on the way is
-collected in :class:`DerivedParameters` for ``parameters/<case>.json``.
+controller with a step at the end of the night (decision D18). The building's U-values are the
+case's times one factor, so that the 5R1C network keeps the case's U·A sum in steady state (decision
+D28). Everything derived on the way is collected in :class:`DerivedParameters` for
+``parameters/<case>.json``.
 """
 
 import dataclasses
@@ -68,8 +70,13 @@ class DerivedParameters:
     specified_air_change_rate_per_hour: float
     air_change_rate_for_hisim_per_hour: float
     window_factors: Tuple[derivation.WindowFactor, ...]
-    window_u_value_in_watt_per_m2_per_kelvin: Optional[float]
-    u_values_by_kind: Dict[str, Optional[float]]
+    #: The case's air-to-air U-values, by opaque kind and for the windows.
+    specified_u_values_by_kind: Dict[str, Optional[float]]
+    specified_window_u_value_in_watt_per_m2_per_kelvin: Optional[float]
+    steady_state_transmission: derivation.SteadyStateTransmission
+    #: The U-values the building gets: the case's times the factor of ``steady_state_transmission``.
+    u_values_for_hisim_by_kind: Dict[str, Optional[float]]
+    window_u_value_for_hisim_in_watt_per_m2_per_kelvin: Optional[float]
     areas_by_kind: Dict[str, float]
     heating_reference_temperature_in_celsius: float
     origins: Dict[str, ValueOrigin]
@@ -87,8 +94,13 @@ class DerivedParameters:
                 "standard_air_density_in_kg_per_m3": derivation.STANDARD_AIR_DENSITY_IN_KG_PER_M3,
             },
             "windows": [dataclasses.asdict(factor) for factor in self.window_factors],
-            "window_u_value_in_watt_per_m2_per_kelvin": self.window_u_value_in_watt_per_m2_per_kelvin,
-            "u_values_by_kind": dict(self.u_values_by_kind),
+            "u_values": {
+                "specified_by_kind_in_watt_per_m2_per_kelvin": dict(self.specified_u_values_by_kind),
+                "specified_window_in_watt_per_m2_per_kelvin": self.specified_window_u_value_in_watt_per_m2_per_kelvin,
+                **dataclasses.asdict(self.steady_state_transmission),
+                "for_hisim_by_kind_in_watt_per_m2_per_kelvin": dict(self.u_values_for_hisim_by_kind),
+                "for_hisim_window_in_watt_per_m2_per_kelvin": self.window_u_value_for_hisim_in_watt_per_m2_per_kelvin,
+            },
             "areas_by_kind": dict(self.areas_by_kind),
             "heating_reference_temperature_in_celsius": self.heating_reference_temperature_in_celsius,
             "origins": {quantity: dataclasses.asdict(origin) for quantity, origin in self.origins.items()},
@@ -129,13 +141,26 @@ def derive(case: Case, weather: pd.DataFrame, year: int) -> Dict[str, Any]:
         Dict[str, Any]: the derived values by name, as :func:`build` consumes them.
     """
     by_kind = derivation.surfaces_by_kind(case)
-    u_values_by_kind = {
+    specified_u_values_by_kind = {
         kind: derivation.area_weighted_u_value(
             tuple((surface.area_in_m2, case.construction_of(surface).u_value_air_to_air_in_watt_per_m2_per_kelvin) for surface in surfaces)
         )
         for kind, surfaces in by_kind.items()
     }
     areas_by_kind = {kind: sum(surface.area_in_m2 for surface in surfaces) for kind, surfaces in by_kind.items()}
+    specified_window_u_value = derivation.area_weighted_u_value(
+        tuple((window.area_in_m2, case.glazing_of(window).u_value_air_to_air_in_watt_per_m2_per_kelvin) for window in case.windows)
+    )
+    mass = derivation.mass_parameters(case)
+    specified_conductance = sum(
+        u_value * areas_by_kind[kind] * TRANSMISSION_ADJUSTMENT_FACTOR for kind, u_value in specified_u_values_by_kind.items() if u_value is not None
+    )
+    if specified_window_u_value is not None:
+        specified_conductance += specified_window_u_value * sum(window.area_in_m2 for window in case.windows)
+    transmission = derivation.steady_state_transmission(
+        specified_conductance,
+        BuildingInformation.HEAT_TRANSFER_COEFF_INDOOR_AIR_AND_INTERNAL_SURFACE_IN_WATT_PER_M2_PER_KELVIN * mass.total_internal_surface_area_in_m2,
+    )
     window_factors = tuple(
         derivation.nonperpendicular_reduction_factor(
             window,
@@ -149,13 +174,14 @@ def derive(case: Case, weather: pd.DataFrame, year: int) -> Dict[str, Any]:
     )
     return {
         "year": year,
-        "mass": derivation.mass_parameters(case),
+        "mass": mass,
         "air_change_rate_for_hisim_per_hour": derivation.altitude_adjusted_air_change_rate_per_hour(case.infiltration_air_changes_per_hour),
         "window_factors": window_factors,
-        "window_u_value": derivation.area_weighted_u_value(
-            tuple((window.area_in_m2, case.glazing_of(window).u_value_air_to_air_in_watt_per_m2_per_kelvin) for window in case.windows)
-        ),
-        "u_values_by_kind": u_values_by_kind,
+        "specified_u_values_by_kind": specified_u_values_by_kind,
+        "specified_window_u_value": specified_window_u_value,
+        "steady_state_transmission": transmission,
+        "u_values_for_hisim_by_kind": {kind: None if u_value is None else transmission.factor * u_value for kind, u_value in specified_u_values_by_kind.items()},
+        "window_u_value_for_hisim": None if specified_window_u_value is None else transmission.factor * specified_window_u_value,
         "areas_by_kind": areas_by_kind,
         "heating_reference_temperature": float(weather["T"].min()),
     }
@@ -197,13 +223,13 @@ def building_config(case: Case, derived: Dict[str, Any], weather: WeatherConfig,
         initial_internal_temperature_in_celsius=heating,
         absolute_conditioned_floor_area_in_m2=case.floor_area_in_m2,
         number_of_apartments=1.0,
-        floor_u_value_in_watt_per_m2_per_kelvin=derived["u_values_by_kind"]["floor"],
+        floor_u_value_in_watt_per_m2_per_kelvin=derived["u_values_for_hisim_by_kind"]["floor"],
         floor_area_in_m2=derived["areas_by_kind"]["floor"],
-        facade_u_value_in_watt_per_m2_per_kelvin=derived["u_values_by_kind"]["wall"],
+        facade_u_value_in_watt_per_m2_per_kelvin=derived["u_values_for_hisim_by_kind"]["wall"],
         facade_area_in_m2=derived["areas_by_kind"]["wall"],
-        roof_u_value_in_watt_per_m2_per_kelvin=derived["u_values_by_kind"]["roof"],
+        roof_u_value_in_watt_per_m2_per_kelvin=derived["u_values_for_hisim_by_kind"]["roof"],
         roof_area_in_m2=derived["areas_by_kind"]["roof"],
-        window_u_value_in_watt_per_m2_per_kelvin=derived["window_u_value"],
+        window_u_value_in_watt_per_m2_per_kelvin=derived["window_u_value_for_hisim"],
         door_u_value_in_watt_per_m2_per_kelvin=DOOR_U_VALUE_IN_WATT_PER_M2_PER_KELVIN,
         door_area_in_m2=DOOR_AREA_IN_M2,
         windows=windows,
@@ -290,8 +316,11 @@ def build(case: Case, year: int = DEFAULT_YEAR) -> BuiltCase:
         specified_air_change_rate_per_hour=case.infiltration_air_changes_per_hour,
         air_change_rate_for_hisim_per_hour=derived["air_change_rate_for_hisim_per_hour"],
         window_factors=derived["window_factors"],
-        window_u_value_in_watt_per_m2_per_kelvin=derived["window_u_value"],
-        u_values_by_kind=derived["u_values_by_kind"],
+        specified_u_values_by_kind=derived["specified_u_values_by_kind"],
+        specified_window_u_value_in_watt_per_m2_per_kelvin=derived["specified_window_u_value"],
+        steady_state_transmission=derived["steady_state_transmission"],
+        u_values_for_hisim_by_kind=derived["u_values_for_hisim_by_kind"],
+        window_u_value_for_hisim_in_watt_per_m2_per_kelvin=derived["window_u_value_for_hisim"],
         areas_by_kind=derived["areas_by_kind"],
         heating_reference_temperature_in_celsius=derived["heating_reference_temperature"],
         origins=origins,

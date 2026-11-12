@@ -106,13 +106,7 @@ deviation_register:            # spec section 8.3; the agent proposes, the human
     category: model
     standard_clause: "ANSI/ASHRAE 140-2023, 7.2.1.8, Table 7-5"
     description: "Exterior solar absorptance 0.6 and infrared emittance 0.9 of the opaque surfaces"
-    hisim_treatment: "No opaque solar gain and no sky radiation term (ISO 13790 11.3.4 and 11.3.5 not implemented); the exterior surfaces see the outdoor air temperature"
-    approved_by: null
-  - id: series_interior_coupling
-    category: model
-    standard_clause: "ISO/FDIS 13790:2007, 7.2.2.2, Eq. (9)"
-    description: "Steady-state heat loss of the zone through the total air-to-air U-values of the constructions"
-    hisim_treatment: "The coupling conductance H_tr,is lies in series with H_tr,w and H_tr,op, whose printed U-values already contain the interior surface resistance, so the network's steady-state transmission conductance is below the U-A sum; found after the first full run (gap analysis §14), no correction applied"
+    hisim_treatment: "No opaque solar gain and no sky radiation term (ISO 13790 11.3.4 and 11.3.5 not implemented); the exterior surfaces see the outdoor air temperature. If implemented, both terms take the case's air-to-air U-values, not the U-values times the factor of steady_state_u_values (gap analysis §18)"
     approved_by: null
   - id: isotropic_sky
     category: model
@@ -126,11 +120,11 @@ deviation_register:            # spec section 8.3; the agent proposes, the human
     description: "Angle-dependent solar heat gain coefficients of Table 7-12 (and 7-19, 7-23)"
     hisim_treatment: "One factor F_w per window: the irradiance-weighted annual mean of SHGC(theta)/SHGC_n over the weather file (beam from the table, diffuse from the hemispherical value); 7.2.1.11.3 a) lets a program without angle-dependent inputs skip the section"
     approved_by: null
-  - id: printed_u_values
+  - id: steady_state_u_values
     category: input_mapping
-    standard_clause: "ANSI/ASHRAE 140-2023, Tables 7-3, 7-11, 7-18, 7-22, 7-26, 7-28, 7-32"
-    description: "Constructions specified layer by layer with surface coefficients"
-    hisim_treatment: "The printed total air-to-air U-values are used, which include the standard's surface coefficients; the layers serve the heat capacity only"
+    standard_clause: "ANSI/ASHRAE 140-2023, 7.2.1.10.3 b.2 and b.3, Tables 7-3, 7-9, 7-11, 7-18, 7-22, 7-26, 7-28, 7-32"
+    description: "Constructions specified layer by layer with surface coefficients; the total U-values reach from the zone air to the outdoor air and contain the combined interior coefficients"
+    hisim_treatment: "The printed total air-to-air U-values times one factor per case, f = H_tr,is / (H_tr,is - sum of U*A), for opaque elements and windows alike, so that the network, which puts H_tr,is in series, keeps their U-A sum in steady state; a value the standard does not specify, in the sense of 7.2.1.10.3 b.3 (decision D28, gap analysis §18). H_tr,is in series still shapes the dynamics. The layers serve the heat capacity only"
     approved_by: null
   - id: effective_thickness_kappa
     category: input_mapping

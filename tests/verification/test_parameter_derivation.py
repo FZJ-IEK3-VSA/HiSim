@@ -76,6 +76,17 @@ def test_the_altitude_adjustment_gives_the_table_value() -> None:
     assert adjusted == pytest.approx(AppendixB.ADJUSTED_INFILTRATION_PER_HOUR, abs=0.0005)
 
 
+def test_the_factor_on_the_u_values_keeps_the_u_a_sum_in_steady_state() -> None:
+    """f = H_is / (H_is - H) makes H_is in series with f times H equal to H; for H at or above H_is there is no f."""
+    transmission = derivation.steady_state_transmission(300.0, 900.0)
+
+    assert transmission.factor == 1.5
+    assert 1.0 / (1.0 / 900.0 + 1.0 / (transmission.factor * 300.0)) == pytest.approx(300.0)
+    for specified, coupling in ((900.0, 900.0), (1000.0, 900.0), (0.0, 900.0)):
+        with pytest.raises(ValueError):
+            derivation.steady_state_transmission(specified, coupling)
+
+
 class SyntheticGlazing:
     """A glazing with a two-point table, so the interpolation is checkable by hand."""
 

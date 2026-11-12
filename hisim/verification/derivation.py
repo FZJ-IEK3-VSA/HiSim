@@ -1,9 +1,10 @@
 """The input-mapping rules of spec §3.2 as pure functions: from a case description to 5R1C parameters.
 
-Rule 3 (κ by the effective-thickness rule and C_m), rule 4 (A_m and A_tot), rule 6 (the altitude
-adjustment of the air change rate) and rule 8 (F_w per window) live here; rules 1, 2 and 5 need no
-derivation (printed U-values, HiSim's own coupling conductances). Every function returns what it
-used beside what it found, so ``parameters/<case>.json`` can show the derivation.
+Rules 1 and 2 (the factor on the U-values, decision D28), rule 3 (κ by the effective-thickness rule
+and C_m), rule 4 (A_m and A_tot), rule 6 (the altitude adjustment of the air change rate) and rule 8
+(F_w per window) live here; rule 5 needs no derivation (HiSim's own coupling conductances). Every
+function returns what it used beside what it found, so ``parameters/<case>.json`` can show the
+derivation.
 """
 
 import math
@@ -284,6 +285,54 @@ def area_weighted_u_value(pairs: Tuple[Tuple[float, float], ...]) -> Optional[fl
         return u_values.pop()
     total_area = sum(area for area, _ in pairs)
     return sum(area * u_value for area, u_value in pairs) / total_area
+
+
+@dataclass(frozen=True)
+class SteadyStateTransmission:
+    """Rules 1 and 2 (spec §3.2.1, decision D28): the factor that keeps a case's U·A sum in steady state.
+
+    The 5R1C network puts H_tr,is in series with H_tr,w and H_tr,op. The case's U-values reach from
+    the zone air to the outdoor air, so a network built from them as they are loses less than their
+    U·A sum in steady state. Every U-value HiSim gets is the case's times ``factor``, which makes the
+    network's steady-state transmission conductance equal to that sum.
+    """
+
+    #: Σ U·A over the opaque surfaces and the windows, with the case's air-to-air U-values, in W/K.
+    specified_conductance_in_watt_per_kelvin: float
+    #: H_tr,is = h_is · A_tot, the conductance the network puts in series, in W/K.
+    coupling_conductance_in_watt_per_kelvin: float
+    #: f = H_tr,is / (H_tr,is − Σ U·A).
+    factor: float
+
+
+def steady_state_transmission(specified_conductance_in_watt_per_kelvin: float, coupling_conductance_in_watt_per_kelvin: float) -> SteadyStateTransmission:
+    """The factor on a case's U-values, from their U·A sum and the coupling conductance.
+
+    With H = Σ U·A and H_tr,is in series, the network's steady-state transmission conductance is
+    1 / (1/H_tr,is + 1/(f·H)), which equals H for f = H_tr,is / (H_tr,is − H).
+
+    Args:
+        specified_conductance_in_watt_per_kelvin: H, the U·A sum with the case's U-values.
+        coupling_conductance_in_watt_per_kelvin: H_tr,is of the case's building.
+
+    Returns:
+        SteadyStateTransmission: the factor and the two conductances it is made of.
+
+    Raises:
+        ValueError: if H is not positive or not below H_tr,is; no factor lets the series reach it then.
+    """
+    specified = specified_conductance_in_watt_per_kelvin
+    coupling = coupling_conductance_in_watt_per_kelvin
+    if not 0.0 < specified < coupling:
+        raise ValueError(
+            f"the U·A sum of {specified} W/K must be positive and below the coupling conductance of {coupling} W/K; "
+            "no factor on the U-values lets the network reach it in steady state"
+        )
+    return SteadyStateTransmission(
+        specified_conductance_in_watt_per_kelvin=specified,
+        coupling_conductance_in_watt_per_kelvin=coupling,
+        factor=coupling / (coupling - specified),
+    )
 
 
 def surfaces_by_kind(case: Case) -> Dict[str, Tuple[Surface, ...]]:

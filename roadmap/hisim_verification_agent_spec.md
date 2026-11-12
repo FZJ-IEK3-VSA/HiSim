@@ -2,10 +2,18 @@
 
 **Audience:** a coding agent (e.g. Claude Code) working in the HiSim repository, plus the
 human reviewer.
-**Status:** Draft, revision 13, 2026-11-04 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
-revisions 6 to 9: 2026-11-03; revisions 10 to 12: 2026-11-04)
+**Status:** Draft, revision 14, 2026-11-12 (revision 1: 2026-10-15; revisions 2 to 5: 2026-11-02;
+revisions 6 to 9: 2026-11-03; revisions 10 to 13: 2026-11-04)
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
+
+**Changes in revision 14** (decision D28, gap analysis §18, 2026-11-12)
+
+- In the ASHRAE suite, the U-values the building gets are the printed air-to-air values times one
+  factor per case, f = H_tr_is / (H_tr_is − Σ U·A), so that the 5R1C network keeps their U·A sum in
+  steady state (§3.2 rules 1 and 2, Appendix B); the ISO suite is not covered. Rules 1 and 2 now
+  name the tables that print the U-values. The register entry `printed_u_values` becomes
+  `steady_state_u_values`, and `series_interior_coupling` is removed (§8.3).
 
 **Changes in revision 13** (step 6, gap analysis §15, 2026-11-04)
 
@@ -428,20 +436,28 @@ the values for cases 600 and 900 are checked against the hand calculation of App
 Every rule that departs from the standard's description is also an entry in the deviation
 register (§8.3).
 
-1. **Opaque transmission.** H_tr_op = Σ U_i·A_i over floor, walls and roof. Thermal bridges
+1. **Opaque transmission.** H_tr_op = Σ U_i·A_i over floor, walls and roof, in the ASHRAE suite
+   times the factor f below. Thermal bridges
    are zero in both suites (ASHRAE: the constructions are plane layers and the term does not occur
-   in the standard, checked 2026-11-03; ISO [verify]). The U-values are the air-to-air values printed
-   in the standards' construction tables (ASHRAE Tables 7-2, 7-25, 7-27, 7-31, checked; ISO Tables
-   23, 24 [verify]). They include the standards' combined surface coefficients, which is
-   consistent with a model that has no separate long-wave exchange. Recomputation from the
+   in the standard, checked 2026-11-03; ISO [verify]). The U-values are the printed air-to-air
+   values (ASHRAE Informative Tables 7-3, 7-26, 7-28, 7-32, from the layers of Tables 7-2, 7-25,
+   7-27, 7-31, checked; ISO Tables 23, 24 [verify]). In the ASHRAE suite they contain the combined
+   interior coefficients of Table 7-9 and reach from the zone air, whereas ISO 13790 lets H_tr_op
+   reach from the central node θ_s and puts H_tr_is in series (rule 5; 7.2.2.1, 7.2.2.2); taken as
+   they are, they would count the step from the air to the surfaces twice. The factor
+   f = H_tr_is / (H_tr_is − H), with H the U·A sum of floor, walls, roof and windows, makes the
+   network's steady-state transmission conductance equal to H (ASHRAE 7.2.1.10.3 b.2 and b.3; D28,
+   gap analysis §18). D28 does not cover the ISO suite. Recomputation from the
    layers serves only as a check (pyBuildingEnergy notes a 0.01 m²K/W discrepancy between
    Informative Table 7-28 and the layers of Table 7-27 for the Case 900 floor; table numbers
    checked). The floor faces outdoor air in both suites (ASHRAE 7.2.1.5 raised floor, checked; ISO
    Table 23 footnote a [verify]) and receives no solar radiation. *[decided 2026-11-02: as stated; the printed
-   value wins where the layer recomputation differs]*
+   value wins where the layer recomputation differs; the factor f in the ASHRAE suite decided
+   2026-11-12 (D28)]*
 2. **Window transmission.** H_tr_w = Σ U_w·A_w with the printed air-to-air window U-values
-   (ASHRAE Normative Table 7-10 with Informative Table 7-11, Tables 7-17 and 7-21 for 660 and 670,
-   checked; ISO clause 7.2.2.6 [verify]).
+   (ASHRAE Normative Tables 7-10, 7-17 and 7-21 with Informative Tables 7-11, 7-18 and 7-22, for
+   600, 660 and 670, checked; ISO clause 7.2.2.6 [verify]), in the ASHRAE suite times the factor f
+   of rule 1.
 3. **Internal heat capacity.** C_m = Σ κ_j·A_j over all elements facing the zone (ISO 13790
    12.3.1; FDIS 2007: 12.3.1.1, equation (68)). κ_j = Σ ρ·c·d over the layers from the inside up
    to the effective thickness of ISO 13786, Annex A, for a period of one day: the smallest of
@@ -1071,7 +1087,7 @@ Not needed to implement this spec. Grouped by when it is useful.
 
 Purpose: make §3.2.3 and §3.2.4 checkable by hand and give `test_parameter_derivation.py`
 its expected values. Layer data are pyBuildingEnergy's transcription of ASHRAE Tables 7-2
-and 7-27; U-values are not derived here (§3.2.1 takes the printed ones). The geometry of B.1
+and 7-27; U-values are not derived here (§3.2.1 takes the printed ones times f). The geometry of B.1
 and every layer value of B.2 were checked by the human against 7.2.1.3, Figure 7-1 and
 Tables 7-2 and 7-27 on 2026-11-03: all correct. B.3 and B.4 were computed from them on
 2026-11-02; B.3 still depends on conditions (a) and (b) of the ISO 13786 rule (D11).
@@ -1144,5 +1160,5 @@ lighter than the lightest class, which is why §3.2.3 does not use the class tab
 | H_tr_is = 3.45·A_tot [W/K] | 592.0 | 592.0 | 592.0 |
 | H_tr_ms = 9.1·A_m [W/K] | 1 246.4 | 1 073.2 | 1 056.6 |
 
-H_tr_op, H_tr_w and H_tr_em follow from the printed U-values (§3.2.1, §3.2.2) and are
-filled in by the agent once the human has confirmed those values.
+H_tr_op, H_tr_w and H_tr_em follow from the printed U-values times the factor f of §3.2.1
+(rules 1 and 2, D28); `parameters/<case>.json` records them.

@@ -892,3 +892,93 @@ energy balance reports as unlinked or unmetered are the ones named above.
 |---|---|---|---|---|
 | D26 | The setup kind of the verification runs (main #1221) | `demo` | `demo`; 2026-11-08 | hisim-x6c7.9 |
 | D27 | The technical room of a case's building (main #1211) | `HEATED_ZONE`, set in the system builder | `HEATED_ZONE`; 2026-11-08 | hisim-x6c7.8 |
+
+## 18. The U-values the building gets (2026-11-12)
+
+Cause 2 of §14.1, read again against both standards.
+
+**The argument**
+
+1. **ASHRAE's U-values reach from the zone air.** The tables label the total U-values of the
+   constructions air-to-air (Informative Tables 7-3, 7-26, 7-28, 7-32) and those of the glazings as
+   reaching from the interior air to the ambient air (Informative Tables 7-11, 7-18, 7-22); both
+   contain the constant combined interior coefficients of Table 7-9. Note c of Table 7-9 fits this
+   reading: it explains a combined coefficient below the convective one by convective and radiative
+   flows in opposite directions, which holds when both are measured against the difference between
+   zone air and surface. In steady state and with these constant coefficients, the transmission of
+   the zone is therefore Σ U·A times the difference between zone air and outdoor air.
+2. **ISO 13790's conductances reach from the central node.** In the 5R1C network, H_tr,w and
+   H_tr,op act between the outdoor air and the central node θ_s, which blends the air with the mean
+   radiant temperature (7.2.2.1), and H_tr,is couples the air to θ_s (7.2.2.2, Eq. 9). Informative
+   Annex I.3.2 describes the effect this represents: transmission is driven by such a blended
+   temperature, which lies below the air temperature when the air is heated to its set point. HiSim
+   implements this as the standard does.
+3. **Feeding the first into the second counts one step twice.** The air-to-air U-values already
+   contain the step from the zone air to the surfaces. Placed where ISO 13790 expects conductances
+   from θ_s, with H_tr,is in front of them, they add that step a second time, and the network
+   transmits less than Σ U·A in steady state. This is the deficit of §14.1. It comes from the input
+   mapping of D10, not from HiSim's implementation of ISO 13790; this revises the reading of cause 2
+   in §14.1 as a property of the model. For the network fed with ASHRAE's values, the steady-state
+   target is Σ U·A (step 1).
+
+**Normative basis.** 7.2.1.10.3 b.2 requires the combined interior coefficients of Table 7-9 from a
+program that computes neither time-step varying interior convection nor long-wave exchange, which
+is the case for the 5R1C. The 5R1C can take them only through the U-values, and its fixed H_tr,is
+lies in series with them. Under 7.2.1.10.3 b.3, values the standard does not specify are allowed
+when a mathematical, physical or logical reason supports them, when they hold for all cases alike,
+and when the Standard Output Report of Normative Annex A2 records them.
+
+**Options**
+
+- (a) U-values by ISO 6946 from the layers, with the interior treatment of ISO 13790 (h_is as
+  fixed): values the standard does not specify, which b.3 would allow.
+- (b) The mapping of the ISO 13790 model in the Modelica Buildings Library (LBNL,
+  `Buildings.ThermalZones.ISO13790`): U-values without the interior coefficient and with the
+  exterior convective one, h_is replaced by the area-weighted interior convective coefficient of
+  Table 7-9, the radiation to the sky computed separately. It changes h_is, which ISO 13790 fixes.
+- (c) The printed air-to-air U-values, which carry the coefficients b.2 specifies, times one factor
+  per case that removes the second step in steady state.
+
+(c) is the only one of the three that keeps the coefficients b.2 specifies for this kind of program
+and meets the target of step 3 in steady state, while h_is and h_ms stay as ISO 13790 fixes them.
+The factor itself moves the network's conductances away from the printed values and is therefore a
+value the standard does not specify, in the sense of b.3: its reason is the argument above, it
+applies to every case of the suite, and the register records it (`steady_state_u_values`). The
+suite has no Standard Output Report yet (D23); until it has one, the register stands in for it.
+
+**Rule (D28):** option (c), for the ASHRAE suite.
+
+- H = Σ U·A over the opaque elements and the windows, with the case's air-to-air U-values;
+  H_tr,is = h_is · A_tot with HiSim's h_is; f = H_tr,is / (H_tr,is − H).
+- Every U-value the building gets is the case's times f, so that 1/(1/H_tr,is + 1/(f·H)) = H.
+  h_is, h_ms and the case files stay as they are. f is computed from the case file alone and has
+  no free parameter.
+- One factor for windows and opaque elements alike is an assumption: the steady state does not
+  decide how the compensation splits between them. H_tr,is in series still shapes the network's
+  dynamics.
+- D28 covers the ASHRAE suite; the deferred ISO 52016-1 suite (D9) is not covered.
+- The absorbed solar radiation of the opaque elements and the radiation to the sky (ISO 13790,
+  11.3.4 and 11.3.5; cause 1) scale with R_se·U, the share of the heat at the outer surface that
+  reaches the zone. If they are implemented, they take the case's air-to-air U-values, not the
+  U-values times f; the building receives only the latter.
+
+What changed:
+
+- **Code.** `derivation.steady_state_transmission` gives f and `system_builder.derive` applies it.
+  `parameters/<case>.json` records the case's U-values, H, H_tr,is, f and the U-values HiSim gets
+  (key `u_values`).
+- **Tests.** For every case, the network's steady-state transmission conductance equals the U·A
+  sum computed from the case file. The factor is checked on synthetic values, and the configuration
+  tests of cases 600 and 620 expect the case's U-values times f.
+- **Register.** `printed_u_values` becomes `steady_state_u_values`, which also notes the
+  dynamics. `series_interior_coupling`, proposed in §15, is removed: its steady-state
+  effect is what D28 compensates. `opaque_solar_absorption_and_sky_radiation` states which U-values
+  the two terms take.
+- **Spec.** Revision 14: §3.2 rules 1 and 2, Appendix B.
+- The results of the suite with the rule stay private (D22).
+
+### 18.1 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D28 | The U-values the building gets in the ASHRAE suite (cause 2 of §14.1; replaces the U-value part of D10) | the printed air-to-air U-values times f per case | as recommended; 2026-11-12 | – |

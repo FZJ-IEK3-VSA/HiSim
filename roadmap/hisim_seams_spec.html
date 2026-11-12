@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec: HiSim seams</title>
+<style>
+  :root { --ink: #1e1e1e; --muted: #495057; --line: #dee2e6; --soft: #f8f9fa; --red: #c92a2a; --green: #2b8a3e; --blue: #1971c2; }
+  body { font-family: Liberation Sans, Helvetica, Arial, sans-serif; color: var(--ink); background: #fff; margin: 0; padding: 0 16px 60px; line-height: 1.45; font-size: 15px; }
+  main { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 28px 0 8px; }
+  h2 { font-size: 20px; margin: 36px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 16px; margin: 24px 0 6px; }
+  p, li { max-width: 100ch; }
+  code, pre { font-family: Liberation Mono, Cascadia Code, monospace; font-size: 13px; }
+  code { background: var(--soft); padding: 0 3px; border-radius: 3px; }
+  pre { background: var(--soft); padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line); }
+  table { border-collapse: collapse; margin: 10px 0 16px; font-size: 13.5px; width: 100%; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; text-align: left; }
+  th { background: var(--soft); }
+  td.n, th.n { text-align: right; white-space: nowrap; }
+  .status { background: #fff9db; border: 1px solid #f59f00; padding: 8px 12px; border-radius: 4px; }
+  .q { background: #e7f5ff; border-left: 4px solid var(--blue); padding: 8px 12px; margin: 10px 0; }
+  .d { background: #ebfbee; border-left: 4px solid var(--green); padding: 8px 12px; margin: 10px 0; }
+  .rec { color: var(--green); font-weight: bold; }
+  .red { color: var(--red); }
+  .diagram { border: 1px solid var(--line); margin: 10px 0 6px; overflow-x: auto; background: #fff; }
+  .diagram svg { width: 1560px; max-width: none; height: auto; display: block; }
+  .caption { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  .small { font-size: 13px; color: var(--muted); }
+  .wrap td { word-break: break-word; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Spec: HiSim gets a layer map shaped as a diamond, enforced by one test; post-processing and economics read one frozen run record; every multi-module component lives in a folder; the tests tree mirrors the packages</h1>
+
+<p class="status"><b>Status:</b> draft, revised on 2026-11-09 after the owner's review of the first draft (#1260): the stack became a diamond, the post-processing
+DTO is restored as the only input of post-processing, and the legacy cost path is deleted rather than refactored (bead
+<code>hisim-legacy-cost-cutover-7300</code>, P1). Nothing merged. Owner: Noah Pflugradt. Epic: <code>hisim-ylxf</code> (P1). Builds on: the four
+import lints (<code>tests/test_renovisor_import_lint.py</code>, <code>tests/test_economics_import_lint.py</code>,
+<code>tests/test_energy_system_layering.py</code>, <code>tests/test_subcomponent_import_lint.py</code>), the config layer rule
+(<code>hisim/config/__init__.py</code>), the heat-pump package #1241, <code>roadmap/cost_spec.md</code> §10 (the cutover), and beads
+hisim-repo-cleanup-o6a.15, o6a.4, o6a.29, o6a.31 and hisim-rust-ideas-9ks.2. All numbers were measured on <code>origin/main</code> at
+<code>911498220</code> (2026-11-09) by the scripts in <code>agent-tmp/seams/</code> (not in the repository; the appendix lists their tables).
+The owner's goal, in his words: "start working on the seams for hisim to limit the blast radius of changes as much as possible."</p>
+
+<h2>1. Problem</h2>
+<p>HiSim has 356 Python modules under <code>hisim/</code> (the <code>inputs</code> data tree excluded): 33 modules directly at the top level and 10 code
+packages. Four import rules are enforced today, each by its own test; everything else may import anything. Measured on main:</p>
+<ul>
+  <li><b>The eight code packages form one strongly connected component.</b> Counting static imports only, <code>config</code>, the top-level modules,
+  <code>caching</code>, <code>components</code>, <code>postprocessing</code>, <code>setup_rules</code>, <code>energy_system</code> and <code>economics</code> all
+  reach each other. There is no package below which a change is safe.</li>
+  <li><b>Components, post-processing and economics import each other in every direction.</b> 49 component modules import <code>economics.facts</code>, 31
+  import <code>postprocessing.kpi_structure</code>, 21 import <code>postprocessing.capex_computation</code>; the post-processing imports 9 component classes
+  and 9 modules of the component model; economics imports 9 post-processing modules. The root is <code>hisim/component.py</code>, which imports both
+  <code>economics.facts</code> and <code>kpi_structure</code>: every component depends on the cost engine and the post-processing through its base class.</li>
+  <li><b>The post-processing DTO eroded into a bag of live objects.</b> <code>PostProcessingDataTransfer</code> once carried everything post-processing needed;
+  today it holds <code>wrapped_components</code> (live component instances) and <code>all_outputs</code>, and post-processing calls methods on them:
+  <code>component_kpi_entries</code>, <code>get_cost_opex</code>, <code>capital_cost_data</code>, <code>write_to_report</code>, <code>weather_config</code>,
+  <code>isinstance(component, Weather)</code>, <code>ElectricityMeter.get_classname() in kpi_entry["description"]</code>. 298 access sites in 9 files read
+  through the DTO, 95 of them on live objects (§4.9). That is a duck-typed dependency no import lint sees, and it is why post-processing cannot run from a
+  result directory or be tested without a simulation.</li>
+  <li><b>Cycles are hidden, not absent.</b> No module-level cycle exists among top-of-file imports, because the cycles were broken by hand: 86 function-local
+  imports of HiSim modules, 36 <code>importlib.import_module</code> calls (24 in components, "to avoid circular-import errors"), and a string import of
+  <code>hisim.economics</code> inside <code>postprocessing_main</code>. With those counted, three module cycles reappear (8, 6 and 5 modules, §4.2).</li>
+  <li><b>Components import each other.</b> 76 static and 14 lazy imports run between modules of <code>hisim/components</code>, against the black-box principle
+  of <code>system_docs/component_design_principles.md</code> B.1: default connections naming another class, and shared helpers filed under components.</li>
+  <li><b>A change to one component touches the whole repository.</b> #1247 (PV publishes its DC power) changed 3 component modules and 86 other files; #1241
+  (heat pump into a package) moved 5 modules and changed 62 other files. The twins, the goldens and the tests cannot say which of them a change affects.</li>
+  <li><b>The tests tree does not mirror the packages.</b> 310 test files sit flat in <code>tests/</code> beside 16 helper modules; 9 subdirectories hold 78 more.</li>
+</ul>
+
+<h2>2. Decisions</h2>
+<p>The owner's review of the first draft (2026-11-09, #1260) settled the shape; the rest is open (§12).</p>
+<div class="d"><b>D1 — The map is a diamond, not a stack</b> (owner, 2026-11-09). "I don't think a linear layer approach as drawn is useful. Postprocessing should
+be parallel, not on top of components." Consequence: one contracts layer at the bottom; components, post-processing and economics side by side above it as
+siblings that never import each other; an orchestration layer that owns the sequence; RenoVisor on top (§6).</div>
+<div class="d"><b>D2 — The post-processing DTO is restored as the only input of post-processing</b> (owner, 2026-11-09). "A long time ago it used to be that
+postprocessing got everything it needed in the postprocessing DTO object and didn't need any imports, but that eroded over time. I think restoring that makes
+sense." Sharpened in the review: the DTO is plain data and serializable; at the end of the run the orchestrator asks each component once, through the
+component interface, and freezes the answers. Consequence: §8; post-processing runs from a result directory alone and is tested with synthetic records.</div>
+<div class="d"><b>D3 — The legacy opex and capex calculation is deleted, not refactored</b> (owner, 2026-11-09). "The opex and capex calculations are to be
+fully replaced by hisim.economics." That is Phase 7 of <code>roadmap/cost_spec.md</code> §10, bead <code>hisim-legacy-cost-cutover-7300</code> (P1).
+Consequence: this spec moves nothing of the legacy path into a contracts package; its violations go on the allow-list under that bead (§7.2).</div>
+
+<h2>3. Terms</h2>
+<ul>
+  <li><b>Layer</b>: a named set of packages and modules. A module imports only layers below its own, never a layer above.</li>
+  <li><b>Siblings</b>: packages in one layer that never import each other. They meet only through the layer below them.</li>
+  <li><b>Contracts</b>: the bottom layer. Plain values and typed records every other layer may import: configuration base, load types, units, logging, the run
+  parameters, the KPI types, the cost-fact types of the new engine, the energy-port vocabulary, and the run record.</li>
+  <li><b>Run record</b> (the DTO): the frozen, plain, serializable record of one finished run that the orchestrator builds and hands to post-processing and
+  economics. Today's <code>PostProcessingDataTransfer</code>, minus every live object.</li>
+  <li><b>Orchestration</b>: the layer that owns the sequence: build and wire, run the components, freeze the run record, start the AFTER_RUN rules, hand the record
+  to post-processing and economics, write the results.</li>
+  <li><b>Package</b>: a directory under <code>hisim/</code> with an <code>__init__.py</code>. A <b>component folder</b> is a package under <code>hisim/components/</code>.</li>
+  <li><b>Public API</b> of a package: the names its <code>__init__.py</code> exports (<code>__all__</code>). Everything else in it is <b>internal</b>.</li>
+  <li><b>Static import</b>: at module level. <b>Lazy import</b>: inside a function. <b>Hidden import</b>: by <code>importlib.import_module</code> or <code>__import__</code> with a string.</li>
+  <li><b>Class path</b>: the dotted module path plus class name an energy-system file writes under <code>class:</code>.</li>
+  <li><b>Allow-list</b>: the committed list of today's violations the lint tolerates, each with the bead that removes it. A <b>ratchet</b> is an allow-list that may only shrink.</li>
+  <li><b>Blast radius</b> of a change: the tests, goldens and recorded files that can be affected by it.</li>
+</ul>
+
+<h2>4. Measured state</h2>
+<p class="small">Method: <code>agent-tmp/seams/import_graph.py</code> parses every <code>hisim/**/*.py</code> with <code>ast</code>, resolves every import to
+the HiSim module that defines the name (relative imports against the file's package, <code>from hisim import x</code> to <code>hisim.x</code>), and records
+whether the statement is at module level, inside a function, or under <code>TYPE_CHECKING</code> (not counted). <code>importlib</code> calls are listed
+separately. <code>dto_accesses.py</code> tracks, inside every function of <code>hisim/postprocessing</code> and <code>hisim/economics</code>, which variables
+are bound from the DTO, its component wrappers, components, outputs or parameters, and records every attribute read, method call, <code>isinstance</code> and
+<code>getattr</code> on them.</p>
+
+<h3>4.1 The package-level import graph against the diamond</h3>
+<div class="diagram" id="svg-current">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1620 1104" font-family="Liberation Sans, Helvetica, Arial, sans-serif">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<defs>
+<marker id="head0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#adb5bd"/></marker>
+<marker id="head1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c92a2a"/></marker>
+</defs>
+<rect x="30" y="859" width="1560" height="215" rx="6" fill="#f1f3f5" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="626" width="1560" height="215" rx="6" fill="#fff4e6" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="393" width="1560" height="215" rx="6" fill="#e6fcf5" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="160" width="1560" height="215" rx="6" fill="#ffe8e8" stroke="#adb5bd" stroke-width="1"/>
+<rect x="60" y="939" width="250" height="109.6" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="360" y="939" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="660" y="939" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="960" y="939" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="60" y="706" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="360" y="706" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="660" y="706" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="960" y="706" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="1260" y="706" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="60" y="473" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="360" y="473" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="660" y="473" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="960" y="473" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="1260" y="473" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="660" y="240" width="250" height="100" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<polyline points="1426.7,576.0 847.5,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1343.3,576.0 276.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="847.5,936.0 847.5,925.0 122.5,925.0 122.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="913.0,969.0 957.0,969.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1053.8,576.0 516.2,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="991.2,576.0 226.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1147.5,470.0 1147.5,459.0 422.5,459.0 422.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1147.5,576.0 1154.4,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1178.8,576.0 1116.2,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="957.0,543.0 913.0,543.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1153.5,470.0 1153.5,448.0 116.5,448.0 116.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="460.0,809.0 391.2,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="410.0,809.0 110.0,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="422.5,703.0 422.5,692.0 1447.5,692.0 1447.5,703.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="428.5,703.0 428.5,681.0 1141.5,681.0 1141.5,703.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="816.2,809.0 826.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="657.0,776.0 613.0,776.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="785.0,809.0 453.8,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="691.2,809.0 176.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="734.5,703.0 734.5,670.0 1435.5,670.0 1435.5,703.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="913.0,736.0 957.0,736.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="865.5,703.0 865.5,659.0 104.5,659.0 104.5,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="526.7,936.0 722.5,809.0" fill="none" stroke="#c92a2a" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#head1)"/>
+<polyline points="357.0,1009.0 313.0,1009.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="128.5,936.0 128.5,914.0 841.5,914.0 841.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="226.7,936.0 691.2,809.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="1471.5,703.0 1471.5,648.0 698.5,648.0 698.5,703.0" fill="none" stroke="#c92a2a" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#head1)"/>
+<polyline points="1343.3,809.0 578.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1301.7,809.0 293.3,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1257.0,776.0 1213.0,776.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="1468.3,809.0 1178.8,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="434.5,470.0 434.5,437.0 1135.5,437.0 1135.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="7 5" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="435.0,576.0 443.3,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="485.0,576.0 753.8,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="460.0,576.0 422.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="385.0,576.0 143.3,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="560.0,576.0 1043.3,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="585.0,576.0 1022.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="613.0,503.0 657.0,503.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="357.0,543.0 313.0,543.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1177.5,703.0 1177.5,637.0 392.5,637.0 392.5,703.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="957.0,794.0 913.0,794.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="1085.0,809.0 547.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="991.2,809.0 243.3,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1178.8,809.0 1147.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1147.5,703.0 860.0,576.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="1022.5,703.0 238.6,576.0" fill="none" stroke="#c92a2a" stroke-width="2.2" marker-end="url(#head1)"/>
+<polyline points="785.0,343.0 785.0,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="691.2,343.0 193.3,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="878.8,343.0 1410.0,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="753.8,343.0 422.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="816.2,343.0 1098.9,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="847.5,343.0 1085.0,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="722.5,343.0 131.4,470.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1159.5,936.0 1159.5,903.0 110.5,903.0 110.5,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="1126.7,936.0 274.3,576.0" fill="none" stroke="#c92a2a" stroke-width="1.6" stroke-dasharray="7 5" marker-end="url(#head1)"/>
+<polyline points="753.8,576.0 526.7,703.0" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="7 5" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="785.0,576.0 485.0,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="691.2,576.0 210.0,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="878.8,576.0 1460.0,703.0" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="7 5" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="657.0,561.0 613.0,561.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="847.5,576.0 1126.7,703.0" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="7 5" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="865.5,470.0 865.5,426.0 104.5,426.0 104.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" stroke-dasharray="7 5" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="143.3,576.0 401.7,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="101.7,576.0 76.7,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="226.7,576.0 987.8,703.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="268.3,576.0 991.2,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="146.5,470.0 146.5,415.0 823.5,415.0 823.5,470.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<polyline points="185.0,809.0 93.3,936.0" fill="none" stroke="#adb5bd" stroke-width="1" marker-end="url(#head0)" stroke-opacity="0.45"/>
+<rect x="478.7" y="917.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="928.7" y="961.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="775.41" y="451.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="928.7" y="535.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="628.7" y="440.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="370.41" y="813.7" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="928.7" y="684.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="778.7" y="673.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="625.41" y="768.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="742.28" y="813.7" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="626.9" y="813.7" width="25.78" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1049.03" y="662.0" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="925.41" y="728.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="475.41" y="651.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="527.39" y="912.76" width="45.56" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="328.7" y="1001.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="494.7" y="906.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="276.12" y="912.76" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1062.22" y="640.0" width="45.56" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1164.86" y="813.7" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1228.7" y="768.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="752.33" y="429.0" width="65.34" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="446.66" y="604.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="324.86" y="604.0" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="625.41" y="495.0" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="328.7" y="535.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="778.7" y="629.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="928.7" y="786.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="906.86" y="813.7" width="19.19" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1106.7" y="679.76" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="890.77" y="674.68" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="605.49" y="394.3" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="895.91" y="371.0" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="687.95" y="347.7" width="65.34" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="628.7" y="895.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="1001.6" y="884.8" width="45.56" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="599.03" y="553.0" width="71.94" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="452.33" y="418.0" width="65.34" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<rect x="526.7" y="407.0" width="12.59" height="15" rx="0" fill="#ffffff" stroke="transparent" stroke-width="1" fill-opacity="0.9"/>
+<text x="40.0" y="876.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">contracts: plain values and typed records</text>
+<text x="40.0" y="643.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">siblings: components | postprocessing | economics</text>
+<text x="40.0" y="410.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">orchestration: the run, the format, the rules, the entry points</text>
+<text x="40.0" y="177.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">RenoVisor</text>
+<text x="185.0" y="956.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">12 contract leaf modules</text>
+<text x="185.0" y="972.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">loadtypes, units, log, utils, hydronics,</text>
+<text x="185.0" y="988.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">simulationparameters,</text>
+<text x="185.0" y="1004.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">postprocessingoptions, energy_port,</text>
+<text x="185.0" y="1020.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">window_offset, simulation_day,</text>
+<text x="185.0" y="1036.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">hisim_commit</text>
+<text x="485.0" y="956.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.config</text>
+<text x="485.0" y="972.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">12 modules: ConfigBase, presets,</text>
+<text x="485.0" y="988.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">sizing laws, channels</text>
+<text x="785.0" y="956.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.caching</text>
+<text x="785.0" y="972.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">6 modules</text>
+<text x="1085.0" y="956.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">4 run-infrastructure modules</text>
+<text x="1085.0" y="972.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">write_guard, result_path_provider,</text>
+<text x="1085.0" y="988.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">calculation_scope,</text>
+<text x="1085.0" y="1004.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">calculation_progress</text>
+<text x="185.0" y="723.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.subcomponents</text>
+<text x="185.0" y="739.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">3 modules: Subcomponent, pumps</text>
+<text x="485.0" y="723.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">6 component-model modules</text>
+<text x="485.0" y="739.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">component, dynamic_component,</text>
+<text x="485.0" y="755.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">sim_repository, part_load,</text>
+<text x="485.0" y="771.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">explicit_state_controller, fluid_loops</text>
+<text x="785.0" y="723.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.components</text>
+<text x="785.0" y="739.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">48 flat modules + 5 folders; 76 static</text>
+<text x="785.0" y="755.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">+ 14 lazy imports between</text>
+<text x="785.0" y="771.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">components, 24 importlib calls</text>
+<text x="1085.0" y="723.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.postprocessing</text>
+<text x="1085.0" y="739.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">40 modules: KPIs, charts, energy</text>
+<text x="1085.0" y="755.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">balance, legacy opex/capex</text>
+<text x="1385.0" y="723.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.economics</text>
+<text x="1385.0" y="739.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">61 modules: facts, evaluator, reports</text>
+<text x="185.0" y="490.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">simulator group</text>
+<text x="185.0" y="506.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">simulator, component_wrapper,</text>
+<text x="185.0" y="522.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">evaluation_order</text>
+<text x="485.0" y="490.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.energy_system</text>
+<text x="485.0" y="506.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">76 modules: format, loader, wiring,</text>
+<text x="485.0" y="522.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">assemblies, recording, executor</text>
+<text x="785.0" y="490.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.setup_rules</text>
+<text x="785.0" y="506.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">16 modules: engine + the rules</text>
+<text x="1085.0" y="490.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">8 entry-point modules</text>
+<text x="1085.0" y="506.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">cli, cli_*, hisim_main,</text>
+<text x="1085.0" y="522.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">hisim_with_profiler,</text>
+<text x="1085.0" y="538.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">project_code_overview_generator</text>
+<text x="1385.0" y="490.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.building_sizer_utils</text>
+<text x="1385.0" y="506.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">6 modules +</text>
+<text x="1385.0" y="522.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">system_setup_configuration</text>
+<text x="785.0" y="257.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.renovisor</text>
+<text x="785.0" y="273.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">29 modules: the translation layer on</text>
+<text x="785.0" y="289.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">top</text>
+<text x="481.7" y="927.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">2</text>
+<text x="931.7" y="971.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">1</text>
+<text x="778.4" y="461.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">31</text>
+<text x="931.7" y="545.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">5</text>
+<text x="631.7" y="450.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">1</text>
+<text x="373.4" y="824.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">12</text>
+<text x="931.7" y="694.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1</text>
+<text x="781.7" y="683.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1</text>
+<text x="628.4" y="778.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">88</text>
+<text x="745.3" y="824.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">59</text>
+<text x="629.9" y="824.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">182</text>
+<text x="1052.0" y="672.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">53 +3 lazy</text>
+<text x="928.4" y="738.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">52</text>
+<text x="478.4" y="661.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">13</text>
+<text x="530.4" y="923.7" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1 lazy</text>
+<text x="331.7" y="1011.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">3</text>
+<text x="497.7" y="916.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">2</text>
+<text x="279.1" y="923.7" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1</text>
+<text x="1065.2" y="650.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1 lazy</text>
+<text x="1167.9" y="824.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">29 +1 lazy</text>
+<text x="1231.7" y="778.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">9</text>
+<text x="755.3" y="439.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">0 +1 lazy</text>
+<text x="449.7" y="614.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">41</text>
+<text x="327.9" y="614.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">24 +1 lazy</text>
+<text x="628.4" y="505.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">30</text>
+<text x="331.7" y="545.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">3</text>
+<text x="781.7" y="639.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">9</text>
+<text x="931.7" y="796.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">9</text>
+<text x="909.9" y="824.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">33</text>
+<text x="1109.7" y="690.7" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">5</text>
+<text x="893.8" y="685.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">3</text>
+<text x="608.5" y="405.2" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">12 +1 lazy</text>
+<text x="898.9" y="381.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">11 +2 lazy</text>
+<text x="691.0" y="358.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">5 +5 lazy</text>
+<text x="631.7" y="905.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">1</text>
+<text x="1004.6" y="895.7" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#c92a2a" text-anchor="start">1 lazy</text>
+<text x="602.0" y="563.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">13 +1 lazy</text>
+<text x="455.3" y="428.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">0 +2 lazy</text>
+<text x="529.7" y="417.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="11" fill="#495057" text-anchor="start">4</text>
+<text x="30.0" y="49.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="24" fill="#1e1e1e" text-anchor="start" font-weight="bold">HiSim import graph today, grouped as the proposed diamond groups them</text>
+<text x="30.0" y="72.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">origin/main 911498220, 2026-11-09. 356 modules under hisim/ (inputs excluded), measured by agent-tmp/seams/import_graph.py (ast, every import statement, function-local ones counted as lazy).</text>
+<text x="30.0" y="86.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">Grey arrows are allowed by the proposed map (downward, or sideways inside the contracts, the orchestration or one sibling column). Red arrows are the violations: a sibling importing</text>
+<text x="30.0" y="100.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">another sibling, anything below knowing a component class, an upward import. 13 package edges carrying 149 import statements. Numbers: import statements (static, +lazy).</text>
+<text x="30.0" y="113.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">Not drawn: the 76 static + 14 lazy imports and 24 importlib calls between modules of hisim.components, the 36 importlib calls in all, and the string import of hisim.economics inside postprocessing_main.</text>
+</svg>
+</div>
+<p class="caption">Figure 1. The import graph today, grouped as the proposed diamond groups it. Editable source:
+<code>roadmap/hisim_seams/current_layer_map.excalidraw</code>.</p>
+<p>802 static and 38 lazy import statements cross a package boundary. Against the diamond, 13 package edges carrying 149 statements point the wrong way
+(<code>package_graph.tsv</code>, module detail in <code>package_edges_detail.tsv</code>):</p>
+<table class="wrap">
+<tr><th>From</th><th>To</th><th class="n">static</th><th class="n">lazy</th><th>What carries it</th><th>What removes it</th></tr>
+<tr><td>components</td><td>economics</td><td class="n">53</td><td class="n">3</td><td>49 modules import <code>economics.facts</code>: <code>CostRelevance</code> (the class attribute <code>cost_relevance</code> every component declares; 34 FREE_OF_COST, 25 PRICED, 4 METER), <code>ComponentCostFacts</code> (the 5 adopters of <code>get_cost_facts</code>); <code>tariff_provider</code> imports <code>tariffs</code>, <code>carriers</code>, <code>uncertainty</code></td><td>the cost-fact types of the new engine move to the contracts layer (they are what a component declares, not what the engine computes); the tariff provider's 6 imports stay on the allow-list under a bead of their own</td></tr>
+<tr><td>components</td><td>postprocessing</td><td class="n">52</td><td class="n">0</td><td>31 modules import <code>kpi_structure</code> (<code>KpiEntry</code>, <code>KpiTagEnumClass</code>, <code>KpiHelperClass</code>); 21 import <code>capex_computation</code></td><td>the KPI types move to the contracts layer (31); the 21 capex imports are deleted by the cutover (D3)</td></tr>
+<tr><td>postprocessing</td><td>component model</td><td class="n">9</td><td class="n">0</td><td><code>hisim.component</code> (<code>ComponentOutput</code>, <code>Component</code>, the kinds) in the DTO, the energy balance, the KPI preparation, the system chart</td><td rowspan="3">D2: post-processing reads the frozen run record only; the record carries output metadata, wiring and one plain record per component (§8)</td></tr>
+<tr><td>postprocessing</td><td>components</td><td class="n">9</td><td class="n">0</td><td>6 classes in the legacy <code>opex_and_capex_cost_calculation</code> (deleted by D3), <code>ElectricityMeter</code> in <code>kpi_preparation</code>, <code>Weather</code> in <code>postprocessing_main</code>, <code>EmissionFactorsAndCostsForDevicesConfig</code> in <code>capex_computation</code> (deleted)</td></tr>
+<tr><td>postprocessing</td><td>simulator group</td><td class="n">3</td><td class="n">0</td><td><code>ComponentWrapper</code> in the DTO and the system chart</td></tr>
+<tr><td>economics</td><td>postprocessing</td><td class="n">9</td><td class="n">0</td><td><code>kpi_structure</code> (<code>KpiTagEnumClass</code>, <code>KpiSource</code>, <code>KpiEntry</code>) in 8 modules; <code>chartbase.SavedChartResolution</code> in <code>report_plots</code></td><td>the KPI types move to contracts; the chart resolution enum moves with them or into the economics report</td></tr>
+<tr><td>postprocessing</td><td>setup_rules</td><td class="n">5</td><td class="n">0</td><td><code>postprocessing_main.judge_the_results</code> runs the AFTER_RUN rules</td><td>the orchestrator starts the AFTER_RUN rules on the run record, before it calls post-processing (D2 sharpening)</td></tr>
+<tr><td>component model</td><td>postprocessing, economics</td><td class="n">2</td><td class="n">0</td><td><code>component.py</code> imports <code>kpi_structure</code> and <code>economics.facts</code></td><td>both move to contracts</td></tr>
+<tr><td>contracts</td><td>components</td><td class="n">1</td><td class="n">0</td><td><code>energy_port.py</code> imports <code>components.configuration.PhysicsConfig</code></td><td><code>PhysicsConfig</code> becomes a contracts leaf <code>hisim/physics_constants.py</code></td></tr>
+<tr><td>config</td><td>components</td><td class="n">0</td><td class="n">1</td><td><code>config.context.SizingContext.for_building</code> (o6a.4)</td><td><code>for_building</code> moves into the building package</td></tr>
+<tr><td>economics</td><td>components</td><td class="n">0</td><td class="n">1</td><td><code>economics.database</code> reads the cost dicts of <code>components/configuration.py</code></td><td>the dicts are deleted by the cutover (D3) or move into <code>hisim/cost_database</code></td></tr>
+<tr><td>run infrastructure</td><td>simulator</td><td class="n">0</td><td class="n">1</td><td><code>calculation_progress</code> imports the simulator for a progress line</td><td>the simulator passes what the progress line needs</td></tr>
+<tr><td colspan="6"><b>Not an import, still a violation:</b> <code>postprocessing_main.compute_lifecycle_costs</code> loads <code>hisim.economics</code> by string (<code>_load_attribute("hisim.economics.catalog_entries", ...)</code>) and calls the bridge from inside post-processing: one sibling driving the other. The orchestrator calls economics (D2 sharpening). The lint of §7 flags string imports of HiSim modules.</td></tr>
+</table>
+<p>Allowed and therefore grey in Figure 1: the orchestration's 30 + 13 imports between <code>energy_system</code> and <code>setup_rules</code>, the
+simulator's calls into post-processing and the rules, the 11 lazy imports of the component model inside <code>setup_rules</code> (they become plain imports
+inside the orchestration layer), and every import of the contracts.</p>
+
+<h3>4.2 Cycles</h3>
+<ul>
+  <li>Package level, static imports: one strongly connected component of all eight code packages (<code>package_cycles.txt</code>).</li>
+  <li>Module level, static imports: none. Every cycle has been cut by a lazy or hidden import.</li>
+  <li>Module level with lazy imports counted (<code>module_cycles.txt</code>): three components of 8, 6 and 5 modules:
+    <ol>
+      <li><code>config</code> ↔ <code>components.building.{config,information}</code> through <code>for_building</code>;</li>
+      <li><code>controller_l2_energy_management_system</code> ↔ <code>heating_curve</code> ↔ <code>more_advanced_heat_pump.*</code> ↔ <code>generic_electric_heating</code>: default connections in both directions;</li>
+      <li><code>economics.results</code> ↔ <code>economics.calculators.*</code>: inside one package, out of scope here.</li>
+    </ol></li>
+  <li>The 24 <code>importlib</code> calls in components (<code>importlib_uses.tsv</code>) are cycles the script cannot draw: <code>building.building</code> (3),
+  <code>generic_chp.controller</code> (2), <code>heat_distribution_system</code> (3), <code>more_advanced_heat_pump</code> (5), <code>simple_water_storage</code>
+  (9), <code>advanced_ev_battery_bslib</code> (1), plus 2 lazy imports in <code>heating_meter</code>. Every one loads another component inside a
+  <code>get_default_connections_from_*</code> method. The other 12 <code>importlib</code> calls are legitimate registries and loaders (the energy-system class
+  loader, the rules registry, the CLI, the weather facade) and one is the string import of economics in post-processing.</li>
+</ul>
+
+<h3>4.3 Lazy imports</h3>
+<p>86 function-local imports of HiSim modules (<code>lazy_imports.tsv</code>), 38 across a package boundary. By the comment beside them: 52 carry a
+<code>noqa</code>/<code>pylint: disable</code> marker, 29 no comment, 5 a cost reason. The largest group is <code>setup_rules</code> (18: "the component layer,
+which collecting the rules must not import"), then the economics reports (12, inside the package), <code>renovisor</code> (14) and the components' default
+connections (14).</p>
+
+<h3>4.4 The top-level modules</h3>
+<p>33 modules sit directly in <code>hisim/</code> (<code>top_level.tsv</code> has every importer and import). Sorted into the diamond:</p>
+<table>
+<tr><th>Module</th><th class="n">lines</th><th class="n">importers</th><th>Imports (HiSim)</th><th>Proposed place</th></tr>
+<tr><td>loadtypes, log, units, hydronics, utils</td><td class="n">443, 126, 256, 372, 503</td><td class="n">117, 53, 1, 11, 26</td><td>none, except utils → caching, log, simulationparameters</td><td>contracts (leaves)</td></tr>
+<tr><td>simulationparameters, postprocessingoptions, window_offset, simulation_day, hisim_commit</td><td class="n">580, 44, 161, 52, 115</td><td class="n">71, 8, 4, 3, 5</td><td>caching.locations, log, simulation_day</td><td>contracts (run parameters)</td></tr>
+<tr><td>energy_port</td><td class="n">566</td><td class="n">36</td><td>hydronics, loadtypes, <span class="red">components.configuration</span></td><td>contracts (the port vocabulary), after PhysicsConfig moves</td></tr>
+<tr><td>write_guard, result_path_provider, calculation_scope, calculation_progress</td><td class="n">690, 395, 84, 134</td><td class="n">4, 3, 5, 2</td><td>log, each other; <span class="red">calculation_progress → simulator (lazy)</span></td><td>contracts (run infrastructure)</td></tr>
+<tr><td>component</td><td class="n">1064</td><td class="n">106</td><td>config, loadtypes, log, energy_port, sim_repository, simulationparameters, <span class="red">economics.facts, kpi_structure</span></td><td>components column: the component model</td></tr>
+<tr><td>dynamic_component, sim_repository, part_load, explicit_state_controller, fluid_loops</td><td class="n">813, 94, 675, 129, 203</td><td class="n">11, 3, 5, 3, 2</td><td>component, config, loadtypes</td><td>components column: the component model</td></tr>
+<tr><td>simulator, component_wrapper, evaluation_order</td><td class="n">924, 190, 190</td><td class="n">9, 4, 2</td><td>component model, run infrastructure, setup_rules, postprocessing</td><td>orchestration</td></tr>
+<tr><td>cli, cli_exit, cli_grouping, cli_render, cli_setup_rules, hisim_main, hisim_with_profiler, project_code_overview_generator</td><td class="n">415, 18, 212, 369, 205, 343, 40, 448</td><td class="n">0–3</td><td>energy_system (31), setup_rules, postprocessing, simulator</td><td>orchestration (<code>hisim/cli/</code>, Q6)</td></tr>
+<tr><td>system_setup_configuration</td><td class="n">133</td><td class="n">1</td><td>components.building, log, utils</td><td>orchestration, with <code>building_sizer_utils</code>, its only importer</td></tr>
+</table>
+
+<h3>4.5 Components that span several modules</h3>
+<p><code>hisim/components</code> holds 48 flat modules and 5 folders (<code>building</code>, <code>weather</code>, <code>generic_pv_system</code>,
+<code>generic_chp</code>, <code>more_advanced_heat_pump</code>). Imports between components (<code>components_cross_imports.tsv</code>), by what is imported:</p>
+<table>
+<tr><th>Imported module</th><th class="n">importers</th><th>Names</th><th>Why</th></tr>
+<tr><td>configuration</td><td class="n">24</td><td>PhysicsConfig, EmissionFactorsAndCostsForFuelsConfig, HouseholdWarmWaterDemandConfig</td><td>shared constants filed under components; the cost dicts go with the cutover</td></tr>
+<tr><td>weather</td><td class="n">11</td><td>Weather</td><td>default connections name the class and its outputs</td></tr>
+<tr><td>building</td><td class="n">7</td><td>Building</td><td>default connections</td></tr>
+<tr><td>dual_circuit_system</td><td class="n">6</td><td>DiverterValve, HotWaterPriorityLimit, DualCircuitHotWater, …</td><td>shared helpers (o6a.29, o6a.31)</td></tr>
+<tr><td>simple_water_storage</td><td class="n">6</td><td>SimpleDHWStorage, SimpleHotWaterStorage</td><td>default connections</td></tr>
+<tr><td>heating_curve</td><td class="n">6</td><td>EmitterDesign, HeatDistributionSystemType, HeatingCurveController</td><td>shared helper and enum; default connections</td></tr>
+<tr><td>12 others</td><td class="n">1–2 each</td><td>a component class, or a helper of a sibling module (car ↔ car profile, LPG connector ↔ workspace)</td><td>default connections; components that span modules</td></tr>
+</table>
+
+<h3>4.6 Cross-package imports of private names</h3>
+<p>6 (<code>private_imports.tsv</code>), all of <code>_AutoSize</code> or <code>_encode_sizable</code> from <code>hisim.config.sizing</code> into
+<code>energy_system</code> (5) and <code>setup_rules.bindings</code> (1). They get public spellings in the first lint PR.</p>
+
+<h3>4.7 Where module paths are recorded</h3>
+<p>104 distinct component class paths appear somewhere in the repository (<code>recorded_class_paths.tsv</code>).</p>
+<table>
+<tr><th>Place</th><th class="n">occurrences</th><th>Detail</th></tr>
+<tr><td><code>energy_systems/*.yaml</code></td><td class="n">597</td><td>66 files, 43 distinct class paths; 22 assembly files among them. #1241 rewrote 10 of these files for 3 paths.</td></tr>
+<tr><td><code>MAIN_CLASS</code> in configs</td><td class="n">61</td><td>one per config class; moves with its module</td></tr>
+<tr><td><code>hisim/energy_system_v3.schema.json</code></td><td class="n">61 distinct</td><td>generated by <code>hisim energy-system schema</code></td></tr>
+<tr><td><code>tests/</code></td><td class="n">238</td><td>166 files mention <code>hisim.components.</code>; most are imports</td></tr>
+<tr><td><code>hisim/</code> elsewhere</td><td class="n">269</td><td>imports and docstrings; <code>setup_rules/inventory.py</code>, <code>building_sizer_utils/interface_configs/system_config.py</code> and <code>energy_system/schema_classes.py</code> name classes</td></tr>
+<tr><td><code>system_setups/</code></td><td class="n">36</td><td>imports in 11 setups</td></tr>
+<tr><td>RenoVisor</td><td class="n">10 + 15</td><td>10 in <code>hisim/renovisor/*.py</code> (imports and docstrings; the translator edits the recorded grouped twins and never writes a class path), 15 in the generated <code>roadmap/renovisor/translation_map.html</code></td></tr>
+<tr><td>goldens</td><td class="n">0</td><td>a golden leaf is keyed by building, KPI tag and KPI name, never by a class path. A module move does not touch a golden.</td></tr>
+<tr><td><code>roadmap/</code>, <code>docs/</code></td><td class="n">148, 6</td><td>specs and the Sphinx module list</td></tr>
+<tr><td>P3 parity table</td><td class="n">0</td><td>keyed by component name and port name</td></tr>
+</table>
+<p>Three spellings of a packaged class coexist: <code>hisim.components.weather.Weather</code> and <code>hisim.components.generic_pv_system.PVSystem</code> (the
+package), <code>hisim.components.building.building.Building</code> (the defining module; 40 files) beside <code>hisim.components.building.Building</code> (1
+file), and <code>hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib</code> (the defining module; #1241's <code>__init__</code>
+re-exports nothing on purpose). Q2 settles one rule.</p>
+
+<h3>4.8 The tests tree</h3>
+<table>
+<tr><th>Measured</th><th>Value</th></tr>
+<tr><td>flat test files in <code>tests/</code></td><td>310, beside 16 helper modules (<code>conftest.py</code>, <code>testing_utils.py</code>, <code>part_load_rigs.py</code>, <code>component_sweep.py</code>, <code>golden_leaf_factory.py</code>, <code>ci_split.py</code>, <code>job_markers.py</code>, …)</td></tr>
+<tr><td>subdirectories with tests</td><td><code>renovisor/</code> 23, <code>rules/</code> 19, <code>economics/</code> 14, <code>assemblies/</code> 12, <code>components/</code> 4, <code>building_sizer_utils/</code> 3, <code>subcomponents/</code> 2, <code>test_postprocessing/test_kpi_computation/</code> 1; data only: <code>energy_systems/</code>, <code>goldens/</code>, <code>worked_examples/</code>. Every test package has an <code>__init__.py</code>.</td></tr>
+<tr><td>conftest files</td><td>3: <code>tests/conftest.py</code> (cache isolation, the stray-file guard per module, <code>--ci-group</code>), <code>tests/assemblies/conftest.py</code>, <code>tests/renovisor/conftest.py</code></td></tr>
+<tr><td>duplicate basenames</td><td>5 already (<code>test_cli.py</code>, <code>test_fluid_loops.py</code>, <code>test_fuel_meter.py</code>, <code>test_kpi_structure.py</code>, <code>test_sizing.py</code>), working because every directory is a package (import mode <code>prepend</code>)</td></tr>
+<tr><td>tests that read sibling files</td><td>71 flat tests use <code>__file__</code> (109 <code>Path(__file__).resolve(</code> sites); 28 reach <code>golden_references/</code>, <code>energy_systems/</code> or <code>system_setups/</code> by a relative path</td></tr>
+<tr><td>tests imported by other tests</td><td>127 flat tests import a helper; 14 test modules are themselves imported as helpers (<code>test_building_one_day_snapshot</code> by 7, <code>test_energy_balance_generators</code> by 7, <code>test_energy_system_loader</code> by 5, <code>test_heat_pump_flow_booking</code> by 4, …)</td></tr>
+<tr><td>markers</td><td>per file: 101 <code>base</code> only, 124 <code>base</code> with parametrize, 10 <code>system_setups</code>, 11 <code>hpcharness</code>, the rest extendedbase/extendedbase2/buildingtest/utsp; <code>tests/job_markers.py</code> refuses zero or two job markers</td></tr>
+<tr><td>CI selection</td><td>by marker only (<code>pytest -m &lt;marker&gt;</code>, <code>working-directory: ./tests/</code>); paths only in <code>assemblies-nightly.yml</code>, <code>p3-parity.yml</code> (<code>tests/test_p3_parity*.py</code>), <code>tests/ci_durations.json</code> (31 keys), and <code>mypy tests/</code></td></tr>
+<tr><td>what a flat test exercises</td><td>by its imports (<code>test_mapping.tsv</code>): 64 import two or more components, 37 economics, 31 energy_system, 31 the component model, 25 postprocessing, 8 setup_rules, 50 exactly one component, 32 nothing of <code>hisim</code>, 4 scripts</td></tr>
+</table>
+
+<h3>4.9 What post-processing and economics read from live objects through the DTO</h3>
+<p>Full table: <code>agent-tmp/seams/dto_accesses_postprocessing_economics.tsv</code> (one row per access site; <code>dto_accesses.tsv</code> also holds the
+orchestration's own reads). 298 sites in 9 files: <code>postprocessing_main.py</code> 195, <code>economics/bridge.py</code> 24,
+<code>energy_balance/ports.py</code> 21, <code>system_chart.py</code> 20, <code>opex_and_capex_cost_calculation.py</code> 18, <code>kpi_preparation.py</code>
+13, <code>economics/adapter.py</code> 3, <code>capex_computation.py</code> 3, the DTO itself 1.</p>
+<table class="wrap">
+<tr><th>Read through</th><th class="n">sites</th><th>Attributes (distinct)</th><th>What it is</th></tr>
+<tr><td>the DTO's own fields</td><td class="n">151</td><td>13: <code>simulation_parameters</code> 46, <code>post_processing_options</code> 43, <code>results</code> 16, <code>results_monthly</code> 12, <code>wrapped_components</code> 10, <code>all_outputs</code> 6, <code>results_cumulative</code> 6, <code>kpi_collection_dict</code> 5, hourly, daily, <code>setup_kind</code>, <code>module_filename</code>, <code>scenario_name</code></td><td>plain data already, except the two lists of live objects</td></tr>
+<tr><td><code>SimulationParameters</code></td><td class="n">50</td><td>16: <code>result_directory</code> 24, <code>figure_format</code> 6, <code>duration</code> 4, <code>start_date</code> 4, <code>year</code> 3, <code>seconds_per_timestep</code> 3, <code>post_processing_options</code>, <code>weather_year</code>, <code>multiple_buildings</code>, <code>country</code>, <code>timesteps</code>, <code>end_date</code>, part-load settings, <code>get_unique_key_as_list()</code>, <code>set_economic_parameters()</code></td><td>plain values; one write (<code>set_economic_parameters</code>, RenoVisor) that a frozen record refuses</td></tr>
+<tr><td>a live <code>Component</code></td><td class="n">48</td><td>22: <code>component_name</code> 29, <code>component_id</code> 4, <code>config</code> 3, <b>method calls</b> <code>component_kpi_entries(all_outputs, results)</code>, <code>get_cost_opex(...)</code>, <code>capital_cost_data(...)</code>, <code>write_to_report()</code>, <code>kpi_source()</code>; <b>hooks by <code>getattr</code></b> <code>get_cost_facts</code>, <code>get_energy_flow_facts</code>, <code>contract</code>, <code>metered_exchanges</code>, <code>port_sets_in_the_energy_balance</code>/<code>port_sets</code>; <b><code>isinstance</code></b> <code>Weather</code> (then <code>weather_config.location</code>), twice <code>(MoreAdvancedHeatPumpHPLib, SimpleHeatSource)</code>, <code>(ElectricityMeter, GasMeter, FuelMeter, L2GenericEnergyManagementSystem)</code>; <code>__class__</code> (system chart)</td><td>the duck-typed dependency; 2 of the 5 method calls and all 3 <code>isinstance</code> groups of the legacy cost path go with the cutover</td></tr>
+<tr><td>a live <code>ComponentOutput</code></td><td class="n">32</td><td>11: <code>unit</code> 10, <code>component_name</code> 9, <code>field_name</code> 7, <code>component_id</code>, <code>full_name</code>, <code>load_type</code>, <code>energy_port</code>, <code>building_label</code>, <code>may_be_non_finite</code>, <code>aggregation</code></td><td>output metadata: plain values</td></tr>
+<tr><td>a <code>ComponentWrapper</code></td><td class="n">15</td><td>2: <code>my_component</code> 14, <code>component_inputs</code> 1</td><td>only a way to the component and its wiring</td></tr>
+<tr><td>a live <code>ComponentInput</code></td><td class="n">2 (+21 in ports and the system chart by name)</td><td><code>field_name</code>, <code>src_object_name</code>, <code>src_field_name</code>, <code>source_output</code>, <code>unit</code>, <code>energy_port</code></td><td>the wiring: plain values (<code>component_connections.json</code> already writes them)</td></tr>
+<tr><td>a class-name string</td><td class="n">1</td><td><code>ElectricityMeter.get_classname() in kpi_entry["description"]</code> (<code>kpi_preparation.py:609</code>)</td><td>becomes a KPI tag or source-kind check</td></tr>
+</table>
+
+<h2>5. Blast radius made concrete</h2>
+<table class="wrap">
+<tr><th>Change</th><th>Touched</th><th>What a seam would have contained</th></tr>
+<tr><td>#1241 the hplib heat pump into a package (no behaviour change)</td><td>67 files: 5 new modules, 23 tests, 10 energy-system files, 2 system setups, <code>heating_meter</code>, <code>simple_water_storage</code>, the EMS, <code>setup_rules/inventory.py</code>, <code>opex_and_capex_cost_calculation.py</code>, <code>simulationparameters.py</code>, the schema, README, docs, 4 specs</td><td>With a public API at <code>hisim.components.more_advanced_heat_pump</code> and class paths naming the package (Q2), the move inside the folder changes nothing outside it. The post-processing edit exists only because the legacy cost path names the heat-pump class (D3 deletes it).</td></tr>
+<tr><td>#1247 the PV publishes its DC power and the inverter's heat (open)</td><td>89 files: 3 modules of <code>generic_pv_system</code>, 1 of <code>energy_balance</code>, 37 energy-system files, 16 system setups, 27 tests</td><td>A new output is a legitimate change of a component's public API, and the twins that contain a PV must be re-recorded. The seam cannot shrink that set, but it can <b>name</b> it: the 29 twins whose <code>class:</code> is the PV system, their golden pairs, and the tests under <code>tests/components/generic_pv_system/</code> plus the system tests whose twins contain a PV. Today the PR re-ran all 116 golden pairs and every test job.</td></tr>
+<tr><td>#1250 Sankey layout engine</td><td>16 files: 7 under <code>postprocessing/energy_balance/figure/</code>, 1 in <code>postprocessing/</code>, 5 tests, 1 script</td><td>Already contained: one subpackage, its tests, no component. Under the diamond it is also provable: nothing in the contracts or the components changed, so no golden can move.</td></tr>
+<tr><td>#1109 water circuits declared at both ends (hydronic stage E)</td><td>34 files: 7 component modules, <code>component.py</code>, <code>energy_port.py</code>, <code>hydronics.py</code>, <code>simulator.py</code>, 3 of <code>energy_balance</code>, 8 energy-system files, 3 setups, 4 tests</td><td>A change of the contracts (<code>energy_port</code>) and the component model is the widest kind; the map says so instead of pretending otherwise. The energy balance changes because the port vocabulary changed, through the record, not through a component import.</td></tr>
+</table>
+
+<h3>5.1 How "affected tests and goldens" becomes computable</h3>
+<ol>
+  <li><b>Changed units.</b> Map every changed file to its package or component folder through the layer map; a changed test to itself; a changed
+  <code>energy_systems/*.yaml</code> to that twin.</li>
+  <li><b>Dependents.</b> Close the set upward over the measured import graph at package granularity (the lint computes it). Under the diamond a change in
+  <code>hisim.components.generic_pv_system</code> affects the orchestration and RenoVisor, never post-processing or economics; a change in post-processing
+  affects nothing below it and no golden KPI value (only the files it writes); a change in the contracts affects everything.</li>
+  <li><b>Tests.</b> The tests of every affected package are the directory that mirrors it (§10) plus the system tests whose twins contain an affected component
+  (step 4). A test outside those directories is unaffected unless it imports an affected module.</li>
+  <li><b>Twins and goldens.</b> A twin is affected when an entry's <code>class:</code> lies in an affected package. The golden pairs are those twins'
+  <code>golden_references/&lt;setup&gt;__&lt;params&gt;.json</code>. For #1247 that is 29 twins; for a change inside the district-heating component it would
+  be the 4 twins that contain one, for the car the 2.</li>
+  <li><b>Output.</b> The pytest paths, the golden pairs and the twins to re-record, as input of <code>golden-check.yml</code>'s <code>--pairs</code> and of a
+  path-selected <code>pytest</code> run (<code>scripts/affected_tests.py</code>, a child bead). Marker-only selection stays for main; selective runs are for
+  pull requests. Owner memory defers Pants, doc-only skips and affected goldens until this epic lands; steps 1–4 are what those need.</li>
+</ol>
+
+<h2>6. The proposed layer map: a diamond</h2>
+<div class="diagram" id="svg-proposed">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1836 867" font-family="Liberation Sans, Helvetica, Arial, sans-serif">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<defs>
+<marker id="head0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2b8a3e"/></marker>
+</defs>
+<rect x="30" y="150" width="1560" height="111.2" rx="6" fill="#ffe8e8" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="279.2" width="1560" height="143.4" rx="6" fill="#e6fcf5" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="440.6" width="1560" height="207.8" rx="6" fill="#fff9db" stroke="#adb5bd" stroke-width="1"/>
+<rect x="30" y="666.4" width="1560" height="171.5" rx="6" fill="#f1f3f5" stroke="#adb5bd" stroke-width="1"/>
+<rect x="60" y="182" width="900.0" height="63.2" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="60" y="311.2" width="357.0" height="95.4" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="441.0" y="311.2" width="357.0" height="95.4" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="822.0" y="311.2" width="357.0" height="95.4" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="1203.0" y="311.2" width="357.0" height="95.4" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5" stroke-dasharray="7 5"/>
+<rect x="60" y="472.6" width="484.0" height="159.8" rx="6" fill="#fff4e6" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="568.0" y="472.6" width="484.0" height="159.8" rx="6" fill="#f3f0ff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="1076.0" y="472.6" width="484.0" height="159.8" rx="6" fill="#e7f5ff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="60" y="698.4" width="200" height="123.5" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="284" y="698.4" width="250" height="123.5" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="558" y="698.4" width="250" height="123.5" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<rect x="832" y="698.4" width="450" height="123.5" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5" stroke-dasharray="7 5"/>
+<rect x="1306" y="698.4" width="250" height="123.5" rx="6" fill="#ffffff" stroke="#1e1e1e" stroke-width="1.5"/>
+<polyline points="1630.0,150.0 1630.0,837.9" fill="none" stroke="#2b8a3e" stroke-width="3" marker-end="url(#head0)"/>
+<text x="40.0" y="167.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">top: RenoVisor, imports everything below</text>
+<text x="510.0" y="199.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.renovisor</text>
+<text x="510.0" y="215.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the translation layer; nothing below imports it (unchanged)</text>
+<text x="510.0" y="234.2" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: python -m hisim.renovisor</text>
+<text x="40.0" y="296.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">orchestration: owns the sequence: build and wire -&gt; run the components -&gt; freeze the run record -&gt; AFTER_RUN rules -&gt; postprocessing(record) -&gt; economics(record) -&gt; write</text>
+<text x="238.5" y="328.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.simulator (+ component_wrapper,</text>
+<text x="238.5" y="344.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">evaluation_order)</text>
+<text x="238.5" y="360.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">runs the components; at the end asks each</text>
+<text x="238.5" y="376.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">component once and freezes the run record</text>
+<text x="238.5" y="395.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: Simulator</text>
+<text x="619.5" y="328.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.energy_system</text>
+<text x="619.5" y="344.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the declarative format, loader, wiring, assemblies,</text>
+<text x="619.5" y="360.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">recording, executor</text>
+<text x="619.5" y="379.5" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: run_energy_system, the model, errors, recording</text>
+<text x="1000.5" y="328.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.setup_rules</text>
+<text x="1000.5" y="344.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">engine and rules; LOAD, BUILD and AFTER_RUN,</text>
+<text x="1000.5" y="360.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the last started by the orchestrator on the run record,</text>
+<text x="1000.5" y="376.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">not from inside postprocessing</text>
+<text x="1000.5" y="395.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: the registry, the subjects</text>
+<text x="1381.5" y="328.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.cli (new package) + building_sizer_utils</text>
+<text x="1381.5" y="344.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">cli, cli_*, hisim_main, hisim_with_profiler,</text>
+<text x="1381.5" y="360.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">project_code_overview_generator;</text>
+<text x="1381.5" y="376.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">system_setup_configuration</text>
+<text x="1381.5" y="395.6" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: the console scripts</text>
+<text x="40.0" y="458.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">siblings: never import each other; they meet only through the contracts</text>
+<text x="302.0" y="489.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.components (+ the component model, subcomponents)</text>
+<text x="302.0" y="506.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">component model: component, dynamic_component, sim_repository,</text>
+<text x="302.0" y="522.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">part_load, explicit_state_controller, fluid_loops</text>
+<text x="302.0" y="538.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">hisim.components.&lt;folder&gt;: one folder per component, its __init__ the</text>
+<text x="302.0" y="554.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">public API; no component imports another (interim allow-list)</text>
+<text x="302.0" y="570.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">hisim.subcomponents: plain device parts</text>
+<text x="302.0" y="586.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">answers the orchestrator once at the end of the run: outputs, metadata, its</text>
+<text x="302.0" y="602.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">record, KPI entries, cost facts</text>
+<text x="302.0" y="621.4" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: the kind base classes, Component I/O, hisim.components.&lt;folder&gt;</text>
+<text x="810.0" y="489.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.postprocessing</text>
+<text x="810.0" y="506.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">reads only the run record and the contracts: KPIs, charts, energy balance,</text>
+<text x="810.0" y="522.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">Sankey, exports</text>
+<text x="810.0" y="538.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">no import of hisim.component, hisim.components or hisim.economics; no</text>
+<text x="810.0" y="554.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">live object</text>
+<text x="810.0" y="570.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">runs from a result directory alone (the Sankey CLI already does), tested</text>
+<text x="810.0" y="586.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">with synthetic records</text>
+<text x="810.0" y="605.3" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: PostProcessor.run(record), KpiFinder, the balance report, the figure</text>
+<text x="1318.0" y="489.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.economics</text>
+<text x="1318.0" y="506.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the lifecycle cost engine and its reports; reads the run record&#x27;s cost facts,</text>
+<text x="1318.0" y="522.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">KPI entries and energy flows, plus hisim/cost_database</text>
+<text x="1318.0" y="538.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">no import of hisim.component, hisim.components or hisim.postprocessing;</text>
+<text x="1318.0" y="554.2" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the only source of cost numbers after the cutover</text>
+<text x="1318.0" y="570.4" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">(hisim-legacy-cost-cutover-7300)</text>
+<text x="1318.0" y="589.2" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: build_evaluation_inputs(record), the evaluator entry, results,</text>
+<text x="1318.0" y="601.2" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">exports</text>
+<text x="40.0" y="683.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="13" fill="#495057" text-anchor="start" font-weight="bold">contracts: plain values and typed records; imports nothing above</text>
+<text x="160.0" y="715.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.config</text>
+<text x="160.0" y="731.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">configuration base, presets,</text>
+<text x="160.0" y="747.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">sizing laws, channels</text>
+<text x="160.0" y="766.7" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: its __all__</text>
+<text x="409.0" y="715.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">leaf modules</text>
+<text x="409.0" y="731.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">loadtypes, units, log, hydronics, utils,</text>
+<text x="409.0" y="747.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">physics_constants (new, from</text>
+<text x="409.0" y="763.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">components/configuration)</text>
+<text x="409.0" y="782.8" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: the module</text>
+<text x="683.0" y="715.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">run parameters</text>
+<text x="683.0" y="731.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">simulationparameters,</text>
+<text x="683.0" y="747.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">postprocessingoptions,</text>
+<text x="683.0" y="763.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">window_offset, simulation_day,</text>
+<text x="683.0" y="780.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">hisim_commit</text>
+<text x="683.0" y="798.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: SimulationParameters,</text>
+<text x="683.0" y="810.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">PostProcessingOptions</text>
+<text x="1057.0" y="715.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">hisim.contracts (new): the typed records</text>
+<text x="1057.0" y="731.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">the run record (the DTO: results, outputs, components, wiring, KPI</text>
+<text x="1057.0" y="747.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">entries, cost facts; plain data, serializable), KpiEntry and tags,</text>
+<text x="1057.0" y="763.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">KpiAddress, the cost facts of the new engine (ComponentCostFacts,</text>
+<text x="1057.0" y="780.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">CostRelevance, EnergyFlowFacts), the energy-port vocabulary</text>
+<text x="1057.0" y="798.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">from postprocessing_datatransfer, kpi_structure, kpi_address,</text>
+<text x="1057.0" y="810.9" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">economics.facts, energy_port</text>
+<text x="1431.0" y="715.6" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle" font-weight="bold">run infrastructure</text>
+<text x="1431.0" y="731.8" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">write_guard, result_path_provider,</text>
+<text x="1431.0" y="747.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">calculation_scope,</text>
+<text x="1431.0" y="763.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="14" fill="#1e1e1e" text-anchor="middle">calculation_progress, caching</text>
+<text x="1431.0" y="782.8" font-family="Liberation Mono, Cascadia Code, monospace" font-size="10" fill="#343a40" text-anchor="middle">public: the module / hisim.caching</text>
+<text x="1642.0" y="200.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">the rules of the map:</text>
+<text x="1642.0" y="214.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start"></text>
+<text x="1642.0" y="228.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">1. imports go down only:</text>
+<text x="1642.0" y="241.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">a layer imports the layers</text>
+<text x="1642.0" y="255.7" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">below it, never above.</text>
+<text x="1642.0" y="269.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start"></text>
+<text x="1642.0" y="283.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">2. siblings never import</text>
+<text x="1642.0" y="297.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">each other: components,</text>
+<text x="1642.0" y="310.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">postprocessing and economics</text>
+<text x="1642.0" y="324.7" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">meet only through the</text>
+<text x="1642.0" y="338.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">contracts layer.</text>
+<text x="1642.0" y="352.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start"></text>
+<text x="1642.0" y="366.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">3. the orchestration imports</text>
+<text x="1642.0" y="379.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">every sibling and sequences</text>
+<text x="1642.0" y="393.7" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">them; nothing else does.</text>
+<text x="1642.0" y="407.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start"></text>
+<text x="1642.0" y="421.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">4. a sibling or the contracts</text>
+<text x="1642.0" y="435.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">never knows a component</text>
+<text x="1642.0" y="448.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">class; postprocessing and</text>
+<text x="1642.0" y="462.7" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">economics read the frozen</text>
+<text x="1642.0" y="476.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">run record only.</text>
+<text x="1642.0" y="490.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start"></text>
+<text x="1642.0" y="504.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">5. across a package boundary</text>
+<text x="1642.0" y="517.9" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">only the public API (__all__)</text>
+<text x="1642.0" y="531.7" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#2b8a3e" text-anchor="start">is imported.</text>
+<text x="30.0" y="49.0" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="24" fill="#1e1e1e" text-anchor="start" font-weight="bold">HiSim proposed layer map: a diamond, not a stack</text>
+<text x="30.0" y="72.5" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">Proposal of the seams spec (roadmap/hisim_seams_spec.html), not an owner decision. A dashed box is a new or renamed package; every other box exists today.</text>
+<text x="30.0" y="86.3" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">Components, postprocessing and economics are siblings over one contracts layer; the orchestration layer owns the sequence and hands the frozen run record down to the two consumers.</text>
+<text x="30.0" y="100.1" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="12" fill="#495057" text-anchor="start">Data directories (hisim/inputs, hisim/cost_database, hisim/subsidy_catalog) hold no code and are outside the map.</text>
+</svg>
+</div>
+<p class="caption">Figure 2. The diamond. Editable source: <code>roadmap/hisim_seams/proposed_layer_map.excalidraw</code>.</p>
+<pre>
+                       renovisor                           imports everything below
+                           |
+      orchestration: simulator | energy_system | setup_rules | cli (+ building_sizer_utils)
+      owns the sequence: build and wire -> run -> freeze the run record -> AFTER_RUN rules -> postprocessing(record) -> economics(record) -> write
+          /                      |                      \
+  components             postprocessing              economics            siblings: never import each other
+  (component model,      (reads the record            (reads the record
+   components/&lt;folder&gt;,   and the contracts)           and the contracts,
+   subcomponents)                                      plus cost_database)
+          \                      |                      /
+      contracts: config | loadtypes, units, log, hydronics, utils, physics_constants | simulationparameters, postprocessingoptions |
+                 hisim.contracts (the run record, KpiEntry and tags, KpiAddress, the cost facts of the new engine, the energy-port vocabulary) |
+                 run infrastructure (write_guard, result_path_provider, calculation_scope, calculation_progress, caching)
+</pre>
+<p>The rules, as the lint checks them (§7):</p>
+<ol>
+  <li><b>Down only.</b> A module imports layers below its own, never above. The contracts import nothing but the contracts.</li>
+  <li><b>Siblings never import each other.</b> Components, post-processing and economics meet only through the contracts. Inside the components column the
+  order is subcomponents and the component model below the component folders.</li>
+  <li><b>The orchestration imports every sibling and sequences them.</b> Nothing else does: no sibling calls another, no sibling starts the rules.</li>
+  <li><b>No sibling and no contract knows a component class.</b> Post-processing and economics read the frozen run record only (§8); the record carries the
+  component's class name as a string for display and never the class.</li>
+  <li><b>Across a package boundary only the public API is imported</b>: the package itself or a name in its <code>__all__</code>.</li>
+  <li><b>A hidden import of a HiSim module counts as an import.</b> <code>importlib.import_module("hisim…")</code>, <code>__import__</code> and the
+  <code>module_name = "hisim…"</code> string pattern are checked like statements; the registries that need them (the class loader, the rules registry, the
+  CLI, the weather facade) are listed in the map.</li>
+</ol>
+<table class="wrap">
+<tr><th>Package</th><th>Public API (what others may import)</th><th>Internal</th></tr>
+<tr><td><code>hisim.config</code></td><td>its <code>__all__</code>; plus public spellings of <code>AutoSize</code> and <code>encode_sizable</code></td><td>the engine's internals</td></tr>
+<tr><td>contract leaves</td><td>the module itself: <code>loadtypes</code>, <code>units</code>, <code>log</code>, <code>hydronics</code>, <code>utils</code>, <code>physics_constants</code> (new)</td><td>—</td></tr>
+<tr><td>run parameters</td><td><code>SimulationParameters</code>, <code>PostProcessingOptions</code>, <code>window_offset</code>, <code>simulation_day</code>, <code>hisim_commit</code></td><td>—</td></tr>
+<tr><td><code>hisim.contracts</code> (new, Q12)</td><td>the run record (§8); <code>KpiEntry</code>, <code>KpiTagEnumClass</code>, <code>KpiHelperClass</code>, <code>KpiSource</code>, <code>KpiAddressStep</code>, <code>KpiAddress</code>; <code>CostRelevance</code>, <code>ComponentCostFacts</code>, <code>EnergyFlowFacts</code>, <code>QuotedPurchase</code>, <code>BillingDeterminants</code>; <code>EnergyPort</code>, <code>LoopQuantity</code>, <code>MeteredExchange</code> and the port roles</td><td>nothing else lives there; the records hold no behaviour beyond validation and (de)serialization</td></tr>
+<tr><td>run infrastructure</td><td>the module / <code>hisim.caching</code></td><td>—</td></tr>
+<tr><td>component model</td><td>the kind base classes, <code>Component</code>, <code>ComponentInput</code>/<code>Output</code>, <code>SingleTimeStepValues</code>, <code>DynamicComponent</code>, <code>SimRepository</code>, the part-load rules, <code>ExplicitStateController</code>, the fluid-loop walk; and the one interface the orchestrator freezes the record through (§8.2)</td><td>—</td></tr>
+<tr><td><code>hisim.components.&lt;folder&gt;</code></td><td>the component class(es), the config class(es), the enums other layers address, the output name constants</td><td>every other module of the folder</td></tr>
+<tr><td><code>hisim.subcomponents</code></td><td>its <code>__all__</code></td><td>—</td></tr>
+<tr><td><code>hisim.postprocessing</code></td><td><code>PostProcessor.run(record)</code>, <code>KpiFinder</code>, the balance report, the Sankey figure, the chart resolution</td><td>charts, KPI preparation, exports</td></tr>
+<tr><td><code>hisim.economics</code></td><td><code>build_evaluation_inputs(record)</code>, the evaluator entry, results, exports, the staged record; the seam-4 rule inside it stays</td><td>calculators, database, report internals</td></tr>
+<tr><td><code>hisim.simulator</code> (+ <code>component_wrapper</code>, <code>evaluation_order</code>)</td><td><code>Simulator</code></td><td>—</td></tr>
+<tr><td><code>hisim.energy_system</code></td><td><code>run_energy_system</code>, the executor, the model types, the errors, the loader, recording, the assemblies' entry points</td><td>wiring internals, feed resolution, the codec</td></tr>
+<tr><td><code>hisim.setup_rules</code></td><td>the registry, the subjects, the results; the rules are discovered by name</td><td>the rule modules</td></tr>
+<tr><td><code>hisim.cli</code> (new, Q6), <code>hisim.building_sizer_utils</code></td><td>the console scripts; the interface configs</td><td>—</td></tr>
+<tr><td><code>hisim.renovisor</code></td><td><code>python -m hisim.renovisor</code>; nothing below imports it</td><td>—</td></tr>
+</table>
+<p>The map as data, <code>system_docs/layer_map.yaml</code>, read by the guideline page and by the lint:</p>
+<pre>
+layers:                       # bottom first; a module imports only layers listed before its own
+  contracts:     [hisim.config, hisim.loadtypes, hisim.units, hisim.log, hisim.hydronics, hisim.utils, hisim.physics_constants,
+                  hisim.simulationparameters, hisim.postprocessingoptions, hisim.window_offset, hisim.simulation_day, hisim.hisim_commit,
+                  hisim.contracts, hisim.write_guard, hisim.result_path_provider, hisim.calculation_scope, hisim.calculation_progress, hisim.caching]
+  siblings:
+    components:     [hisim.subcomponents, hisim.component, hisim.dynamic_component, hisim.sim_repository, hisim.part_load,
+                     hisim.explicit_state_controller, hisim.fluid_loops, hisim.components]
+    postprocessing: [hisim.postprocessing]
+    economics:      [hisim.economics]
+  orchestration: [hisim.simulator, hisim.component_wrapper, hisim.evaluation_order, hisim.energy_system, hisim.setup_rules, hisim.cli,
+                  hisim.building_sizer_utils]
+  top:           [hisim.renovisor]
+component_classes_known_only_by: [orchestration, top]      # rule 4
+public_api: __all__                                        # rule 5; a package without __all__ exports nothing
+hidden_import_registries: [hisim.energy_system.classes, hisim.setup_rules.registry, hisim.cli, hisim.components.weather]   # rule 6
+allow_list:                                                # the ratchet: module -> module, with the bead that removes it
+  - {from: hisim.components.generic_boiler, to: hisim.postprocessing.cost_and_emission_computation.capex_computation, bead: hisim-legacy-cost-cutover-7300}
+  - ...
+</pre>
+
+<h2>7. Enforcement</h2>
+<h3>7.1 Options</h3>
+<table class="wrap">
+<tr><th></th><th>A. import-linter (pip package, <code>lint-imports</code>)</th><th>B. one HiSim test, <code>tests/test_layer_map.py</code>, reading <code>system_docs/layer_map.yaml</code></th></tr>
+<tr><td>what it checks</td><td>layer, forbidden and independence contracts over the import graph grimp builds; function-local imports are seen</td><td>the same, from <code>ast</code> as the four existing lints do; plus hidden string imports (rule 6); plus a fresh-interpreter closure check of <code>hisim.postprocessing</code> and <code>hisim.economics</code> (importing either loads no <code>hisim.component</code>, no <code>hisim.components</code>, not each other), as <code>test_renovisor_import_lint.py</code> does</td></tr>
+<tr><td>the sibling rule</td><td>an independence contract</td><td>one rule over the YAML</td></tr>
+<tr><td>where the map lives</td><td><code>.importlinter</code>, a second notation beside the document</td><td>one YAML the guideline links; layers, siblings, public APIs, allow-list with bead ids</td></tr>
+<tr><td>existing violations</td><td><code>ignore_imports</code>; no stale-entry detection</td><td>allow-list entries that must exist to pass and must be deleted when no longer needed (ratchet)</td></tr>
+<tr><td>public API seam</td><td>not built in; a forbidden contract per package</td><td>one rule: a cross-package import names the package or a name of its <code>__all__</code></td></tr>
+<tr><td>cost</td><td>a new dependency and a CI step; ~60 lines of config; installed nowhere today</td><td>~300 lines of test code; the four lints fold into it</td></tr>
+<tr><td>runs in</td><td>a quality job</td><td><code>pytest -m base</code>; fails locally before a push</td></tr>
+</table>
+<p><span class="rec">Recommendation: B.</span> The pattern exists four times, the hidden imports of §4.2 and the string import of economics are what a tool cannot
+see, the map and the allow-list stay one document, and nothing is installed. A is the fallback if B grows past a few hundred lines.</p>
+
+<h3>7.2 The allow-list policy</h3>
+<ul>
+  <li><b>Fix first</b>: no lint until every violation is gone. Rejected: 149 statements across 90 modules is weeks of PRs, and the seams keep getting worse meanwhile.</li>
+  <li><b>Package-level entries</b> ("components may import economics until bead X"): coarse, lets new violations in under an existing entry. Rejected.</li>
+  <li><b>Module-level ratchet</b>: one entry per (importing module, imported module), each with the bead that removes it. A new violation fails; an entry whose
+  import is gone fails until deleted. <span class="rec">Recommended.</span></li>
+</ul>
+<p>The first list, grouped by the bead that empties it: <code>hisim-legacy-cost-cutover-7300</code> (the 21 component imports of <code>capex_computation</code>,
+the 6 component-class imports and 3 <code>isinstance</code> groups of <code>opex_and_capex_cost_calculation</code>, <code>capex_computation</code>'s import of
+the device cost table, <code>economics.database</code>'s lazy import of <code>components.configuration</code>, the <code>get_cost_capex</code>/<code>get_cost_opex</code>
+calls on live components); the contracts bead (49 + 1 imports of <code>economics.facts</code>, 31 + 1 of <code>kpi_structure</code>, 8 + 1 of economics into
+<code>kpi_structure</code>/<code>chartbase</code>); the run-record beads (post-processing's 9 imports of the component model, 3 of
+<code>ComponentWrapper</code>, <code>Weather</code>, <code>ElectricityMeter</code>, the string import of economics, the 5 imports of <code>setup_rules</code>);
+the tariff provider (6); the default connections (76 + 14 + 24, one bead, until Q1 is decided); five single strays. About 95 entries.</p>
+
+<h2>8. The run record: post-processing's only input</h2>
+<h3>8.1 What the record holds</h3>
+<p>Derived from §4.9: every value post-processing and economics read today, as plain data. Field groups, with the live access they replace:</p>
+<table class="wrap">
+<tr><th>Group</th><th>Fields</th><th>Replaces</th></tr>
+<tr><td><b>run</b></td><td><code>scenario_name</code>, <code>description</code>, <code>setup_kind</code>, <code>module_filename</code>, <code>setup_function</code>, <code>execution_time_in_s</code>, the HiSim commit</td><td>the DTO's own fields, unchanged</td></tr>
+<tr><td><b>parameters</b></td><td>the <code>SimulationParameters</code> as a frozen plain value (Q15): <code>result_directory</code>, <code>figure_format</code>, <code>start_date</code>, <code>end_date</code>, <code>year</code>, <code>weather_year</code>, <code>duration</code>, <code>seconds_per_timestep</code>, <code>timesteps</code>, <code>post_processing_options</code>, <code>multiple_buildings</code>, <code>country</code>, the part-load settings, the unique key, the economic parameters</td><td>50 reads of <code>ppdt.simulation_parameters.*</code>; the one write (<code>set_economic_parameters</code>) moves before the freeze</td></tr>
+<tr><td><b>results</b></td><td><code>results</code>, <code>results_monthly</code>, <code>results_hourly</code>, <code>results_daily</code>, <code>results_cumulative</code> (frames; on disk the CSV/parquet the run already writes)</td><td>unchanged</td></tr>
+<tr><td><b>outputs</b></td><td>one record per output: <code>full_name</code>, <code>field_name</code>, <code>component_name</code>, <code>component_id</code> (building label, address), <code>unit</code>, <code>load_type</code>, <code>tags</code>, <code>aggregation</code>, <code>may_be_non_finite</code>, <code>energy_port</code> (role, loop quantity, metered exchange), <code>display</code> flags</td><td>32 reads of live <code>ComponentOutput</code>s; <code>ChartSelection.of_results</code>; the energy balance's port reads</td></tr>
+<tr><td><b>wiring</b></td><td>one record per connected input: <code>component_name</code>, <code>field_name</code>, <code>src_object_name</code>, <code>src_field_name</code>, <code>unit</code>, <code>energy_port</code></td><td><code>system_chart</code> and <code>energy_balance/ports.py</code> walking <code>component.inputs</code>; the same data <code>component_connections.json</code> already writes</td></tr>
+<tr><td><b>components</b></td><td>one record per component: <code>component_name</code>, <code>component_id</code>, <code>class_name</code> (string), <code>kind</code> (data source, physics, L1, L2, meter), <code>display_config</code>, <code>config</code> as plain values (what <code>write_to_report</code> and <code>weather_config.location</code> read today), <code>cost_relevance</code>, the declared energy ports (<code>metered_exchanges</code>, <code>port_sets_in_the_energy_balance</code>, fluid-loop port sets), the tariff <code>contract</code></td><td>48 reads of live components: <code>isinstance(component, Weather)</code> becomes a kind/tag test on the record; the ElectricityMeter description match becomes a <code>KpiSource</code> kind or tag test; <code>__class__</code> in the system chart becomes <code>class_name</code></td></tr>
+<tr><td><b>kpi_entries</b></td><td>per component the <code>KpiEntry</code> list its <code>component_kpi_entries(all_outputs, results)</code> returns, stamped with its source (Q11 decides whether the component or post-processing computes them)</td><td><code>kpi_preparation.get_all_component_kpis</code> calling into 31 components</td></tr>
+<tr><td><b>cost_facts</b></td><td>per component <code>get_cost_facts()</code>, <code>get_energy_flow_facts()</code>, <code>kpi_source()</code> as the typed facts of <code>hisim.contracts</code></td><td><code>economics.bridge</code> and <code>adapter</code> reading <code>wrapper.my_component</code> with <code>getattr</code> (Q13)</td></tr>
+<tr><td><b>gone</b></td><td>—</td><td><code>get_cost_opex</code>, <code>get_cost_capex</code>, <code>capital_cost_data</code>, the three <code>isinstance</code> groups of the legacy cost path (D3); <code>write_to_report</code> (the PDF report retired in #1245; the config values replace it)</td></tr>
+</table>
+
+<h3>8.2 How the record is built</h3>
+<ol>
+  <li>The run ends. The orchestrator (the simulator, for both modes) asks each component once through one method of the component interface, say
+  <code>Component.run_record(all_outputs, results) -> ComponentRunRecord</code>, implemented in the base class from what every component already carries
+  (<code>component_name</code>, <code>component_id</code>, <code>config</code>, <code>display_config</code>, <code>cost_relevance</code>, the declared ports) plus the
+  two hooks a component may override today (<code>get_component_kpi_entries</code>, <code>get_cost_facts</code>). A component never sees the record of
+  another.</li>
+  <li>The orchestrator freezes the answers with the output metadata, the wiring, the parameters and the result frames into one <code>RunRecord</code>
+  (<code>hisim.contracts</code>), a frozen dataclass of plain values and frames, serializable to the result directory (<code>run_record.json</code> beside the
+  CSVs; the frames stay in their files).</li>
+  <li>The orchestrator starts the AFTER_RUN setup rules on the record (<code>RunResults</code> today takes live components; it takes the record), then calls
+  <code>PostProcessor.run(record)</code>, then <code>economics</code> on the same record (Q13), then writes.</li>
+  <li><code>hisim postprocess &lt;result directory&gt;</code> rebuilds the record from the directory and runs post-processing again, as the Sankey CLI already
+  does for its three JSON inputs (<code>energy_balance/figure/inputs.py</code>).</li>
+</ol>
+<p><b>Payoffs.</b> Post-processing imports nothing of the component model or the components, so the import lint and the fresh-interpreter check prove rule 4
+(today 9 + 9 + 3 imports and 95 duck-typed reads); it runs from a result directory alone, so a chart or a KPI change needs no simulation to try out; it is
+tested with synthetic records, so <code>tests/postprocessing/</code> becomes <code>base</code> and loses its component imports; a component's KPI and cost
+declarations become visible data in the result directory; and the record is the one place the cost engine and the post-processing agree on.</p>
+
+<h3>8.3 Migration order, relative to the cutover</h3>
+<ol>
+  <li><b>Record beside the live objects.</b> The simulator builds the <code>RunRecord</code> and still passes the live lists; post-processing switches reader
+  by reader (outputs, wiring, components, KPI entries) to the record. No result changes; the goldens prove it. Independent of the cutover.</li>
+  <li><b>The cutover</b> (<code>hisim-legacy-cost-cutover-7300</code>, its exit criteria in <code>cost_spec.md</code> §10.0) deletes the legacy cost path and
+  with it the last method calls on live components.</li>
+  <li><b>The live lists go.</b> <code>wrapped_components</code> and <code>all_outputs</code> leave the DTO; the orchestrator starts the rules and economics; the
+  fresh-interpreter check turns on. Only now does rule 4 hold.</li>
+</ol>
+<p>Step 1 can start at once and does not wait for the cutover; step 3 needs it (Q14).</p>
+
+<h3>8.4 The 105 statements of the first draft, re-checked</h3>
+<p>The first draft counted 105 component import statements of three modules above the components. With D3: the 21 imports of
+<code>capex_computation</code> disappear with the cutover and need no contracts move. The 49 + 1 imports of <code>economics.facts</code>
+(<code>CostRelevance</code> on every component, <code>ComponentCostFacts</code> on the adopters of <code>get_cost_facts</code>) and the 31 + 1 imports of
+<code>kpi_structure</code> are the new engine's and the KPI declarations: 82 statements that still need the contracts layer. The tariff provider's 6 imports of
+engine modules are neither and stay on the allow-list under their own bead.</p>
+
+<h2>9. The component-folder migration</h2>
+<h3>9.1 Which components</h3>
+<p>Full table: <code>agent-tmp/seams/component_folders.tsv</code>.</p>
+<table class="wrap">
+<tr><th>Folder</th><th>Modules today</th><th>Class paths to migrate</th><th>Note</th></tr>
+<tr><td><code>car/</code></td><td>generic_car, generic_car_profile, controller_l1_generic_ev_charge, advanced_ev_battery_bslib</td><td>3</td><td>the LPG handover type stays with the LPG folder</td></tr>
+<tr><td><code>lpg_occupancy/</code></td><td>loadprofilegenerator_utsp_connector, pylpg_workspace, lpg_local_time, lpg_car_information</td><td>1</td><td>a move without an edit keeps AGENTS.md's "do not touch" of the connector</td></tr>
+<tr><td><code>electrolyzer/</code></td><td>generic_electrolyzer_h2, controller_l1_electrolyzer_h2, controller_l2_ptx_energy_management_system, generic_electrolyzer_and_h2_storage</td><td>2</td><td></td></tr>
+<tr><td><code>fuel_cell/</code></td><td>generic_fuel_cell, controller_l1_fuel_cell, controller_l2_xtp_fuel_cell_ems, advanced_fuel_cell</td><td>1</td><td></td></tr>
+<tr><td><code>heat_distribution/</code></td><td>heat_distribution_system, heating_curve</td><td>3</td><td><code>EmitterDesign</code> to subcomponents (o6a.31)</td></tr>
+<tr><td><code>water_storage/</code></td><td>simple_water_storage (2783 lines, two components, 9 importlib calls)</td><td>2</td><td>a split, not only a move</td></tr>
+<tr><td><code>boiler/</code></td><td>generic_boiler (2971 lines, component and controller)</td><td>2</td><td>a split</td></tr>
+<tr><td>out of components</td><td>configuration → <code>hisim/physics_constants.py</code>; its cost dicts deleted (D3) or into <code>cost_database</code>; <code>HouseholdWarmWaterDemandConfig</code> to its user; dual_circuit_system → subcomponents</td><td>0</td><td>24 and 6 importers</td></tr>
+</table>
+<p>Single-module components with their controller in the same module stay flat unless Q7 decides otherwise.</p>
+
+<h3>9.2 How recorded paths migrate</h3>
+<ol>
+  <li><b>The class-path convention is settled first (Q2).</b> If the package path wins, the recorder derives the path from the nearest package whose
+  <code>__all__</code> exports the class, and a one-time rewrite brings the 40 <code>building.building.Building</code> files and the three heat-pump paths to
+  it. If the defining module wins, the weather and PV spellings are rewritten the other way and the weather facade's <code>__module__</code> pin goes.</li>
+  <li><b>Every move PR rewrites the recorded files in the same PR</b>: energy-system YAMLs (<code>scripts/record_all_setups.py --check</code> proves the twins
+  byte-equal), the schema, <code>MAIN_CLASS</code>, the translation map, tests and docs. #1241 did this for 10 YAMLs.</li>
+  <li><b>A moved path is written down</b> in <code>hisim/energy_system/moved_class_paths.yaml</code>: old path, new path, PR, date. The loader's refusal
+  <code>EF-10</code> looks the old path up and names the new one. It still refuses (Q3).</li>
+  <li><b>Goldens stay valid without change</b> (§4.7). A move PR is a refactoring commit free of result changes; the golden check must pass bit-identically.</li>
+  <li><b>RenoVisor bindings stay valid</b> as long as the grouped twins it edits are re-recorded in the same PR; the translator never writes a class path.</li>
+</ol>
+
+<h3>9.3 The default connections</h3>
+<p>24 <code>importlib</code> calls and about 30 of the 76 static component-to-component imports exist so that component A can name component B's class and
+outputs in <code>get_default_connections_from_B</code>, while B names A in its own. A folder structure does not remove them; they go only if the connection
+tables leave the components (Q1): the declarative wiring and its assemblies already hold the same knowledge as data, and <code>hisim.config.channels</code>
+already matches ports by load type, unit and tag. Until decided, the default connections are allow-list entries of one bead.</p>
+
+<h2>10. Tests in subdirectories</h2>
+<h3>10.1 Proposed mapping</h3>
+<p>The tests tree mirrors the diamond: one directory per package or component folder, so a seam's tests sit together and step 3 of §5.1 reads them off the
+path. Mapping of the 310 flat files by what they import (<code>test_mapping.tsv</code>):</p>
+<table>
+<tr><th>Target directory</th><th class="n">files</th><th>From</th></tr>
+<tr><td><code>tests/contracts/</code> and <code>tests/core/</code></td><td class="n">31</td><td>tests of the leaves, the run infrastructure, the component model, the simulator</td></tr>
+<tr><td><code>tests/components/&lt;folder&gt;/</code></td><td class="n">50</td><td>tests that import exactly one component: 11 building, 8 heat pump, 7 water storage, 6 weather, 3 LPG, 2 each air conditioner, boiler, electricity meter, examples, 1 each of 20 others; the 4 already in <code>tests/components/</code> join their folders</td></tr>
+<tr><td><code>tests/systems/</code></td><td class="n">64</td><td>tests that build two or more components: energy balance, DHW chains, hydronic twins, system setups, sweeps, golden history</td></tr>
+<tr><td><code>tests/economics/</code></td><td class="n">37</td><td>join the 14 already there</td></tr>
+<tr><td><code>tests/energy_system/</code></td><td class="n">31</td><td>format, loader, wiring, recording, schema, parity, twins</td></tr>
+<tr><td><code>tests/postprocessing/</code></td><td class="n">25</td><td>KPIs, charts, Sankey, balance report, absorbing <code>tests/test_postprocessing/</code>; with the record (§8) these run on synthetic records, without a simulation</td></tr>
+<tr><td><code>tests/rules/</code></td><td class="n">8</td><td>join the 19 already there</td></tr>
+<tr><td><code>tests/tooling/</code></td><td class="n">36</td><td>the lints, the beads scripts, <code>ci_split</code>, the HPC harness (11), scripts, <code>job_markers</code></td></tr>
+<tr><td><code>tests/_support/</code></td><td class="n">16</td><td>the helper modules, so that no test module is imported as a helper</td></tr>
+<tr><td>others</td><td class="n">14</td><td>config (1), building_sizer_utils (2), inputs (2), renovisor (1), caching (4), cli (4)</td></tr>
+</table>
+<p>The automatic mapping is a proposal per file; about a fifth will be re-sorted by hand.</p>
+
+<h3>10.2 What has to change with it</h3>
+<ul>
+  <li><b>conftest and fixtures.</b> <code>tests/conftest.py</code> stays the root conftest; its stray-file ledger is keyed by module path and keeps working.
+  <code>assemblies/conftest.py</code> and <code>renovisor/conftest.py</code> stay. New directories need no conftest.</li>
+  <li><b>Helpers.</b> The 16 helper modules move to <code>tests/_support/</code>; the 14 test modules other tests import are split into a helper and the test.
+  Imports become absolute (<code>from tests._support.testing_utils import …</code>), which works from any cwd and depth (Q8).</li>
+  <li><b>Markers.</b> Unchanged; <code>job_markers.py</code> keeps checking them.</li>
+  <li><b>CI jobs selecting by path.</b> <code>p3-parity.yml</code> (<code>tests/test_p3_parity*.py</code> → <code>tests/energy_system/</code>),
+  <code>tests/ci_durations.json</code> (31 keys renamed in the same PR; <code>tests/test_ci_split.py</code> reports a stale key), the paths <code>tests.yml</code>
+  mentions in comments; <code>assemblies-nightly.yml</code> and <code>mypy tests/</code> unchanged.</li>
+  <li><b>Golden or recorded paths.</b> 109 <code>Path(__file__).resolve(</code> sites reach the repository root with <code>parents[1]</code>; one helper
+  <code>tests._support.paths.REPO_ROOT</code> replaces them in the move PR.</li>
+  <li><b>Sibling files.</b> <code>tests/goldens/</code>, <code>tests/energy_systems/</code>, <code>tests/worked_examples/</code> stay and are reached through the same helper.</li>
+  <li><b><code>__init__.py</code> and duplicate basenames.</b> Every new directory gets an <code>__init__.py</code> (import mode <code>prepend</code>, as today), so
+  a basename may repeat across directories as the five existing duplicates do.</li>
+</ul>
+
+<h3>10.3 Place in the PR plan</h3>
+<p><b>One mechanical move first</b> conflicts with every open PR that adds or edits a test: #1247 (27 tests), #1252–#1254 (18 tests), #954. <b>One move PR per
+target directory after the lint lands</b> conflicts only with PRs touching those tests. <span class="rec">Recommended: per directory, after the lint PR,
+starting with the directories no open PR touches (economics, postprocessing, rules, tooling), the component folders as each folder PR lands, systems
+last.</span></p>
+
+<h2>11. PR plan and child beads</h2>
+<p>Small, independent PRs; each row is a child bead of <code>hisim-ylxf</code> (kind, area and priority per AGENTS.md's schema; created with <code>br</code>
+on the branch of the first PR). Order: stop the seams getting worse at once; then the record and the contracts, which remove the sibling imports; then the
+file moves, which are result-free; tests per directory. The cutover (<code>hisim-legacy-cost-cutover-7300</code>, P1) is a sibling bead, not a child; rows
+that need it say so.</p>
+<table class="wrap">
+<tr><th>#</th><th>Child bead title</th><th>Done when</th><th>Removes / needs</th></tr>
+<tr><td>1</td><td>The layer map is written as <code>system_docs/layer_map.md</code> with <code>layer_map.yaml</code>, and one base test enforces the diamond (down only, siblings apart, public API, hidden imports) with a module-level allow-list of today's violations</td><td>passes on main with every violation listed with a bead id; a new violation fails; the four existing lints fold in; the 6 private-name imports get public spellings</td><td>the ratchet starts</td></tr>
+<tr><td>2</td><td>The package <code>hisim.contracts</code> holds the KPI types, the cost-fact types of the new engine and the energy-port vocabulary, and <code>component.py</code> imports nothing above the contracts</td><td>82 allow-list entries deleted (§8.4); economics' 9 imports of post-processing gone; goldens bit-identical</td><td>components → economics/postprocessing, economics → postprocessing, component model → both</td></tr>
+<tr><td>3</td><td>The <code>RunRecord</code> type is defined in <code>hisim.contracts</code> and the simulator freezes it at the end of every run, beside the live lists it still passes</td><td>every run writes <code>run_record.json</code>; a test rebuilds the record from a result directory and compares it with the frozen one</td><td>§8.3 step 1; independent of the cutover</td></tr>
+<tr><td>4</td><td>Post-processing reads outputs, wiring and components from the record: the energy balance, the system chart, the chart selection, the building list, the weather location and the ElectricityMeter check</td><td>no <code>isinstance</code> on a component, no <code>__class__</code>, no <code>component.inputs</code> walk in <code>hisim/postprocessing</code>; goldens bit-identical</td><td>9 imports of the component model, <code>Weather</code>, <code>ElectricityMeter</code>, 3 of <code>ComponentWrapper</code></td></tr>
+<tr><td>5</td><td>The components' KPI entries and cost facts travel in the record (Q11, Q13), and <code>kpi_preparation</code> and the economics bridge read them there</td><td><code>component_kpi_entries</code>, <code>get_cost_facts</code>, <code>get_energy_flow_facts</code>, <code>kpi_source</code> are called by the orchestrator only; goldens and the cost parity report bit-identical</td><td>the duck-typed reads of §4.9; needs 3</td></tr>
+<tr><td>6</td><td>The orchestrator starts the AFTER_RUN rules and the cost engine on the record; post-processing calls neither</td><td>no import of <code>setup_rules</code> and no string import of <code>hisim.economics</code> under <code>hisim/postprocessing</code></td><td>5 + 1 hidden</td></tr>
+<tr><td>7</td><td>The live lists leave the DTO; importing <code>hisim.postprocessing</code> or <code>hisim.economics</code> in a fresh interpreter loads no component module, and <code>hisim postprocess &lt;dir&gt;</code> reruns post-processing from a result directory</td><td>the fresh-interpreter check is on; <code>tests/postprocessing/</code> runs on synthetic records</td><td>§8.3 step 3; needs the cutover</td></tr>
+<tr><td>8</td><td><code>hisim/components/configuration.py</code> is dissolved: <code>PhysicsConfig</code> into <code>hisim/physics_constants.py</code>, the hot-water demand config into its user; the cost dicts go with the cutover</td><td>no module imports <code>hisim.components.configuration</code>; <code>energy_port.py</code> imports no component</td><td>24 component importers, contracts → components; cost dicts need the cutover</td></tr>
+<tr><td>9</td><td>The concrete setup rules import the component model and the simulator plainly, inside the orchestration layer</td><td>no lazy import in <code>hisim/setup_rules</code></td><td>11 lazy imports</td></tr>
+<tr><td>10</td><td>The stray imports are fixed: <code>utils → simulationparameters</code>, <code>config.context.for_building</code> (o6a.4), <code>recording.session → hisim_main</code>, <code>calculation_progress → simulator</code>, <code>assemblies.testing.checks → Building</code>; the tariff provider's engine imports get their bead</td><td>five entries deleted; pylint's <code>cyclic-import</code> re-enabled</td><td>5 statements</td></tr>
+<tr><td>11</td><td>The class-path convention is applied once (Q2), and <code>moved_class_paths.yaml</code> makes the loader name the new path on an old one (Q3)</td><td>one spelling across 66 YAMLs; <code>record_all_setups.py --check</code> clean; a loader test proves the message</td><td>the spelling drift</td></tr>
+<tr><td>12–16</td><td>One PR per folder: <code>car</code>, <code>lpg_occupancy</code>, <code>electrolyzer</code>, <code>fuel_cell</code>, <code>heat_distribution</code> (with <code>EmitterDesign</code> to subcomponents, o6a.31)</td><td>the folder's <code>__init__</code> exports its API; recorded files rewritten; goldens bit-identical; old paths in the mapping</td><td>the flat multi-module components</td></tr>
+<tr><td>17–18</td><td><code>simple_water_storage</code> and <code>generic_boiler</code> each become a folder of two modules under the 750-line limit</td><td>as above; the line-count ratchet shrinks by two files</td><td>two over-limit files</td></tr>
+<tr><td>19</td><td><code>dual_circuit_system</code> moves to subcomponents (o6a.29 and o6a.31 fold in)</td><td>the subcomponent lint passes; six importers use <code>hisim.subcomponents</code></td><td>6 cross-component imports</td></tr>
+<tr><td>20</td><td>The default connections stop importing other components (design per Q1)</td><td>no <code>importlib</code> call and no cross-component import for a default connection; the module cycles of §4.2 are gone</td><td>24 importlib calls, ~30 imports</td></tr>
+<tr><td>21</td><td>The entry points move into <code>hisim/cli/</code> and <code>system_setup_configuration</code> into <code>building_sizer_utils</code> (Q6)</td><td>the console script and <code>python hisim/hisim_main.py</code> keep working</td><td>9 top-level modules</td></tr>
+<tr><td>22–28</td><td>Tests move, one PR per target directory: economics, postprocessing, rules, tooling + <code>_support</code>, contracts and core, components (per folder), systems</td><td>every moved file keeps its marker; <code>ci_durations.json</code> and the workflows name the new paths; no test module is imported by another test</td><td>the flat tests tree</td></tr>
+<tr><td>29</td><td><code>scripts/affected_tests.py</code> lists the tests, twins and golden pairs a diff affects, from the layer map and the class paths in the twins</td><td>for #1247's diff it names the 29 PV twins and their goldens; for a change under <code>postprocessing/</code> it names no golden</td><td>the full re-run per PR</td></tr>
+<tr><td>30</td><td>Optional (Q9): the component-model modules move into <code>hisim/core/</code></td><td>106 import sites rewritten; no behaviour change</td><td>the last flat modules of the components column</td></tr>
+</table>
+
+<h2>12. Open questions for the owner</h2>
+<p>Each question gives the context, the options with their consequences, and a recommendation marked as such. D1–D3 are decided; nothing below is.</p>
+
+<div class="q"><b>Q1. May components import each other at all?</b> Today 76 static, 14 lazy and 24 hidden imports exist, in three groups: (i) shared helpers
+misfiled under components (configuration, dual_circuit_system, heating_curve's EmitterDesign): they move regardless; (ii) the modules of one component spread
+over several files (car, LPG, electrolyzer, fuel cell): one folder makes the import internal; (iii) default connections naming another class and its outputs,
+in both directions (building ↔ heat distribution, storage ↔ heat pump, EMS → nine components). Options for (iii): (a) allow a component folder to import
+another's public API for its default connections only, acyclically: impossible as long as both sides declare the connection, so the <code>importlib</code>
+dodges stay; (b) allow it cyclically through lazy imports inside <code>get_default_connections_*</code>, on a permanent allow-list: the lint then lies about the
+components; (c) forbid every import between component folders and move the default connections out of the components into data the wiring layer reads
+(the assemblies already express the same connections declaratively; <code>config.channels</code> already matches ports by tag): the imperative setups get
+their defaults from the same table through the simulator's <code>connect_automatically</code>. <span class="rec">Recommendation: (c) as the rule, with (b) as
+the interim allow-list under one bead, so the folder PRs do not wait for it.</span></div>
+
+<div class="q"><b>Q2. The class-path convention.</b> A packaged component is spelled three ways today (§4.7). (a) The defining module
+(<code>…more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib</code>, as #1241 chose): the path names the file to open, but every later reshuffle inside
+the folder changes recorded files, which is the churn this epic exists to remove. (b) The package (<code>…weather.Weather</code>): a folder can be
+reorganised without touching a twin, the public API and the recorded name coincide; #1241's three paths and 40 building files are rewritten once.
+<span class="rec">Recommendation: (b), with the recorder deriving the path from the nearest package whose <code>__all__</code> exports the class, so no
+<code>__module__</code> pin is needed.</span></div>
+
+<div class="q"><b>Q3. Alias period or clean break for moved paths.</b> #1241 broke cleanly: an old path is refused with EF-10 and no hint. (a) Clean break plus the
+recorded mapping, so the refusal names the new path and the PR (the bead's "fail loudly, except where written down" read as: the entries make the message,
+not an alias). (b) An alias period in which entries younger than N releases resolve with a warning: convenient for external users with old files, but HiSim has
+no external declarative users today and an alias delays the rewrite of every twin. <span class="rec">Recommendation: (a); the mapping file exists either way,
+so (b) can be switched on if an external user appears.</span></div>
+
+<div class="q"><b>Q4. import-linter or HiSim's own test.</b> §7.1. <span class="rec">Recommendation: the own test</span>: it sees the hidden imports, keeps the
+map and the allow-list in one document, folds the four lints into one, runs in <code>pytest -m base</code> and adds no dependency. import-linter stays the
+fallback.</div>
+
+<div class="q"><b>Q5. The allow-list policy.</b> §7.2: fix first, package-level entries, or a module-level ratchet with bead ids and stale-entry failure.
+<span class="rec">Recommendation: the ratchet.</span> Inside it: may a PR add an entry? Proposed: only with a bead id and the owner's approval; the test's
+failure message says so.</div>
+
+<div class="q"><b>Q6. Where the CLI lives.</b> Eight entry-point modules sit at the top level. (a) A package <code>hisim/cli/</code> with
+<code>hisim_main.py</code> kept at the top as the documented script path (README, CLAUDE.md, AGENTS.md and the quality workflow run
+<code>python hisim/hisim_main.py</code>); (b) everything into <code>hisim/cli/</code> and a two-line <code>hisim/hisim_main.py</code> that calls it; (c) leave them
+flat and list them in the orchestration layer. <span class="rec">Recommendation: (b); the console script <code>hisim=hisim.cli:main</code> becomes
+<code>hisim.cli.main:main</code>.</span></div>
+
+<div class="q"><b>Q7. Folder policy.</b> The bead says "every component that spans more than one module". (a) Only those (seven folders, §9.1): least churn,
+two shapes coexist. (b) Every component in a folder, also the ~40 single-module ones: one shape, one test directory per component, at the cost of 40 trivial
+moves (no recorded-path churn if Q2 picks the package path and the folder is named after the module). <span class="rec">Recommendation: (a) now, (b)
+folder by folder when a component is next touched, never as one sweep.</span></div>
+
+<div class="q"><b>Q8. The tests layout.</b> (a) Mirror the diamond (<code>tests/components/car/</code>, <code>tests/energy_system/</code>, …) with
+<code>systems/</code> for tests that build several components and <code>tooling/</code> for tests of scripts and CI: the path says what a test exercises, which
+§5.1 needs. (b) Group by topic (hydronics, DHW, electricity, costs): reads well, but a topic spans packages and the path says nothing a tool can use. Inside
+(a): the energy-balance and golden tests go to <code>systems/</code> (their twins decide their blast radius, not their directory); helpers are imported
+absolutely as <code>tests._support.…</code>. <span class="rec">Recommendation: (a) with <code>systems/</code>, <code>tooling/</code> and
+<code>_support/</code>.</span></div>
+
+<div class="q"><b>Q9. Move the component-model modules into <code>hisim/core/</code>?</b> The lint needs no move: the map lists the modules under the
+components column. A package makes the column visible in the tree, at the price of rewriting 106 import sites of <code>hisim.component</code> in every open
+PR's path. <span class="rec">Recommendation: not now; decide again when the stack of open PRs is short.</span></div>
+
+<div class="q"><b>Q10. The record's scope.</b> (a) Everything post-processing needs is in the record, and post-processing never opens a file of the result
+directory except to write: one input, one test fixture, rule 4 provable by import. (b) The record holds metadata and the frames' locations, and
+post-processing may also read the result directory's files (<code>all_kpis.json</code>, <code>balance_report.json</code>, the CSVs), as the Sankey CLI does
+today: smaller record, but two inputs, and a test needs a directory. <span class="rec">Recommendation: (a), with the frames referenced by file when the record
+is serialized and attached when it is in memory; the Sankey CLI then rebuilds the record from the directory and uses the same path as a run.</span></div>
+
+<div class="q"><b>Q11. Who computes a component's KPIs.</b> Today 31 components implement <code>get_component_kpi_entries(all_outputs, results)</code> and
+post-processing calls it. (a) The component computes its KPI entries, the orchestrator calls it at the freeze and the record carries the entries: the knowledge
+stays with the device (a heat pump knows what its SCOP is), post-processing only aggregates; the component model keeps a dependency on the result frame type.
+(b) Post-processing computes every KPI from the results and the output metadata (tags, port roles): the component declares, never computes after the run;
+every KPI formula lives in one place and runs from a result directory; but 31 components' KPI code moves into post-processing, keyed by tag, and a
+device-specific KPI (a battery's cycles, a collector's efficiency) needs a tag per device. <span class="rec">Recommendation: (a) for now, through the one
+interface of §8.2, so the record holds the entries as data; (b) KPI by KPI where a formula is the same for every device of a kind (energy sums, peaks,
+run hours), under the existing KPI address scheme.</span></div>
+
+<div class="q"><b>Q12. Where the record type and the declaration types live.</b> (a) A new package <code>hisim/contracts/</code> (the run record, the KPI
+types, the cost facts, the energy-port vocabulary): names the layer, one place. (b) Inside <code>hisim/config/</code>: already the bottom, but config is about
+configuring. (c) Flat leaf modules at the top level: no new package, but the top level grows again. (d) The record stays in <code>hisim/postprocessing/</code>
+where the DTO is today: then economics imports post-processing for it, against rule 2. <span class="rec">Recommendation: (a).</span></div>
+
+<div class="q"><b>Q13. Does economics consume the same record?</b> Today the bridge takes <code>wrapped_components</code>, <code>all_outputs</code>, the
+results and the parameters (24 reads through <code>wrapper.my_component</code> and <code>getattr</code>). (a) Yes: the record carries each component's cost
+facts, energy-flow facts and KPI source; <code>build_evaluation_inputs(record)</code>; one freeze serves both consumers and the cost engine runs from a result
+directory too. (b) Economics keeps its own collection pass over the live components through the orchestrator: a second interface, and rule 4 needs a second
+proof. <span class="rec">Recommendation: (a).</span></div>
+
+<div class="q"><b>Q14. Migration order of the record relative to the cutover.</b> (a) Record first (§8.3 steps 1 and 2 in either order, step 3 after the
+cutover): the readers switch one by one while the legacy path still runs on live objects; the cutover then deletes the last live calls. (b) Cutover first, then
+the record: a smaller record from the start, but every record step waits on the cutover's exit criteria (<code>cost_spec.md</code> §10.0), which include the
+parity report and RenoVisor runs. <span class="rec">Recommendation: (a); beads 3 to 6 start at once, bead 7 waits.</span></div>
+
+<div class="q"><b>Q15. The run parameters in the record.</b> (a) The record carries the <code>SimulationParameters</code> object as it is, placed in the contracts
+layer (it imports only <code>caching.locations</code>, <code>log</code>, <code>postprocessingoptions</code>, <code>simulation_day</code>): no new type, but one
+mutable object with 580 lines and a cache registry inside the "plain" record, and one writer (<code>set_economic_parameters</code>) to move. (b) A frozen
+<code>RunParameters</code> with the 16 attributes post-processing and economics read (§4.9): plain and serializable, at the cost of a second parameters type.
+<span class="rec">Recommendation: (b), built by the orchestrator from the <code>SimulationParameters</code> at the freeze.</span></div>
+
+<h2>13. Beads</h2>
+<p>Epic <code>hisim-ylxf</code>. The child beads are the rows of §11; created with <code>br</code> on the branch of the first PR, kind <code>chore</code> (a
+move or a lint) or <code>task</code> (the contracts, the record, the affected-tests script), area <code>components</code>, <code>postprocessing</code>,
+<code>economics</code> or <code>ci</code> as the change lands, priority P2 for rows 1–11 and P3 for the rest, and <code>owner-decision</code> on the fifteen
+questions above until they are answered. Sibling bead: <code>hisim-legacy-cost-cutover-7300</code> (P1), which rows 7 and 8 wait on. Folded in:
+hisim-repo-cleanup-o6a.15 (rows 1, 2, 9, 10, 20), o6a.4 (row 10), o6a.29 and o6a.31 (rows 16 and 19). Referenced, not folded: hisim-rust-ideas-9ks.2 (one
+adapter per physics library is internal to its component folder under this map).</p>
+
+<h2>Appendix: files and how the diagrams were made</h2>
+<ul>
+  <li><code>agent-tmp/seams/import_graph.py</code> wrote <code>modules.json</code>, <code>package_graph.tsv</code>, <code>package_edges_detail.tsv</code>,
+  <code>package_cycles.txt</code>, <code>module_cycles.txt</code>, <code>lazy_imports.tsv</code>, <code>importlib_uses.tsv</code>, <code>top_level.tsv</code>,
+  <code>private_imports.tsv</code>, <code>components_cross_imports.tsv</code>, <code>summary.json</code>.</li>
+  <li><code>agent-tmp/seams/dto_accesses.py</code> wrote <code>dto_accesses.tsv</code> (341 sites, every reader) and
+  <code>dto_accesses_postprocessing_economics.tsv</code> (298 sites, the two siblings), one row per access site: file, line, object kind, attribute, call or
+  read, the expression.</li>
+  <li>Further tables: <code>recorded_class_paths.tsv</code>, <code>test_mapping.tsv</code>, <code>component_folders.tsv</code>.</li>
+  <li>The two figures were generated by <code>agent-tmp/seams/make_layer_maps.py</code>: it builds the Excalidraw element list in Python (bands, boxes with
+  bound labels, arrows with bindings and lane routing), writes <code>roadmap/hisim_seams/current_layer_map.excalidraw</code> and
+  <code>proposed_layer_map.excalidraw</code>, renders an SVG from the same element list, screenshots the SVG to PNG with Playwright Firefox
+  (<code>~/pwenv</code>), and checks the layout for overlapping boxes, labels wider than their box and arrow labels covering text (0 problems in both). Figure
+  1's edges are read from <code>modules.json</code> and coloured against the diamond; the Excalidraw files open at excalidraw.com. The SVGs are inlined into
+  this page by <code>agent-tmp/seams/inline_svgs.py</code>.</li>
+</ul>
+
+</main>
+</body>
+</html>

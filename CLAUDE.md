@@ -113,7 +113,8 @@ Every device is a `Component` subclass, through the one kind base class it inher
   `MAIN_CLASS` and offering its named defaults as `@preset` classmethods (`preset_<name>(cls, name)`).
   The `get_default_*` factories the P4 sweep replaced are gone; a value the surrounding system
   decides is a `sized_field(rule=...)` rather than an argument
-- Has a `DisplayConfig` to control webtool/report visibility
+- Has a `DisplayConfig`, whose `pretty_name` (when set) is its display name in the KPI results
+  (`KpiSource.display_name`)
 
 ### Dynamic components (`hisim/dynamic_component.py`)
 `DynamicComponent` extends `Component` to support a variable number of inputs/outputs resolved at runtime by matching `LoadTypes`, `Units`, and tags (`ComponentType` / `InandOutputType` from `loadtypes.py`).
@@ -130,7 +131,7 @@ Two ways to wire components together:
 Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates components and connects them — the imperative input. Every setup has a recorded declarative twin in `energy_systems/<stem>.energy_system.yaml`. Simulation parameters (time range, resolution, post-processing options) live in separate `.simulation.json` files like `2021_minutely_plots.simulation.json`, which both modes read.
 
 ### Post-processing (`hisim/postprocessing/`)
-`PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`, `MAKE_RESULT_JSON_FOR_WEBTOOL`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.
+`PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.
 
 ### Where a run may write (`hisim/write_guard.py`, `hisim/calculation_scope.py`)
 Every calculation -- `hisim_main` (both modes), `run_energy_system`, the RenoVisor run, the economics

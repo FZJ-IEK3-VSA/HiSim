@@ -555,7 +555,9 @@ def _comparison_basis(reference: LifecycleCostResult, variant: LifecycleCostResu
 def plot_payback_curve(
     reference: LifecycleCostResult, variant: LifecycleCostResult, path: str
 ) -> str:
-    """Draw the cumulative discounted savings (reference minus variant) per band slot; the zero crossing is the payback.
+    """Draw the cumulative discounted savings (reference minus variant) per band slot and the zero line of the payback.
+
+    The payback year is the first year from which a curve stays at or above zero (`results.discounted_payback_year`).
 
     The curves come from `results.cumulative_discounted_savings`, which also yields the printed payback year. Title and
     y label name the basis via `_comparison_basis`.
@@ -576,7 +578,7 @@ def plot_payback_curve(
         basis = _comparison_basis(reference, variant)
         axis.set_ylabel(f"cumulative discounted savings vs the reference [EUR] — {basis} basis",
                         color=_Palette.MUTED, fontsize=9)
-        axis.set_title(f"Discounted payback (zero-crossing) — {basis} basis", fontsize=10,
+        axis.set_title(f"Discounted payback (stays above zero) — {basis} basis", fontsize=10,
                        color=_Palette.INK, loc="left")
         axis.legend(fontsize=7.5, frameon=False, labelcolor=_Palette.INK)
         figure.tight_layout()
@@ -841,7 +843,7 @@ def plot_liquidity_fan(
 
     The upper panel is the cumulative nominal cost (cost positive, upward), annotated with the deepest out-of-pocket
     position. The lower panel is the cumulative discounted cost ending at the NPV, or with a comparison the cumulative
-    discounted savings, whose zero crossings give the payback interval. Each panel draws the best estimate as a line
+    discounted savings, whose payback years (from which each world stays at or above zero) give the payback interval. Each panel draws the best estimate as a line
     and the low/high envelope as a fill, over the nominal series' year range.
 
     Args:
@@ -1413,7 +1415,7 @@ def plot_lifecycle_swimlane(
     """Draw the life of the renovation on one page: assets, financing, support and milestones.
 
     Every lane restates a figure shown in full elsewhere (asset events, amortization, payback crossings). The payback
-    milestone is a range bar between the band's zero crossings and appears only with a comparison. An empty lane is
+    milestone is a range bar between the band's payback years and appears only with a comparison. An empty lane is
     dropped and recorded as a skip.
 
     Args:

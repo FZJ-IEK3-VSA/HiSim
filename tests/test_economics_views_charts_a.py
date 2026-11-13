@@ -418,25 +418,24 @@ class TestLiquidityFanSeries:
             "high": [-100.0, -90.0, -70.0, -60.0],
         }
         assert views.band_zero_crossings(curves) == {"low": 2, "best_estimate": 3, "high": None}
-        # The crossing rule itself (year 0 excluded, first crossing only) is pinned once, on the
-        # function both the fan and the printed payback year read.
+        # The payback rule itself (the first year from which the curve stays at or above zero) is
+        # pinned once, on the function both the fan and the printed payback year read.
         assert discounted_payback_year(curves["low"]) == 2
 
-    def test_zero_crossings_of_a_cost_curve_are_not_a_payback_year(self):
-        """A cost-shaped curve has no payback crossing, and the helper says year 1 anyway.
+    def test_a_cost_curve_has_no_payback_year(self):
+        """A cost-shaped curve gives no payback year, though it turns favourable in year 4.
 
         `band_zero_crossings` is `discounted_payback_year` per slot, and that rule is written for
-        a *savings* curve: negative until the variant has paid for itself, so the first
-        non-negative year is the payback year. A cumulative **cost** curve has the opposite
-        orientation — it starts at the year-0 investment and falls as revenue arrives — so its
-        first non-negative year is simply year 1, whatever the curve does later. The fixture here
-        turns favourable in year 4 and the helper answers 1 for every slot.
+        a *savings* curve: negative until the variant has paid for itself, so the first year from
+        which it stays non-negative is the payback year. A cumulative **cost** curve has the
+        opposite orientation — it starts at the year-0 investment and falls as revenue arrives —
+        so it ends below zero and the helper answers None for every slot, while a reader would
+        say it turns favourable in year 4.
 
         This is why the liquidity fan feeds the helper the comparison's
         `cumulative_discounted_savings_in_euro` and never the cost series it draws in the upper
-        panel. The behaviour is pinned rather than fixed: the crossing rule belongs to
-        `results.discounted_payback_year`, which the printed payback year reads as well, and
-        changing it here would let the two disagree. A view that ever wants "the year the cost
+        panel. The rule belongs to `results.discounted_payback_year`, which the printed payback
+        year reads as well, so it is not bent here: a view that ever wants "the year the cost
         curve turns favourable" needs its own helper with its own name.
         """
         result = make_result(
@@ -447,7 +446,7 @@ class TestLiquidityFanSeries:
         )
         curve = views.cumulative_nominal_cost_series(result)
         assert curve[Slot.BEST_ESTIMATE] == [10000.0, 7000.0, 4000.0, 1000.0, -2000.0, -5000.0]
-        assert views.band_zero_crossings(curve) == {slot: 1 for slot in Slot}
+        assert views.band_zero_crossings(curve) == {slot: None for slot in Slot}
         # What a reader would mean by "when does it turn favourable" on this curve:
         favourable = [
             year for year, value in enumerate(curve[Slot.BEST_ESTIMATE]) if value < 0

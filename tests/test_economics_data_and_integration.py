@@ -490,7 +490,7 @@ class TestEuroPerKilowattHourBasis:
         native = self._native_pellet_variant(shipped)
         with pytest.raises(CostDataError, match="cannot be converted to EUR/kWh"):
             database.energy_content_of(dataclasses.replace(native, quantity_unit="cord"))
-        with pytest.raises(CostDataError, match="no lower heating value is known"):
+        with pytest.raises(CostDataError, match="no heating value per ton is known"):
             database.energy_content_of(
                 dataclasses.replace(native, carrier=EnergyCarrier.HYDROGEN)
             )

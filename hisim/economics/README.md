@@ -546,9 +546,18 @@ CO2 component:
   "co2_price_exposure": 1.0,                 // share of emissions priced via co2_price_paths.json
   "tax_and_levy_share": 0.25,                // stripped in the MACROECONOMIC view
   "quantity_unit": "kWh",                    // "kWh" | "liter" (oil, diesel) | "ton" (pellets, wood chips)
+  "calorific_basis": "GROSS",                // fuel rows only: "GROSS" (gas, hydrogen) | "NET" (oil, pellets, wood chips, diesel)
   "source_ids": ["src_ai_estimates"]
 }
 ```
+
+**The calorific basis rule:** a fuel row states `calorific_basis`, the calorific value its working
+price and emission factor are stated on: the gross (GCV) or the net (NCV). It must be the basis
+HiSim reports the fuel on (`hisim.loadtypes.CalorificBasis.reported_for`: GCV for natural gas and
+hydrogen, NCV for heating oil, pellets, wood chips and diesel), and every boiler reports its fuel on
+it whatever its type, so a price per kWh multiplies kWh of the same basis. The loader refuses a fuel
+row without the field or with the other basis, and a row of electricity, its feed-in or district
+heating that states one (owner decision of 2026-11-13, bead hisim-boiler-fuel-one-basis-b7e2).
 
 **The CO2 double-counting rule:** if `co2_price_exposure > 0`, the working price must EXCLUDE
 the explicit CO2 price (the engine adds `emissions × co2_price(country, year)` from the paths
@@ -558,7 +567,7 @@ do), exposure must be 0. Never both.
 `quantity_unit` says how the **file** quotes the row — `"liter"` for oil and diesel, `"ton"`
 for pellets and wood chips, as the cited sources publish them. Nothing is billed in those units:
 `CostDatabase.get_energy_price` divides the working price and the emission factor by the
-carrier's lower heating value (from `PhysicsConfig`) and hands out an entry in EUR/kWh and
+carrier's heating value on its calorific basis (from `PhysicsConfig`) and hands out an entry in EUR/kWh and
 kg/kWh, recording the division in the provenance detail (decision D26). Quantities are kWh
 everywhere, so the `*_per_kwh` field names are literally true by the time anything reads them.
 The `ELECTRICITY_FEED_IN` carrier holds the feed-in remuneration as its working price. Its row

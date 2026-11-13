@@ -37,7 +37,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 
 from hisim import loadtypes as lt
-from hisim.components.generic_boiler import BoilerEfficiencySources, BoilerType, CalorificBasis
+from hisim.components.generic_boiler import BoilerEfficiencySources, BoilerType
 from hisim.renovisor.constants import BoilerEfficiency
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.vocabulary import (
@@ -1545,15 +1545,15 @@ class SemanticChecks:
         - every boiler: at most :attr:`BOILER_SEASONAL_EFFICIENCY_MAXIMUM_IN_PERCENT`. A larger one
           is no such figure -- a German datasheet's 104 % for a condensing boiler is on the net
           calorific value -- and ``GenericBoilerConfig`` refuses it.
-        - a boiler booked on the net calorific value (conventional gas, LPG, oil and HVO, pellets,
+        - a boiler whose efficiency curve is on the net calorific value (conventional gas, LPG, oil and HVO, pellets,
           logs and wood chips): at most its own ceiling,
           :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` at the stated installation
           year and :attr:`BOILER_POWER_OF_THE_CEILING_CHECK_IN_WATT`. Above it the scaled curve
-          exceeds 1 on the net calorific value: the boiler would make more heat than the fuel booked
-          for it, and its combustion loss would turn negative. For example, a current conventional
+          exceeds 1 on the net calorific value: the boiler would make more heat than the fuel it
+          burns, and its combustion loss would turn negative. For example, a current conventional
           gas boiler takes at most 86.82 %, so the frontend's 90 % default is refused for it (owner
           decision of 2026-10-21). The boiler's build refuses the same, the backstop. A condensing
-          gas, oil or hydrogen boiler, booked on the gross value, is checked by its build only
+          gas, oil or hydrogen boiler, whose curve is on the gross value, is checked by its build only
           (owner decision of 2026-10-21).
 
         The house's boiler is checked as stated, as the 97 % limit is, whether or not a measure
@@ -1583,7 +1583,7 @@ class SemanticChecks:
                 )
             ]
         energy_carrier, boiler_type = cls.BOILER_FUEL_AND_TYPE[boilers[generator]]
-        if CalorificBasis.of_booking(energy_carrier, boiler_type) != CalorificBasis.NET:
+        if BoilerEfficiencySources.curve_basis(energy_carrier, boiler_type) != lt.CalorificBasis.NET:
             return []
         installation_year = heating.get("installation_year")
         ceiling = BoilerEfficiencySources.highest_seasonal_efficiency(
@@ -1603,8 +1603,8 @@ class SemanticChecks:
                 path=path,
                 code=ProblemCode.RANGE_EXCEEDED,
                 message=(
-                    f"a {generator} boiler {vintage} does not condense and its fuel is booked on the net "
-                    f"calorific value, on which its efficiency curve cannot exceed 100 %: it takes a seasonal "
+                    f"a {generator} boiler {vintage} does not condense, so its efficiency curve is stated on the net "
+                    f"calorific value, on which it cannot exceed 100 %: it takes a seasonal "
                     f"efficiency of at most {ceiling_in_percent:.2f} % (eta_s, gross calorific value); {path} is "
                     f"{stated:g} %"
                 ),

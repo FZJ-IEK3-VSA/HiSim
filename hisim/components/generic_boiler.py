@@ -84,7 +84,9 @@ class BoilerType(str, Enum):
 
     CONVENTIONAL uses only the heat of combustion, i.e. the lower heating value
     of the fuel; CONDENSING additionally recovers the heat of the water vapour
-    in the waste gases, i.e. the higher heating value. Every member carries its
+    in the waste gases, i.e. the higher heating value. The type picks the basis
+    of the boiler's efficiency curve (:meth:`BoilerEfficiencySources.curve_basis`),
+    not the basis its fuel is reported on, which is the fuel's own. Every member carries its
     own name as its value so that a serialized boiler configuration names the
     type explicitly instead of encoding it as an integer.
     """
@@ -128,36 +130,31 @@ class GenericBoilerConfig(ConfigBase):
         return maximal_thermal_power_in_watt
 
     @staticmethod
-    def heating_value_in_joule_per_m3(energy_carrier: lt.LoadTypes, boiler_type: "BoilerType") -> float:
-        """Returns the heating value of the fuel the way this boiler type exploits it.
+    def heating_value_in_joule_per_m3(energy_carrier: lt.LoadTypes) -> float:
+        """Return the fuel's heating value on the basis its energy is reported on, in J/m3.
 
-        A condensing boiler recovers the latent heat of the flue gas and is therefore
-        rated on the higher heating value; a conventional one loses it and is rated on the
-        lower. Which of the two applies is a property of the configured device, so the
-        choice lives here rather than in the component that later divides by it.
+        Every boiler reports its fuel on the fuel's own calorific basis (:meth:`hisim.loadtypes.CalorificBasis.reported_for`),
+        whatever its type, so one heating value turns any boiler's reported kWh back into the cubic metres or litres it
+        burnt: the higher heating value for gas and hydrogen, the lower for oil, pellets and wood chips. For example,
+        natural gas gives 39.819 MJ/m3 and heating oil 35.358 GJ/m3.
 
         Args:
             energy_carrier: The fuel burnt.
-            boiler_type: Condensing or conventional.
 
         Returns:
             The heating value in joule per cubic metre.
 
         Raises:
-            ValueError: If the carrier has no entry in ``PhysicsConfig`` (district heating
-                burns nothing), or if the boiler type is neither of the two.
+            ValueError: If the carrier has no entry in ``PhysicsConfig`` or no calorific basis (district heating
+                burns nothing).
         """
         properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
-        if boiler_type == BoilerType.CONDENSING:
+        if lt.CalorificBasis.reported_for(energy_carrier) == lt.CalorificBasis.GROSS:
             return properties.higher_heating_value_in_joule_per_m3
-        if boiler_type == BoilerType.CONVENTIONAL:
-            return properties.lower_heating_value_in_joule_per_m3
-        raise ValueError(f"Boiler type {boiler_type} is not implemented.")
+        return properties.lower_heating_value_in_joule_per_m3
 
     @classmethod
-    def fuel_constants(
-        cls, energy_carrier: lt.LoadTypes, boiler_type: "BoilerType"
-    ) -> Tuple[Optional[float], Optional[float]]:
+    def fuel_constants(cls, energy_carrier: lt.LoadTypes) -> Tuple[Optional[float], Optional[float]]:
         """Returns the fuel's heating value in kWh per litre and its density in kg per m3.
 
         The pair the fuel meter needs to turn kilowatt hours back into litres and
@@ -172,15 +169,15 @@ class GenericBoilerConfig(ConfigBase):
 
         Args:
             energy_carrier: The fuel burnt.
-            boiler_type: Condensing or conventional, which picks the heating value.
 
         Returns:
-            ``(heating value in kWh/l, density in kg/m3)``, both ``None`` for district heating.
+            ``(heating value in kWh/l, density in kg/m3)``, the heating value on the basis the fuel is reported on,
+            both ``None`` for district heating.
         """
         if energy_carrier == lt.LoadTypes.DISTRICTHEATING:
             return None, None
         # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
-        heating_value_in_kwh_per_liter = cls.heating_value_in_joule_per_m3(energy_carrier, boiler_type) / (3.6 * 1e9)
+        heating_value_in_kwh_per_liter = cls.heating_value_in_joule_per_m3(energy_carrier) / (3.6 * 1e9)
         density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
             energy_carrier=energy_carrier
         ).density_in_kg_per_m3
@@ -200,6 +197,10 @@ class GenericBoilerConfig(ConfigBase):
     component_id: ComponentID
     energy_carrier: lt.LoadTypes
     boiler_type: BoilerType
+    #: The minimal and the maximal burner (fuel) power, in W, on the boiler's curve basis
+    #: (:meth:`BoilerEfficiencySources.curve_basis`): the NCV for a conventional gas boiler, the GCV for a condensing
+    #: one. The boiler reports the fuel it burns on the fuel's own basis (:meth:`BurnerModulation.on_reported_basis`),
+    #: so a 20 kW conventional gas boiler reports up to 22.19 kW of gas on the GCV.
     minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
     maximal_thermal_power_in_watt: Sizable[float] = sized_field(
         rule=MAXIMAL_POWER_LAW,
@@ -213,7 +214,8 @@ class GenericBoilerConfig(ConfigBase):
     #: (:meth:`BoilerEfficiencySources.curve`); when ``None``, the curve applies unscaled. For example, 0.90 for a
     #: label stating 90 %. The config refuses a value above 0.97; the build refuses one above the boiler's own
     #: ceiling (:meth:`BoilerEfficiencySources.highest_seasonal_efficiency`), which keeps the scaled curve at or below
-    #: 1 on the basis its fuel is booked on, for example 0.8682 for a current conventional gas boiler (NCV).
+    #: 1 on the basis it is stated on (:meth:`BoilerEfficiencySources.curve_basis`), for example 0.8682 for a current
+    #: conventional gas boiler (NCV).
     seasonal_efficiency: Optional[float] = None
     #: The year the boiler was installed, or ``None`` for a current boiler. A year before 2000 picks the IWU 2002 row
     #: of its decade for a gas or oil boiler; ``None`` or a later year takes a current product's data
@@ -311,8 +313,8 @@ class GenericBoilerConfig(ConfigBase):
         Runs after the boiler itself resolved, so the values are the final concrete numbers
         whether they came from a law, a preset constant or an override.
 
-        The fuel half — the carrier and the two constants :meth:`fuel_constants` derives from it
-        and from the boiler type — is what the gas and fuel meters copy instead of repeating, so
+        The fuel half — the carrier and the two constants :meth:`fuel_constants` derives from it —
+        is what the gas and fuel meters copy instead of repeating, so
         a meter accounting this boiler's consumption cannot state a different fuel from the one
         it burns. Both constants are ``None`` for district heating, which burns nothing.
 
@@ -324,9 +326,7 @@ class GenericBoilerConfig(ConfigBase):
             dict: the five facts named in :attr:`SIZING_CONTRIBUTIONS`.
         """
         del ctx
-        heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
-            config.energy_carrier, config.boiler_type
-        )
+        heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(config.energy_carrier)
         return {
             "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
             "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
@@ -434,44 +434,6 @@ class GenericBoilerConfig(ConfigBase):
 
 
 @unique
-class CalorificBasis(str, Enum):
-    """The calorific value an efficiency is stated on: the gross (GCV) or the net (NCV) calorific value of the fuel.
-
-    The gross calorific value (GCV, Brennwert, Hs) counts the heat the water vapour of the flue gas gives off when it
-    condenses; the net calorific value (NCV, Heizwert, Hi) does not. The same boiler therefore has a higher efficiency
-    on the NCV than on the GCV, by the fuel's ratio GCV/NCV (natural gas 1.109). Ecodesign product fiches state the
-    GCV, IWU 2002 and most German test reports the NCV.
-    """
-
-    GROSS = "GROSS"
-    NET = "NET"
-
-    @classmethod
-    def of_booking(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> "CalorificBasis":
-        """Return the basis a boiler's fuel is booked on, the one its efficiency curve must be stated on.
-
-        HiSim books a boiler's fuel in kWh of burner power and turns them into litres or cubic metres with
-        :meth:`GenericBoilerConfig.heating_value_in_joule_per_m3`: the higher heating value for a condensing, the
-        lower for a conventional boiler. A fuel whose two heating values are equal in ``PhysicsConfig`` (pellets and
-        wood chips, which have only an NCV there) is booked on the NCV whatever the boiler type. For example, a
-        condensing gas boiler is booked on the GCV, a conventional oil and every pellet boiler on the NCV.
-
-        Args:
-            energy_carrier: The fuel the boiler burns.
-            boiler_type: Condensing or conventional.
-
-        Returns:
-            The calorific basis of the boiler's fuel.
-        """
-        properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
-        has_gross_value = (
-            properties.higher_heating_value_in_joule_per_m3 > properties.lower_heating_value_in_joule_per_m3
-        )
-        if boiler_type == BoilerType.CONDENSING and has_gross_value:
-            return cls.GROSS
-        return cls.NET
-
-
 @unique
 class BoilerVintage(str, Enum):
     """Which generation of boilers an efficiency row describes, chosen by the boiler's installation year.
@@ -531,7 +493,7 @@ class EfficiencyTestPoints:
     IWU 2002 Tab. 2). The 30 % point is taken at a 30 °C return for a condensing boiler (813/2013, same footnote; IWU
     2002 Tab. 3 states a 30 °C mean boiler temperature, read here as the return). A non-condensing boiler has no
     return-temperature term, so its test temperatures do not enter its curve. For example, the Vitodens 200-W fiche
-    gives ``EfficiencyTestPoints(0.877, 0.978, CalorificBasis.GROSS, 0.0030)``.
+    gives ``EfficiencyTestPoints(0.877, 0.978, lt.CalorificBasis.GROSS, 0.0030)``.
     """
 
     #: The efficiency at full load (100 % of the rated output), dimensionless, on :attr:`calorific_basis`.
@@ -539,7 +501,7 @@ class EfficiencyTestPoints:
     #: The efficiency at 30 % load, dimensionless, on :attr:`calorific_basis`.
     efficiency_at_part_load: float
     #: The calorific value both efficiencies are stated on.
-    calorific_basis: CalorificBasis
+    calorific_basis: lt.CalorificBasis
     #: The efficiency a condensing boiler gains per kelvin its return is below the full-load test return, on the
     #: GCV, per K; 0 for a non-condensing boiler.
     condensing_gain_on_gross_basis_per_kelvin: float = 0.0
@@ -549,11 +511,12 @@ class EfficiencyTestPoints:
 
 @dataclass(frozen=True)
 class CombustionEfficiencyCurve(Subcomponent):
-    """A boiler's combustion efficiency over its load and its return temperature, on its booking basis.
+    """A boiler's combustion efficiency over its load and its return temperature, on one calorific basis.
 
-    The combustion efficiency is the heat into the water over the fuel power, on the calorific basis the boiler's
-    fuel is booked on (:meth:`CalorificBasis.of_booking`). The load ratio ``beta`` is the burner (fuel) power over the
-    maximal burner power. The curve passes through the two test points: ``eta_100`` at full load and the 60 °C test
+    The combustion efficiency is the heat into the water over the fuel power. :meth:`BoilerEfficiencySources.curve`
+    states it on the boiler's curve basis (:meth:`BoilerEfficiencySources.curve_basis`); the boiler burns by it on the
+    basis its fuel is reported on (:meth:`BurnerModulation.on_reported_basis`). The load ratio ``beta`` is the
+    burner (fuel) power over the maximal burner power. The curve passes through the two test points: ``eta_100`` at full load and the 60 °C test
     return, ``eta_30`` at 30 % load and the 30 °C test return. Between them it is linear in load, and a condensing
     boiler gains ``g`` per kelvin its return is below 60 °C (BRE, SAP 10 Technical Paper S10TP-12 issue 1.2, 2023:
     0.30 percentage points per kelvin on the GCV for gas, §4.5, and 0.20 for oil, Fig. 2):
@@ -709,12 +672,12 @@ class BoilerEfficiencySources:
     #: 813/2013, document 5593552-01: eta_4 = 87.7 % (full load, 80/60 °C), eta_1 = 97.8 % (30 % load, 30 °C
     #: return), GCV.
     VITODENS_200W_B2HF_11: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.877, 0.978, CalorificBasis.GROSS, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN
+        0.877, 0.978, lt.CalorificBasis.GROSS, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN
     )
     #: Current condensing oil boiler: Buderus Logano plus GB125-22 (22 kW, article 7736604146), product fiche to
     #: (EU) 811/2013 and 813/2013, document 6721825297 (2020/10): eta_4 = 91.0 %, eta_1 = 97.5 %, GCV.
     LOGANO_PLUS_GB125_22: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.910, 0.975, CalorificBasis.GROSS, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN
+        0.910, 0.975, lt.CalorificBasis.GROSS, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN
     )
     #: Current conventional (low-temperature) boiler: Buderus Logano G125-21 (21 kW oil low-temperature boiler),
     #: Planungsunterlage Logano G125 (Ausgabe 08/2004), section 1.4, "Kennwerte zur Ermittlung der
@@ -722,48 +685,48 @@ class BoilerEfficiencySources:
     #: 813/2013 bars non-condensing boilers up to 400 kW from sale for space heating since 2015 (B1 boilers aside),
     #: so this is the newest household low-temperature boiler data found. Used for gas as well, as IWU 2002 gives gas
     #: and oil low-temperature boilers the same rows.
-    LOGANO_G125_21: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.937, 0.960, CalorificBasis.NET)
+    LOGANO_G125_21: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.937, 0.960, lt.CalorificBasis.NET)
     #: Pellet boiler: Froeling PE1 Pellet 15, "Produktdaten PE1 Pellet" T6390021_de, data to (EU) 2015/1189:
     #: eta_n = 87.8 % (nominal load), eta_p = 84.5 % (30 % load), GCV.
-    FROELING_PE1_PELLET_15: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.878, 0.845, CalorificBasis.GROSS)
+    FROELING_PE1_PELLET_15: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.878, 0.845, lt.CalorificBasis.GROSS)
     #: Wood-chip boiler: Hargassner Eco-HK 20 (6-20 kW), brochure "Hackgut" 2020, technical data, "Wirkungsgrad
     #: Volllast / Teillast 93,9 / 91,4 %", NCV (its smallest load, 6 kW, is 30 %).
-    HARGASSNER_ECO_HK_20: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.939, 0.914, CalorificBasis.NET)
+    HARGASSNER_ECO_HK_20: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(0.939, 0.914, lt.CalorificBasis.NET)
 
     #: IWU 2002, "Gas-Niedertemperatur-/Brennwertkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3
     #: "Gas-Brennwertkessel" eta_30% = 0.97 at 30 °C; NCV, 20 kW.
     IWU_GAS_CONDENSING_1980S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.89, 0.97, CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.89, 0.97, lt.CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, the same rows, 90er Jahre: Tab. 2 eta_k,70 = 0.92, Tab. 3 eta_30% = 1.01; NCV, 20 kW.
     IWU_GAS_CONDENSING_1990S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.92, 1.01, CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.92, 1.01, lt.CalorificBasis.NET, CONDENSING_GAS_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, "Oel-Niedertemperaturkessel/Brennwertkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3
     #: "Oel-Brennwertkessel" eta_30% = 0.94 at 30 °C; NCV, 20 kW.
     IWU_OIL_CONDENSING_1980S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.89, 0.94, CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.89, 0.94, lt.CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, the same rows, 90er Jahre: Tab. 2 eta_k,70 = 0.92, Tab. 3 eta_30% = 0.97; NCV, 20 kW.
     IWU_OIL_CONDENSING_1990S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.92, 0.97, CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
+        0.92, 0.97, lt.CalorificBasis.NET, CONDENSING_OIL_GAIN_ON_GROSS_BASIS_PER_KELVIN, follows_size_law=True
     )
     #: IWU 2002, "Gas-/Oel-Niedertemperaturkessel", 80er Jahre: Tab. 2 eta_k,70 = 0.89, Tab. 3 eta_30% = 0.88 at
     #: 40 °C; NCV, 20 kW (the gas and the oil rows are equal).
     IWU_LOW_TEMPERATURE_1980S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.89, 0.88, CalorificBasis.NET, follows_size_law=True
+        0.89, 0.88, lt.CalorificBasis.NET, follows_size_law=True
     )
     #: IWU 2002, the same rows, 90er Jahre: Tab. 2 eta_k,70 = 0.92, Tab. 3 eta_30% = 0.92 at 40 °C; NCV, 20 kW.
     IWU_LOW_TEMPERATURE_1990S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.92, 0.92, CalorificBasis.NET, follows_size_law=True
+        0.92, 0.92, lt.CalorificBasis.NET, follows_size_law=True
     )
     #: IWU 2002, "Gas-Spezialkessel", 70er Jahre: Tab. 2 eta_k,70 = 0.85, Tab. 3 eta_30% = 0.80 at 50 °C; NCV, 20 kW.
     IWU_GAS_STANDARD_1970S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.85, 0.80, CalorificBasis.NET, follows_size_law=True
+        0.85, 0.80, lt.CalorificBasis.NET, follows_size_law=True
     )
     #: IWU 2002, "Oel-Spezialkessel", 70er Jahre: Tab. 2 eta_k,70 = 0.84, Tab. 3 eta_30% = 0.79 at 50 °C; NCV, 20 kW.
     IWU_OIL_STANDARD_1970S: ClassVar[EfficiencyTestPoints] = EfficiencyTestPoints(
-        0.84, 0.79, CalorificBasis.NET, follows_size_law=True
+        0.84, 0.79, lt.CalorificBasis.NET, follows_size_law=True
     )
 
     #: IWU 2002 eq. 2-1, ``eta_k,70 = eta_k,70,20kW - 0.0195 + 0.015 lg Q_n`` (Q_n in kW), constant term,
@@ -810,6 +773,60 @@ class BoilerEfficiencySources:
             return cls.WOOD_CHIPS_GROSS_OVER_NET
         properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
         return properties.higher_heating_value_in_joule_per_m3 / properties.lower_heating_value_in_joule_per_m3
+
+    @classmethod
+    def curve_basis(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> lt.CalorificBasis:
+        """Return the basis a boiler's efficiency curve and burner powers are stated on, and on which its curve stays at most 1.
+
+        A condensing boiler recovers the latent heat of its flue gas, so its heat is bounded by the fuel's GCV; a
+        conventional one loses it, so its heat is bounded by the NCV. The curve basis is the GCV for a condensing
+        boiler of a fuel whose two heating values differ in ``PhysicsConfig``, and the NCV for every other boiler
+        (pellets and wood chips have only an NCV there). It is not the basis the boiler reports its fuel on, which is
+        the fuel's own (:meth:`hisim.loadtypes.CalorificBasis.reported_for`): :meth:`reported_over_curve_basis` moves
+        the one to the other. For example, a condensing gas boiler has its curve on the GCV, a conventional oil and
+        every pellet boiler on the NCV.
+
+        Args:
+            energy_carrier: The fuel the boiler burns.
+            boiler_type: Condensing or conventional.
+
+        Returns:
+            The calorific basis of the boiler's curve and burner powers.
+        """
+        properties = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=energy_carrier)
+        has_gross_value = (
+            properties.higher_heating_value_in_joule_per_m3 > properties.lower_heating_value_in_joule_per_m3
+        )
+        if boiler_type == BoilerType.CONDENSING and has_gross_value:
+            return lt.CalorificBasis.GROSS
+        return lt.CalorificBasis.NET
+
+    @classmethod
+    def reported_over_curve_basis(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> float:
+        """Return the kWh of fuel on its reported basis per kWh on the boiler's curve basis, dimensionless.
+
+        The boiler burns by a curve on its curve basis (:meth:`curve_basis`) and reports its fuel on the fuel's basis
+        (:meth:`hisim.loadtypes.CalorificBasis.reported_for`), the one its price and emission factor are stated on.
+        The factor is 1 where the two agree, the fuel's GCV/NCV (:meth:`gross_over_net`) for a curve on the NCV and a
+        fuel reported on the GCV, and its inverse for a curve on the GCV and a fuel reported on the NCV. Hydrogen
+        takes the gas boiler's curve, but the factor is hydrogen's own: it converts the fuel, not the curve. For
+        example, a conventional gas boiler gives 1.109 (gas is reported on the GCV), a condensing oil boiler
+        1 / 1.066 = 0.938 (oil is reported on the NCV), a condensing gas, a conventional oil and every pellet boiler 1.
+
+        Args:
+            energy_carrier: The fuel the boiler burns.
+            boiler_type: Condensing or conventional.
+
+        Returns:
+            The fuel energy on the reported basis over the same fuel's energy on the curve basis.
+        """
+        curve_basis = cls.curve_basis(energy_carrier, boiler_type)
+        reported_basis = lt.CalorificBasis.reported_for(energy_carrier)
+        if curve_basis == reported_basis:
+            return 1.0
+        if curve_basis == lt.CalorificBasis.NET:
+            return cls.gross_over_net(energy_carrier)
+        return 1.0 / cls.gross_over_net(energy_carrier)
 
     @classmethod
     def test_points(
@@ -908,7 +925,7 @@ class BoilerEfficiencySources:
         installation_year: Optional[int],
         maximal_power_in_watt: float,
     ) -> CombustionEfficiencyCurve:
-        """Return a boiler's curve from its source row, moved to its size and put on its booking basis.
+        """Return a boiler's curve from its source row, moved to its size and put on its curve basis.
 
         Hydrogen takes the gas boiler's curve as it is: the same efficiencies on the same basis. For example, a
         20 kW condensing gas boiler of 1995 gets IWU's 0.92 / 1.01 (NCV) on the GCV, 0.829 / 0.910.
@@ -920,7 +937,7 @@ class BoilerEfficiencySources:
             maximal_power_in_watt: The maximal burner power, in W, above 0.
 
         Returns:
-            The curve on the calorific basis the boiler's fuel is booked on.
+            The curve on the boiler's curve basis (:meth:`curve_basis`).
         """
         size_correction = cls.size_correction(maximal_power_in_watt)
         source_carrier = lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier
@@ -931,14 +948,14 @@ class BoilerEfficiencySources:
             efficiency_at_full_load += size_correction
             efficiency_at_part_load += size_correction
         gross_over_net = cls.gross_over_net(source_carrier)
-        booking = CalorificBasis.of_booking(source_carrier, boiler_type)
+        curve_basis = cls.curve_basis(source_carrier, boiler_type)
         gain_per_kelvin = points.condensing_gain_on_gross_basis_per_kelvin
-        if booking == CalorificBasis.NET:
+        if curve_basis == lt.CalorificBasis.NET:
             gain_per_kelvin *= gross_over_net
-        if points.calorific_basis == CalorificBasis.NET and booking == CalorificBasis.GROSS:
+        if points.calorific_basis == lt.CalorificBasis.NET and curve_basis == lt.CalorificBasis.GROSS:
             efficiency_at_full_load /= gross_over_net
             efficiency_at_part_load /= gross_over_net
-        elif points.calorific_basis == CalorificBasis.GROSS and booking == CalorificBasis.NET:
+        elif points.calorific_basis == lt.CalorificBasis.GROSS and curve_basis == lt.CalorificBasis.NET:
             efficiency_at_full_load *= gross_over_net
             efficiency_at_part_load *= gross_over_net
         return CombustionEfficiencyCurve(
@@ -948,11 +965,11 @@ class BoilerEfficiencySources:
         )
 
     @classmethod
-    def gross_to_booking_factor(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> float:
-        """Return the factor that puts an efficiency on the GCV onto the boiler's booking basis, dimensionless.
+    def gross_to_curve_basis_factor(cls, energy_carrier: lt.LoadTypes, boiler_type: BoilerType) -> float:
+        """Return the factor that puts an efficiency on the GCV onto the boiler's curve basis, dimensionless.
 
-        It is the fuel's GCV/NCV for a boiler booked on the NCV (:meth:`CalorificBasis.of_booking`) and 1 for one
-        booked on the GCV. Hydrogen takes the gas boiler's curve as it is, so it takes the gas factor as well. For
+        It is the fuel's GCV/NCV for a boiler whose curve is on the NCV (:meth:`curve_basis`) and 1 for one whose curve
+        is on the GCV. Hydrogen takes the gas boiler's curve as it is, so it takes the gas factor as well. For
         example, a conventional gas boiler gives 1.109, a condensing gas boiler 1, a pellet boiler 1.078.
 
         Args:
@@ -960,10 +977,10 @@ class BoilerEfficiencySources:
             boiler_type: Condensing or conventional.
 
         Returns:
-            ``eta_booking / eta_GCV``.
+            ``eta_curve_basis / eta_GCV``.
         """
         source_carrier = lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier
-        if CalorificBasis.of_booking(source_carrier, boiler_type) == CalorificBasis.NET:
+        if cls.curve_basis(source_carrier, boiler_type) == lt.CalorificBasis.NET:
             return cls.gross_over_net(source_carrier)
         return 1.0
 
@@ -980,15 +997,14 @@ class BoilerEfficiencySources:
 
         A stated ``eta_s`` scales the boiler's curve by ``s = (eta_s + 0.03) k / eta_son`` (:meth:`curve`), so the
         curve's highest point becomes ``s H``, with ``eta_son = 0.85 eta_30 + 0.15 eta_100`` and ``H`` the highest
-        point of the unscaled curve, both on the booking basis, and ``k`` from :meth:`gross_to_booking_factor`. The
-        scaled curve must stay at or below 1 on the basis the boiler's fuel is booked on: above it, the heat exceeds
-        the fuel booked for it and the combustion loss turns negative. Solving ``s H <= 1`` gives the ceiling
-        ``eta_s <= eta_son / (H k) - 0.03``. For a condensing gas or oil boiler, booked on the GCV, that is 1 on the
-        GCV (current condensing gas 0.9545). A non-condensing boiler and every pellet and wood-chip boiler is booked
-        on the NCV, where a non-condensing boiler cannot reach 1 either, so its ceiling lies a fuel's GCV/NCV lower:
-        current conventional gas 0.8682, conventional oil 0.9050, pellets 0.8678, wood chips 0.8624. :meth:`curve`
-        refuses exactly what lies above it, and the RenoVisor request check calls it to refuse such a request
-        before anything runs.
+        point of the unscaled curve, both on the curve basis, and ``k`` from :meth:`gross_to_curve_basis_factor`. The
+        scaled curve must stay at or below 1 on its curve basis: above it, the heat exceeds the fuel burnt for it and
+        the combustion loss turns negative. Solving ``s H <= 1`` gives the ceiling ``eta_s <= eta_son / (H k) - 0.03``.
+        For a condensing gas or oil boiler, whose curve is on the GCV, that is 1 on the GCV (current condensing gas
+        0.9545). A non-condensing boiler and every pellet and wood-chip boiler has its curve on the NCV, where a
+        non-condensing boiler cannot reach 1 either, so its ceiling lies a fuel's GCV/NCV lower: current conventional
+        gas 0.8682, conventional oil 0.9050, pellets 0.8678, wood chips 0.8624. :meth:`curve` refuses exactly what lies
+        above it, and the RenoVisor request check calls it to refuse such a request before anything runs.
 
         Only the IWU rows whose two test points differ depend on the size, through eq. 2-1 (the 1990s and 1980s
         condensing, the 1980s low-temperature and the 1970s standard rows): it adds the same correction to both
@@ -1002,7 +1018,7 @@ class BoilerEfficiencySources:
             maximal_power_in_watt: The maximal burner power, in W, above 0.
 
         Returns:
-            The highest ``eta_s`` on the GCV whose scaled curve stays at or below 1 on the booking basis.
+            The highest ``eta_s`` on the GCV whose scaled curve stays at or below 1 on the curve basis.
 
         Raises:
             ValueError: If the power is not finite or not above 0 W, or no source covers the fuel.
@@ -1013,9 +1029,9 @@ class BoilerEfficiencySources:
             installation_year=installation_year,
             maximal_power_in_watt=maximal_power_in_watt,
         )
-        gross_to_booking = cls.gross_to_booking_factor(energy_carrier, boiler_type)
+        gross_to_curve_basis = cls.gross_to_curve_basis_factor(energy_carrier, boiler_type)
         return (
-            unscaled.active_mode_seasonal_efficiency() / (unscaled.highest_efficiency() * gross_to_booking)
+            unscaled.active_mode_seasonal_efficiency() / (unscaled.highest_efficiency() * gross_to_curve_basis)
             - cls.TEMPERATURE_CONTROL_CORRECTION
         )
 
@@ -1034,9 +1050,9 @@ class BoilerEfficiencySources:
         Without a stated seasonal efficiency the curve is :meth:`unscaled_curve`. With one, the curve is scaled so
         that its active-mode seasonal efficiency minus :attr:`TEMPERATURE_CONTROL_CORRECTION`, on the GCV, is the
         stated value: ``s = (eta_s + 0.03) * k / (0.85 eta_30 + 0.15 eta_100)``, where ``k`` is the fuel's GCV/NCV
-        for a boiler booked on the NCV and 1 for one booked on the GCV (:meth:`gross_to_booking_factor`). For
+        for a boiler whose curve is on the NCV and 1 for one on the GCV (:meth:`gross_to_curve_basis_factor`). For
         example, a stated 0.90 on the current condensing gas curve gives ``s = 0.93 / 0.963 = 0.966``. A stated value
-        above :meth:`highest_seasonal_efficiency` is refused: it would lift the curve above 1 on the booking basis.
+        above :meth:`highest_seasonal_efficiency` is refused: it would lift the curve above 1 on its curve basis.
 
         Args:
             energy_carrier: The fuel the boiler burns.
@@ -1047,11 +1063,11 @@ class BoilerEfficiencySources:
                 dimensionless, or ``None``.
 
         Returns:
-            The curve on the boiler's booking basis.
+            The curve on the boiler's curve basis.
 
         Raises:
             ValueError: If the stated value is above :meth:`highest_seasonal_efficiency`, so the scaled curve would
-                exceed 1 somewhere on the basis the boiler's fuel is booked on: the GCV for a condensing gas, oil or
+                exceed 1 somewhere on the boiler's curve basis: the GCV for a condensing gas, oil or
                 hydrogen boiler, the NCV for every other one.
         """
         unscaled = cls.unscaled_curve(
@@ -1062,7 +1078,7 @@ class BoilerEfficiencySources:
         )
         if seasonal_efficiency is None:
             return unscaled
-        gross_to_booking = cls.gross_to_booking_factor(energy_carrier, boiler_type)
+        gross_to_curve_basis = cls.gross_to_curve_basis_factor(energy_carrier, boiler_type)
         highest_seasonal_efficiency = cls.highest_seasonal_efficiency(
             energy_carrier=energy_carrier,
             boiler_type=boiler_type,
@@ -1070,12 +1086,12 @@ class BoilerEfficiencySources:
             maximal_power_in_watt=maximal_power_in_watt,
         )
         if seasonal_efficiency > highest_seasonal_efficiency:
-            on_net_basis = CalorificBasis.of_booking(energy_carrier, boiler_type) == CalorificBasis.NET
+            on_net_basis = cls.curve_basis(energy_carrier, boiler_type) == lt.CalorificBasis.NET
             basis = "net" if on_net_basis else "gross"
             year = f"installed in {installation_year}" if installation_year is not None else "a current one"
             hint = (
-                "the boiler's fuel is booked on the net calorific value, on which a boiler that does not condense "
-                "cannot exceed 1: its heat would exceed the fuel booked for it"
+                "the boiler's efficiency curve is stated on the net calorific value, on which a boiler that does not "
+                "condense cannot exceed 1: its heat would exceed the fuel it burns"
                 if on_net_basis
                 else "the stated value must be the Ecodesign seasonal space heating efficiency eta_s of the energy "
                 "label, on the gross calorific value"
@@ -1086,27 +1102,62 @@ class BoilerEfficiencySources:
                 f"({year}) can take: it would scale the boiler's curve above 1 on the {basis} calorific value; "
                 f"{hint}."
             )
-        target_on_booking_basis = (seasonal_efficiency + cls.TEMPERATURE_CONTROL_CORRECTION) * gross_to_booking
-        return unscaled.scaled(target_on_booking_basis / unscaled.active_mode_seasonal_efficiency())
+        target_on_curve_basis = (seasonal_efficiency + cls.TEMPERATURE_CONTROL_CORRECTION) * gross_to_curve_basis
+        return unscaled.scaled(target_on_curve_basis / unscaled.active_mode_seasonal_efficiency())
 
 
 @dataclass(frozen=True)
 class BurnerModulation(Subcomponent):
-    """A boiler burner's power band and its combustion efficiency across it.
+    """A boiler burner's power band and its combustion efficiency across it, on the basis its fuel is reported on.
 
     The burner modulates between a minimal and a maximal power. Its combustion efficiency, the share of the fuel
     power that becomes heat, follows the boiler's :class:`CombustionEfficiencyCurve` over the load ratio, the burner
     power over the maximal power, and the return temperature of the circuit it fires. A subcomponent built once from
-    the boiler's configuration, so its methods are pure functions of their arguments. For example, a 2-20 kW
-    band on the current condensing gas curve burns at 0.945 at 10 kW on a 40 °C return.
+    the boiler's configuration (:meth:`on_reported_basis`), so its methods are pure functions of their arguments. For
+    example, a 2-20 kW band on the current condensing gas curve burns at 0.945 at 10 kW on a 40 °C return.
     """
 
     #: The lowest power the burner modulates down to, in W.
     minimal_power_in_watt: float
     #: The highest power the burner reaches, in W, above 0.
     maximal_power_in_watt: float
-    #: The combustion efficiency over load and return temperature, on the boiler's booking basis.
+    #: The combustion efficiency over load and return temperature, on the same calorific basis as the two powers.
     efficiency_curve: CombustionEfficiencyCurve
+
+    @classmethod
+    def on_reported_basis(
+        cls,
+        *,
+        minimal_power_in_watt: float,
+        maximal_power_in_watt: float,
+        curve_on_curve_basis: CombustionEfficiencyCurve,
+        reported_over_curve_basis: float,
+    ) -> "BurnerModulation":
+        """Return the burner with its power band and curve moved from the boiler's curve basis to the reported basis.
+
+        The configured burner powers and the curve are stated on the boiler's curve basis
+        (:meth:`BoilerEfficiencySources.curve_basis`); the boiler reports its fuel on the fuel's basis
+        (:meth:`hisim.loadtypes.CalorificBasis.reported_for`). The burner multiplies both powers by ``k``, the kWh on
+        the reported basis per kWh on the curve basis (:meth:`BoilerEfficiencySources.reported_over_curve_basis`), and
+        divides the curve by it. The heat at every control signal, ``P eta``, stays what it is on the curve basis; the
+        fuel it burns is ``k`` times the fuel on the curve basis. For example, a 20 kW current conventional gas boiler
+        (curve on the NCV, ``eta_100`` = 0.937) becomes a 22.19 kW burner on the GCV with ``eta_100`` = 0.845, and
+        makes 18.74 kW of heat at full power on either basis.
+
+        Args:
+            minimal_power_in_watt: The configured minimal burner power, in W, on the curve basis.
+            maximal_power_in_watt: The configured maximal burner power, in W, on the curve basis.
+            curve_on_curve_basis: The boiler's curve on its curve basis (:meth:`BoilerEfficiencySources.curve`).
+            reported_over_curve_basis: ``k``, dimensionless, above 0.
+
+        Returns:
+            The burner whose powers and fuel are on the reported basis.
+        """
+        return cls(
+            minimal_power_in_watt=minimal_power_in_watt * reported_over_curve_basis,
+            maximal_power_in_watt=maximal_power_in_watt * reported_over_curve_basis,
+            efficiency_curve=curve_on_curve_basis.scaled(1.0 / reported_over_curve_basis),
+        )
 
     def commanded_power_in_watt(self, control_signal: float) -> float:
         """Return the burner power a control signal commands, in W: its share of the maximum, at least the minimum.
@@ -1836,6 +1887,8 @@ class GenericBoiler(PhysicsComponent):
         self.minimal_thermal_power_in_watt = self.config.minimal_thermal_power_in_watt
         self.maximal_thermal_power_in_watt = self.config.maximal_thermal_power_in_watt
         self.maximal_flow_temperature_in_celsius = self.config.maximal_flow_temperature_in_celsius
+        #: The combustion efficiency curve on the boiler's curve basis (:meth:`BoilerEfficiencySources.curve_basis`),
+        #: the basis of the two configured powers; the burner burns by it moved to the basis the fuel is reported on.
         self.efficiency_curve = BoilerEfficiencySources.curve(
             energy_carrier=self.energy_carrier,
             boiler_type=self.config.boiler_type,
@@ -1843,10 +1896,13 @@ class GenericBoiler(PhysicsComponent):
             maximal_power_in_watt=self.maximal_thermal_power_in_watt,
             seasonal_efficiency=self.config.seasonal_efficiency,
         )
-        self.burner = BurnerModulation(
+        self.burner = BurnerModulation.on_reported_basis(
             minimal_power_in_watt=self.minimal_thermal_power_in_watt,
             maximal_power_in_watt=self.maximal_thermal_power_in_watt,
-            efficiency_curve=self.efficiency_curve,
+            curve_on_curve_basis=self.efficiency_curve,
+            reported_over_curve_basis=BoilerEfficiencySources.reported_over_curve_basis(
+                self.energy_carrier, self.config.boiler_type
+            ),
         )
         #: The boiler's circulation pump: the flow that carries the commanded heat over the lift the controller asks for,
         #: ``m = P_th / (c lift)``. On a lift close to 0 K that flow has no bound (12 kW at 0.877 over 0.01 K is
@@ -1874,13 +1930,13 @@ class GenericBoiler(PhysicsComponent):
 
         # The fuel constants are derived by the config, which is also what contributes them
         # as sizing facts, so the meter accounting this boiler's consumption reads exactly
-        # the numbers the boiler itself burns by. Condensing/conventional picks the higher
-        # or the lower heating value; an unknown carrier still raises here, as it always did.
+        # the numbers the boiler itself burns by. The heating value is the one on the basis
+        # the fuel is reported on; an unknown carrier still raises here, as it always did.
         self.heating_value_of_fuel_in_joule_per_m3 = GenericBoilerConfig.heating_value_in_joule_per_m3(
-            self.energy_carrier, self.config.boiler_type
+            self.energy_carrier
         )
         heating_value_in_kwh_per_liter, density_in_kg_per_m3 = GenericBoilerConfig.fuel_constants(
-            self.energy_carrier, self.config.boiler_type
+            self.energy_carrier
         )
         # ``fuel_constants`` returns None only for district heating, and the line above already
         # refused that carrier the way it always did, so both values are numbers here.

@@ -17,7 +17,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.uncertainty import UncertainValue
-from hisim.loadtypes import ComponentType, Units
+from hisim.loadtypes import CalorificBasis, ComponentType, Units
 
 
 class CostDataError(ValueError):
@@ -270,6 +270,11 @@ class EnergyPriceEntry:
     #: How the remuneration of an `ELECTRICITY_FEED_IN` row is paid: FIXED_TARIFF (the default, the EEG
     #: convention) or MARKET_LINKED. Only a feed-in row may state it; the loader refuses it anywhere else.
     feed_in_kind: FeedInKind = FeedInKind.FIXED_TARIFF
+    #: The calorific value a fuel row's working price and emission factor are stated on, the gross (GCV) or the net
+    #: (NCV), or None for a carrier that burns nothing (electricity, its feed-in, district heating). Every fuel row
+    #: declares it, and the loader refuses a row whose basis is not the one HiSim reports the fuel on
+    #: (`hisim.loadtypes.CalorificBasis.reported_for`), so a price per kWh multiplies kWh of the same basis.
+    calorific_basis: Optional[CalorificBasis] = None
 
     @property
     def entry_key(self) -> str:

@@ -338,6 +338,17 @@ renovisorissues #102): a difference that rises above zero again moves the year t
 one that ends above zero gives `null`, so a world with a positive `npv_delta_in_euro` never states a
 year, and year 0 is a valid value for a plan no dearer than the reference from the start.
 
+A plan that buys a subject with no price -- a `by_subject` row of the plan with `unpriced: true` and a
+`measure_id`, such as an envelope measure without a cost block or the hot-water lagging -- states
+`null` in every end of `comparison.discounted_payback_year`, and
+`comparison.discounted_payback_year_null_reason` says why (schema version 10, renovisorissues #87):
+`{"code": "unpriced_subjects", "unpriced_subjects": [...], "measure_ids": [...], "note": "..."}`. The
+plan's investment is unknown, not the sum of its priced rows, so no year is stated and there is no
+lower bound. A reader's quote for the measure prices it, and the payback is stated again. A kept
+envelope element (`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and
+the plan and withholds nothing. Without such a subject the reason is `null`, and a `null` end means
+that world does not stay repaid within the horizon.
+
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when
 the block states none: the document never dates a plan from its weather. `weather_year` is the year

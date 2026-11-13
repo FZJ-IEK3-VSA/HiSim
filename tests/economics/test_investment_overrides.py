@@ -536,15 +536,25 @@ class TestAnEnvelopeQuote:
         assert (row["investment_origin"], row["investment_source"]) == ("reader_quote", "facade quote")
 
     def test_an_unpriced_envelope_subject_becomes_priced(self, database) -> None:
-        """The request carried no price for it; the quote is one, and the row says so."""
+        """The request carried no price for it; the quote is one, and the row says so.
+
+        The payback follows the row: withheld over the unknown price (renovisorissues #87), stated once the quote
+        prices it.
+        """
         quoted = _price(database, always_eligible_catalog(0.3), [ENVELOPE_QUOTE])
-        row = _rows(_document(quoted, unpriced=[SyntheticPlan.ENVELOPE_SUBJECT]))[SyntheticPlan.ENVELOPE_SUBJECT]
+        quoted_document = _document(quoted, unpriced=[SyntheticPlan.ENVELOPE_SUBJECT])
+        row = _rows(quoted_document)[SyntheticPlan.ENVELOPE_SUBJECT]
         assert row["unpriced"] is False
         assert row["note"] == StagedDocument.QUOTED_UNPRICED_NOTE
+        assert quoted_document["comparison"]["discounted_payback_year_null_reason"] is None
         plain_result = _price(database, always_eligible_catalog(0.3))
-        plain = _rows(_document(plain_result, unpriced=[SyntheticPlan.ENVELOPE_SUBJECT]))
+        plain_document = _document(plain_result, unpriced=[SyntheticPlan.ENVELOPE_SUBJECT])
+        plain = _rows(plain_document)
         assert plain[SyntheticPlan.ENVELOPE_SUBJECT]["unpriced"] is True
         assert plain[SyntheticPlan.ENVELOPE_SUBJECT]["investment_origin"] is None
+        reason = plain_document["comparison"]["discounted_payback_year_null_reason"]
+        assert reason["unpriced_subjects"] == [SyntheticPlan.ENVELOPE_SUBJECT]
+        assert plain_document["comparison"]["discounted_payback_year"] == {"min": None, "best": None, "max": None}
 
 
 class TestTheUnpricedLaggingBecomesPriced:
@@ -1013,7 +1023,7 @@ class TestTheCommand:
         """The generator of stage 2 at the quote, the quote in the block."""
         assert _run_with(workspace, [_quote(2, "heating_system")]) == 0
         document = json.loads((workspace / "economics_result.json").read_text(encoding="utf-8"))
-        assert document["schema_version"] == 9
+        assert document["schema_version"] == 10
         assert document["parameters"][ParameterKeys.INVESTMENT_OVERRIDES] == [_quote(2, "heating_system")]
         row = _rows(document)[SyntheticPlan.HEAT_PUMP_SUBJECT]
         assert (row["investment_origin"], row["investment_source"]) == ("reader_quote", SOURCE)

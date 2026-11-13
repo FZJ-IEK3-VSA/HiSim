@@ -521,7 +521,7 @@ class TestTheDocumentShape:
         """
         import jsonschema
 
-        assert document["schema_version"] == 9
+        assert document["schema_version"] == 10
         StagedDocument.validate(document)
         for older in (1, 2, 3, 4, 5, 6, 7):
             with pytest.raises(jsonschema.ValidationError):
@@ -1496,7 +1496,12 @@ class TestTheEnergyEcho:
         second = self._document(database, parsed.parameters, tmp_path, "second")
         for variant in ("reference", "plan"):
             assert second[variant]["totals"] == document[variant]["totals"]
-        assert second["comparison"] == document["comparison"]
+        # The fixture declares the facade unpriced, so it states no payback year; the second document is built
+        # without the mapping report and states one. Every figure besides is the same.
+        payback_keys = ("discounted_payback_year", "discounted_payback_year_null_reason")
+        assert {key: value for key, value in second["comparison"].items() if key not in payback_keys} == {
+            key: value for key, value in document["comparison"].items() if key not in payback_keys
+        }
         without_origins = {key: value for key, value in second["parameters"].items() if key != "origins"}
         assert without_origins == {key: value for key, value in document["parameters"].items() if key != "origins"}
         assert second["parameters"]["origins"]["escalation"]["energy"] == {"ELECTRICITY": "stated"}

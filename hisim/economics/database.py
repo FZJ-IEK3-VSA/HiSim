@@ -12,7 +12,8 @@ from __future__ import annotations
 import copy
 import json
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from hisim import log
 from hisim.economics.carriers import EnergyCarrier
@@ -32,7 +33,7 @@ from hisim.economics.catalog_entries import (
 from hisim.economics.provenance import ParameterOrigin, ParameterProvenance, ProvenanceLedger
 from hisim.economics.sources import SourceEntry, SourceRegistry
 from hisim.economics.uncertainty import UncertainValue
-from hisim.loadtypes import ComponentType
+from hisim.loadtypes import CalorificBasis, ComponentType, LoadTypes
 
 #: The row types and the source registry live in `catalog_entries` / `sources`; they stay importable from here so
 #: the data layer keeps one public import surface.
@@ -119,6 +120,52 @@ def _feed_in_kind_of_row(item: Dict[str, Any], carrier: EnergyCarrier, context: 
         f"{context}: feed_in_kind {raw!r} is not one a price row can declare "
         f"({', '.join(kind.value for kind in admissible)}); a spot-referenced remuneration needs a tariff contract."
     )
+
+
+def _calorific_basis_of_row(item: Dict[str, Any], carrier: EnergyCarrier, context: str) -> Optional[CalorificBasis]:
+    """Return the calorific basis an energy price row declares: required on a fuel row, refused on any other.
+
+    A fuel's price and emission factor per kWh mean nothing until the basis of the kWh is named, and HiSim reports
+    each fuel on one basis (`CalorificBasis.reported_for`). A fuel row must therefore state the basis its working
+    price and emission factor are on, and it must be that one; the loader never assumes a basis. Example: a
+    `NATURAL_GAS` row states `"calorific_basis": "GROSS"`, a `HEATING_OIL` row `"NET"`, an `ELECTRICITY` row nothing.
+
+    Args:
+        item: The raw JSON object of the row.
+        carrier: The row's carrier, already resolved.
+        context: The `file:carrier@year` location string, quoted in the error.
+
+    Returns:
+        The declared basis of a fuel row, None for a row of a carrier that burns nothing.
+
+    Raises:
+        CostDataError: If a fuel row states no basis, an unknown one or another than HiSim reports the fuel on, or a
+            row of a carrier that burns nothing states one.
+    """
+    raw = item.get("calorific_basis")
+    fuel = CostDatabase.FUEL_LOAD_TYPES.get(carrier)
+    if fuel is None:
+        if raw is not None:
+            raise CostDataError(
+                f"{context}: calorific_basis is stated on a {carrier.value} row; only a fuel row has one."
+            )
+        return None
+    reported = CalorificBasis.reported_for(fuel)
+    if raw is None:
+        raise CostDataError(
+            f"{context}: a {carrier.value} row must state its calorific_basis, the calorific value its working price "
+            f"and emission factor are stated on; HiSim reports {carrier.value} on {reported.value}."
+        )
+    if raw not in [basis.value for basis in CalorificBasis]:
+        raise CostDataError(
+            f"{context}: calorific_basis {raw!r} is neither {' nor '.join(basis.value for basis in CalorificBasis)}."
+        )
+    if raw != reported.value:
+        raise CostDataError(
+            f"{context}: the row states its price and emission factor on the {raw} calorific value, but HiSim reports "
+            f"{carrier.value} on {reported.value}; convert the row to {reported.value}."
+        )
+    return reported
 
 
 class CostDatabase:
@@ -302,6 +349,7 @@ class CostDatabase:
                     notes=item.get("notes"),
                     data_file=file_name,
                     feed_in_kind=_feed_in_kind_of_row(item, carrier, context),
+                    calorific_basis=_calorific_basis_of_row(item, carrier, context),
                 )
             )
         return entries
@@ -411,6 +459,19 @@ class CostDatabase:
     #: `components/generic_car.py` uses to turn simulated liters into kWh; pricing must agree with the model.
     DIESEL_ENERGY_CONTENT_IN_KWH_PER_LITER = 9.8
 
+    #: The fuel each fuel carrier is, for its heating value and its calorific basis (`CalorificBasis.reported_for`).
+    #: A carrier missing here burns nothing: electricity, its feed-in and district heating.
+    FUEL_LOAD_TYPES: ClassVar[Mapping[EnergyCarrier, LoadTypes]] = MappingProxyType(
+        {
+            EnergyCarrier.NATURAL_GAS: LoadTypes.GAS,
+            EnergyCarrier.HYDROGEN: LoadTypes.GREEN_HYDROGEN,
+            EnergyCarrier.HEATING_OIL: LoadTypes.OIL,
+            EnergyCarrier.PELLETS: LoadTypes.PELLETS,
+            EnergyCarrier.WOOD_CHIPS: LoadTypes.WOOD_CHIPS,
+            EnergyCarrier.DIESEL: LoadTypes.DIESEL,
+        }
+    )
+
     #: Entry fields quoted per native billing quantity and therefore divided by the energy content; everything else
     #: on the row is per year, one-off or dimensionless.
     CONVERTED_PRICE_FIELDS = ("working_price_in_euro_per_kwh", "emission_factor_in_kg_per_kwh")
@@ -418,8 +479,9 @@ class CostDatabase:
     def energy_content_of(self, entry: EnergyPriceEntry) -> Optional[EnergyContent]:
         """Return the energy content of one native billing unit of a fuel-quoted row, or None if it is already per kWh.
 
-        Heating values come from `components.configuration.PhysicsConfig`, the lower heating values the boilers and
-        meters use, so a bill matches the physics that produced its kWh. Diesel per liter uses
+        Heating values come from `components.configuration.PhysicsConfig`, on the calorific basis HiSim reports the
+        fuel on (`CalorificBasis.reported_for`, the net calorific value for oil, pellets and wood chips), the one the
+        boilers and meters report their kWh on, so a bill matches the physics that produced its kWh. Diesel per liter uses
         `DIESEL_ENERGY_CONTENT_IN_KWH_PER_LITER`. The import happens at call time so that `hisim.economics` stays
         importable without `hisim.components`.
 
@@ -447,27 +509,26 @@ class CostDatabase:
                 kwh_per_quantity_unit=self.DIESEL_ENERGY_CONTENT_IN_KWH_PER_LITER,
                 source_label="HiSim generic_car diesel heating value",
             )
-        # Deferred imports: `hisim.economics` must stay importable without `hisim.components`.
-        from hisim import loadtypes as lt  # pylint: disable=import-outside-toplevel
+        # Deferred import: `hisim.economics` must stay importable without `hisim.components`.
         from hisim.components.configuration import PhysicsConfig  # pylint: disable=import-outside-toplevel
 
-        load_types_by_carrier = {
-            EnergyCarrier.HEATING_OIL: lt.LoadTypes.OIL,
-            EnergyCarrier.PELLETS: lt.LoadTypes.PELLETS,
-            EnergyCarrier.WOOD_CHIPS: lt.LoadTypes.WOOD_CHIPS,
-        }
-        load_type = load_types_by_carrier.get(entry.carrier)
-        if load_type is None:
+        convertible_carriers = (EnergyCarrier.HEATING_OIL, EnergyCarrier.PELLETS, EnergyCarrier.WOOD_CHIPS)
+        if entry.carrier not in convertible_carriers:
             raise CostDataError(
-                f"Energy price entry {entry.entry_key}: no lower heating value is known for "
+                f"Energy price entry {entry.entry_key}: no heating value per {unit} is known for "
                 f"{entry.carrier.value}, so its {entry.quantity_unit} quote cannot be converted "
                 "to EUR/kWh."
             )
+        load_type = self.FUEL_LOAD_TYPES[entry.carrier]
         physics = PhysicsConfig.get_properties_for_energy_carrier(load_type)
+        is_gross = CalorificBasis.reported_for(load_type) == CalorificBasis.GROSS
+        heating_value_in_joule_per_m3 = (
+            physics.higher_heating_value_in_joule_per_m3 if is_gross else physics.lower_heating_value_in_joule_per_m3
+        )
         if unit == "liter":
-            kwh_per_unit = physics.lower_heating_value_in_joule_per_m3 / 3.6e9  # J/m3 -> kWh/l
+            kwh_per_unit = heating_value_in_joule_per_m3 / 3.6e9  # J/m3 -> kWh/l
         else:
-            kwh_per_unit = physics.lower_heating_value_in_joule_per_kg * 1000.0 / 3.6e6  # -> kWh/t
+            kwh_per_unit = heating_value_in_joule_per_m3 / physics.density_in_kg_per_m3 * 1000.0 / 3.6e6  # -> kWh/t
         return EnergyContent(
             quantity_unit=unit,
             unit_symbol="l" if unit == "liter" else "t",

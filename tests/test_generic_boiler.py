@@ -120,7 +120,9 @@ class FuelConstants:
     "preset_name, energy_carrier, boiler_type",
     [
         ("preset_condensing_gas", lt.LoadTypes.GAS, generic_boiler.BoilerType.CONDENSING),
+        ("preset_condensing_gas", lt.LoadTypes.GAS, generic_boiler.BoilerType.CONVENTIONAL),
         ("preset_oil", lt.LoadTypes.OIL, generic_boiler.BoilerType.CONVENTIONAL),
+        ("preset_oil", lt.LoadTypes.OIL, generic_boiler.BoilerType.CONDENSING),
     ],
 )
 def test_the_config_derives_the_fuel_constants_the_component_exposes(
@@ -133,7 +135,8 @@ def test_the_config_derives_the_fuel_constants_the_component_exposes(
     Failure mode caught: the derivation moving to ``GenericBoilerConfig`` (D-15) and drifting
     from what ``GenericBoiler.build`` sets, so the meter reading the contributed facts would
     account litres and kilograms the boiler beside it never burnt. Both boiler types are
-    covered because the type is what picks the higher or the lower heating value.
+    covered because both report their fuel on the fuel's own calorific basis, so both take
+    the same heating value (hisim-boiler-fuel-one-basis-b7e2).
     """
     config = getattr(generic_boiler.GenericBoilerConfig, preset_name)("Boiler").resolve(
         SizingContext(
@@ -141,14 +144,13 @@ def test_the_config_derives_the_fuel_constants_the_component_exposes(
             number_of_apartments=FuelConstants.NUMBER_OF_APARTMENTS,
         )
     )
+    config.boiler_type = boiler_type
     component = generic_boiler.GenericBoiler(
         config=config,
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
     )
 
-    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = generic_boiler.GenericBoilerConfig.fuel_constants(
-        energy_carrier, boiler_type
-    )
+    heating_value_in_kwh_per_liter, density_in_kg_per_m3 = generic_boiler.GenericBoilerConfig.fuel_constants(energy_carrier)
 
     assert component.heating_value_of_fuel_in_kwh_per_liter == heating_value_in_kwh_per_liter
     assert component.fuel_density_in_kg_per_m3 == density_in_kg_per_m3
@@ -191,9 +193,7 @@ def test_district_heating_has_no_heating_value_and_no_fuel_density() -> None:
     to pass — today's setups hand a district-heating meter the *oil* constants — so its
     consumption would be reported as litres of a fuel nobody burnt (D-15).
     """
-    assert generic_boiler.GenericBoilerConfig.fuel_constants(
-        lt.LoadTypes.DISTRICTHEATING, generic_boiler.BoilerType.CONDENSING
-    ) == (None, None)
+    assert generic_boiler.GenericBoilerConfig.fuel_constants(lt.LoadTypes.DISTRICTHEATING) == (None, None)
 
     config = generic_boiler.GenericBoilerConfig(
         component_id=ComponentID(name="DistrictHeatingBoiler"),
@@ -908,10 +908,10 @@ def test_a_boiler_without_a_finite_positive_maximal_power_is_refused_when_built(
 def test_a_non_condensing_boiler_above_its_ceiling_is_refused_when_built(
     preset: Callable[[str], generic_boiler.GenericBoilerConfig], boiler_type: Optional[generic_boiler.BoilerType]
 ) -> None:
-    """Owner decision of 2026-10-21: a boiler booked on the NCV never burns above 1 there, the backstop of RenoVisor.
+    """Owner decision of 2026-10-21: a boiler whose curve is on the NCV never burns above 1 there, RenoVisor's backstop.
 
     Above :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` the scaled curve would make more heat than the
-    fuel booked for it, a negative combustion loss. Just below the ceiling the boiler builds.
+    fuel it burns, a negative combustion loss. Just below the ceiling the boiler builds.
     """
     config = preset("Boiler")
     if boiler_type is not None:

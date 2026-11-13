@@ -533,3 +533,85 @@ class TestTheWoodFuelEmissionFactors:
                 if factor == 0.0:
                     continue
                 assert factor >= 0.004, (country, entry.carrier.value if hasattr(entry.carrier, "value") else entry.carrier, entry.year, factor)
+
+
+class TestCalorificBasisOfPriceRows:
+    """Every fuel row states the calorific basis of its price and emission factor (hisim-boiler-fuel-one-basis-b7e2).
+
+    A price per kWh of gas multiplied by kWh of another basis is 11 % off, so the loader takes no row whose basis is
+    missing or differs from the one HiSim reports the fuel on (`CalorificBasis.reported_for`).
+    """
+
+    CONTEXT = "energy_prices_XX.json:carrier@2026"
+
+    def test_every_shipped_fuel_row_states_the_basis_hisim_reports_its_fuel_on(self, database):
+        """Gas and hydrogen on the GCV, oil, pellets, wood chips and diesel on the NCV; nothing else has a basis."""
+        expected = {
+            EnergyCarrier.NATURAL_GAS: lt.CalorificBasis.GROSS,
+            EnergyCarrier.HYDROGEN: lt.CalorificBasis.GROSS,
+            EnergyCarrier.HEATING_OIL: lt.CalorificBasis.NET,
+            EnergyCarrier.PELLETS: lt.CalorificBasis.NET,
+            EnergyCarrier.WOOD_CHIPS: lt.CalorificBasis.NET,
+            EnergyCarrier.DIESEL: lt.CalorificBasis.NET,
+        }
+        for country, entries in database.energy_prices.items():
+            for entry in entries:
+                assert entry.calorific_basis == expected.get(entry.carrier), (country, entry.entry_key)
+
+    @pytest.mark.parametrize(
+        ("carrier", "basis"),
+        [
+            (EnergyCarrier.NATURAL_GAS, lt.CalorificBasis.GROSS),
+            (EnergyCarrier.HYDROGEN, lt.CalorificBasis.GROSS),
+            (EnergyCarrier.HEATING_OIL, lt.CalorificBasis.NET),
+            (EnergyCarrier.PELLETS, lt.CalorificBasis.NET),
+            (EnergyCarrier.WOOD_CHIPS, lt.CalorificBasis.NET),
+            (EnergyCarrier.DIESEL, lt.CalorificBasis.NET),
+        ],
+    )
+    def test_a_fuel_row_returns_the_basis_it_states(self, carrier, basis):
+        """The stated basis comes back as the enum member."""
+        # pylint: disable=protected-access
+        assert database_module._calorific_basis_of_row({"calorific_basis": basis.value}, carrier, self.CONTEXT) is basis
+
+    @pytest.mark.parametrize(
+        "carrier", [EnergyCarrier.ELECTRICITY, EnergyCarrier.ELECTRICITY_FEED_IN, EnergyCarrier.DISTRICT_HEATING]
+    )
+    def test_a_carrier_that_burns_nothing_has_no_basis(self, carrier):
+        """No basis stated is None; a stated one is refused, since it would mean nothing."""
+        # pylint: disable=protected-access
+        assert database_module._calorific_basis_of_row({}, carrier, self.CONTEXT) is None
+        with pytest.raises(CostDataError, match="only a fuel row has one"):
+            database_module._calorific_basis_of_row({"calorific_basis": "GROSS"}, carrier, self.CONTEXT)
+
+    def test_a_fuel_row_without_a_basis_is_refused(self):
+        """The loader never assumes a basis."""
+        # pylint: disable=protected-access
+        with pytest.raises(CostDataError, match="must state its calorific_basis.*HiSim reports NATURAL_GAS on GROSS"):
+            database_module._calorific_basis_of_row({}, EnergyCarrier.NATURAL_GAS, self.CONTEXT)
+
+    def test_a_fuel_row_on_the_other_basis_is_refused(self):
+        """An oil price per kWh of GCV would be multiplied by kWh of NCV."""
+        # pylint: disable=protected-access
+        with pytest.raises(CostDataError, match="on the GROSS calorific value, but HiSim reports HEATING_OIL on NET"):
+            database_module._calorific_basis_of_row({"calorific_basis": "GROSS"}, EnergyCarrier.HEATING_OIL, self.CONTEXT)
+
+    def test_an_unknown_basis_is_refused(self):
+        """Only the two members are bases."""
+        # pylint: disable=protected-access
+        with pytest.raises(CostDataError, match="'HHV' is neither GROSS nor NET"):
+            database_module._calorific_basis_of_row({"calorific_basis": "HHV"}, EnergyCarrier.NATURAL_GAS, self.CONTEXT)
+
+    def test_the_loader_refuses_a_shipped_gas_row_without_its_basis(self, tmp_path):
+        """The check runs on every row the database loads, not only when called directly."""
+        directory = _clone_database(tmp_path)
+        path = os.path.join(directory, "energy_prices_IE.json")
+        with open(path, encoding="utf-8") as file:
+            raw = json.load(file)
+        for item in raw["entries"]:
+            if item["carrier"] == "NATURAL_GAS":
+                del item["calorific_basis"]
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(raw, file)
+        with pytest.raises(CostDataError, match="energy_prices_IE.json:NATURAL_GAS@2026: a NATURAL_GAS row must state"):
+            CostDatabase(directory)

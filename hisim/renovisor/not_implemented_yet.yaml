@@ -120,7 +120,7 @@
   tracked: hisim-component-physics-4g9.4
 
 # A seasonal efficiency is written onto a boiler's `seasonal_efficiency`, which scales its sourced
-# part-load curve (approximated, translate.py `_efficiency`). A boiler booked on the net calorific
+# part-load curve (approximated, translate.py `_efficiency`). A boiler whose curve is on the net calorific
 # value -- conventional gas, LPG, oil and HVO, pellets, logs and wood chips -- takes at most its own
 # ceiling (`BoilerEfficiencySources.highest_seasonal_efficiency`), above which its curve exceeds 100 %
 # there: the request is refused (exit 2, `SemanticChecks._boiler_seasonal_efficiency`; owner decision

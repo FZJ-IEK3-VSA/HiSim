@@ -202,6 +202,84 @@ class SubjectKindNames:
         return str(getattr(subject_kind, "value", subject_kind)).lower()
 
 
+class UnpricedPayback:
+    """Why a plan that buys something with no price states no payback year (renovisorissues #87, point 1).
+
+    An unpriced subject -- an envelope measure without a cost block, a measure HiSim holds no price for -- is booked at
+    a placeholder zero, so a payback year over the plan's investment would be a year over part of it. By owner decision
+    of 2026-11-13 such a plan states no payback year at all (every end of `comparison.discounted_payback_year` is
+    `null`), and `comparison.discounted_payback_year_null_reason` says which subjects are unpriced. There is no lower
+    bound ("at least N years"). The subjects are read off the plan's `by_subject` rows, so the reason names exactly the
+    rows that say `unpriced: true`; a row a reader's quote priced is not one of them.
+
+    Only subjects the plan buys count: rows that carry a `measure_id`. A kept envelope element (`envelope_<element>`)
+    is unpriced as well, but it belongs to the house as it was and is renewed alike in the reference and in every stage
+    that keeps it; it carries no measure and does not withhold the payback. A document built without a measure map
+    cannot tell the two apart, so there every unpriced row withholds it.
+
+    Example::
+
+        rows = [{"subject": "window_replacement", "measure_id": "window_replacement", "unpriced": True}]
+        UnpricedPayback.subjects(rows, has_measure_map=True)  # ["window_replacement"]
+    """
+
+    #: The `code` of the reason: the plan buys subjects whose price is unknown.
+    CODE: ClassVar[str] = "unpriced_subjects"
+
+    #: The sentence the reason carries.
+    NOTE: ClassVar[str] = (
+        "no payback year is stated: the plan buys {subjects}, whose price is unknown, not zero, so the plan's investment "
+        "is unknown and any payback year would be one over part of it"
+    )
+
+    #: The payback band of a plan that states none.
+    NO_PAYBACK_YEAR: ClassVar[Dict[str, None]] = {"min": None, "best": None, "max": None}
+
+    @staticmethod
+    def subjects(by_subject: Sequence[Mapping[str, Any]], has_measure_map: bool) -> List[str]:
+        """Return the unpriced subjects the plan buys, sorted, from its `by_subject` rows.
+
+        Args:
+            by_subject: The plan's `by_subject` rows, as the document writes them.
+            has_measure_map: Whether the document was built with the mapping report's measure map; without one every
+                unpriced row counts, because a measure's row cannot be told from a kept element's.
+
+        Returns:
+            The subjects of the rows with `unpriced: true` and a `measure_id` (any unpriced row without a measure map),
+                sorted; empty when the plan buys nothing unpriced.
+        """
+        return sorted(
+            str(row["subject"])
+            for row in by_subject
+            if row["unpriced"] and (row["measure_id"] is not None or not has_measure_map)
+        )
+
+    @classmethod
+    def reason(cls, by_subject: Sequence[Mapping[str, Any]], subjects: Sequence[str]) -> Optional[Dict[str, Any]]:
+        """Return `comparison.discounted_payback_year_null_reason` for the given unpriced subjects, or None.
+
+        Args:
+            by_subject: The plan's `by_subject` rows, for the measures of the subjects.
+            subjects: The unpriced subjects the plan buys, from :meth:`subjects`.
+
+        Returns:
+            None when there are none; otherwise `{"code", "unpriced_subjects", "measure_ids", "note"}`, with the
+                subjects as given and the distinct measures of their rows, sorted.
+        """
+        if not subjects:
+            return None
+        wanted = set(subjects)
+        measure_ids = sorted(
+            {str(row["measure_id"]) for row in by_subject if row["subject"] in wanted and row["measure_id"] is not None}
+        )
+        return {
+            "code": cls.CODE,
+            "unpriced_subjects": list(subjects),
+            "measure_ids": measure_ids,
+            "note": cls.NOTE.format(subjects=", ".join(subjects)),
+        }
+
+
 class StagedDocument:
     """Builds and writes `economics_result.json` for one priced plan.
 
@@ -230,7 +308,7 @@ class StagedDocument:
     """
 
     #: Version of this document format, bumped whenever a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 9
+    SCHEMA_VERSION: ClassVar[int] = 10
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -383,6 +461,7 @@ class StagedDocument:
             The document with `schema_version`, `engine`, `parameters`, `currency`, `groups`, `stages`, `reference`,
                 `plan`, `comparison` and `provenance`, in that order, so two runs of one plan produce the same bytes.
         """
+        plan = self._evaluation(self._result.plan, staged=True)
         return {
             "schema_version": self.SCHEMA_VERSION,
             "engine": self._engine(),
@@ -391,8 +470,8 @@ class StagedDocument:
             "groups": [group.value for group in CostGroup],
             "stages": self._stages(),
             "reference": self._evaluation(self._result.reference, staged=False),
-            "plan": self._evaluation(self._result.plan, staged=True),
-            "comparison": self._comparison(self._result.comparison),
+            "plan": plan,
+            "comparison": self._comparison(self._result.comparison, plan["by_subject"]),
             "provenance": {
                 "cost_provenance": self._cost_provenance,
                 "explain_command": (
@@ -1577,8 +1656,19 @@ class StagedDocument:
 
     # ------------------------------------------------------------------ comparison
 
-    def _comparison(self, comparison: VariantComparison) -> Dict[str, Any]:
-        """Plan minus reference: the deltas, the payback and the cumulative difference."""
+    def _comparison(self, comparison: VariantComparison, plan_by_subject: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+        """Plan minus reference: the deltas, the payback and the cumulative difference.
+
+        A plan that buys an unpriced subject states no payback year, and says why (:class:`UnpricedPayback`).
+
+        Args:
+            comparison: The engine's comparison of plan and reference.
+            plan_by_subject: The plan's `by_subject` rows, whose `unpriced` flags decide whether a payback is stated.
+
+        Returns:
+            The `comparison` block.
+        """
+        unpriced = UnpricedPayback.subjects(plan_by_subject, self._has_measure_map)
         horizon = self._parameters.observation_period_in_years
         reference = self._result.reference
         plan = self._result.plan
@@ -1619,7 +1709,10 @@ class StagedDocument:
             "monthly_cost_year1_delta_in_euro": monthly_delta,
             # The range by value, not by slot: which world pays back first depends on which
             # uncertainty dominates the savings.
-            "discounted_payback_year": comparison.discounted_payback_envelope.to_band(),
+            "discounted_payback_year": (
+                dict(UnpricedPayback.NO_PAYBACK_YEAR) if unpriced else comparison.discounted_payback_envelope.to_band()
+            ),
+            "discounted_payback_year_null_reason": UnpricedPayback.reason(plan_by_subject, unpriced),
             "cumulative_delta": cumulative,
             "lifecycle_co2_delta_in_kg": self._scalar_band(
                 plan.lifecycle_co2_result.total_co2_in_kg

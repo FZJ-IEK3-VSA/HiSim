@@ -222,8 +222,8 @@ class TestTheWrittenDocument:
                 SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
                 SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system",
             },
-            unpriced_subjects={SyntheticPlan.ENVELOPE_SUBJECT},
         ).write(path)
 
         document = json.loads(path.read_text(encoding="utf-8"))
         assert document["comparison"]["discounted_payback_year"] == {"min": 9, "best": 9, "max": 11}
+        assert document["comparison"]["discounted_payback_year_null_reason"] is None

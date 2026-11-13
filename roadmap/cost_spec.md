@@ -546,9 +546,9 @@ All deltas are computed **slot-wise** (§3.9): reference and variant are compare
 LOW/BEST_ESTIMATE/HIGH world, so shared cost uncertainty (the same heat-pump price band appearing in both
 variants) cancels instead of inflating the delta band.
 
-The **discounted payback time** is the first year where cumulative discounted savings exceed the
-differential investment (`None` if never within the horizon). It is computed per slot, yielding a
-payback band (best case / expected / worst case, each independently `None`-able).
+The **discounted payback time** is the first year from which the cumulative discounted savings stay at or
+above zero until the horizon, year 0 included (`None` when they end below zero; renovisorissues #102). It is
+computed per slot, yielding a payback band (best case / expected / worst case, each independently `None`-able).
 
 ### 3.8 CO2 accounting
 

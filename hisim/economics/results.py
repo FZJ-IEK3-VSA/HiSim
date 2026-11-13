@@ -934,13 +934,14 @@ class VariantComparison:
     #: The equivalent annual cost delta over `TimelineAggregation.MONTHS_PER_YEAR`.
     monthly_equivalent_cost_delta_in_euro: UncertainValue
     npv_delta_by_subject: Dict[str, UncertainValue]
-    # Discounted payback per slot; each independently None-able ("never within horizon"):
+    # Discounted payback per slot; each independently None-able ("never stays repaid within the horizon"):
     discounted_payback_years: Dict[str, Optional[int]] = field(default_factory=dict)
     warm_rent_change_per_month_in_euro: Optional[UncertainValue] = None
     warm_rent_neutral_per_slot: Dict[str, bool] = field(default_factory=dict)
     #: The payback *curve* per slot: cumulative discounted savings (reference - variant) for
-    #: years 0..T, index = year. `discounted_payback_years` is its zero-crossing, so the
-    #: curve a report draws and the number it prints cannot disagree.
+    #: years 0..T, index = year. `discounted_payback_years` is the first year from which it stays
+    #: at or above zero (:func:`discounted_payback_year`), so the curve a report draws and the
+    #: number it prints cannot disagree.
     cumulative_discounted_savings_in_euro: Dict[str, List[float]] = field(default_factory=dict)
 
     def to_json(self) -> dict:
@@ -1018,21 +1019,27 @@ def cumulative_discounted_savings(
 
 
 def discounted_payback_year(cumulative_savings: List[float]) -> Optional[int]:
-    """Return the first year after 0 at which a payback curve reaches zero, or None if never within the horizon.
+    """Return the first year from which a payback curve stays at or above zero to the horizon, or None.
 
-    Year 0 is excluded because it is the investment year; a variant costing nothing extra would otherwise pay back at
-    once. Only the first crossing counts, so a later dip below zero (a large replacement) is not reflected.
+    The curve is one slot's cumulative discounted savings, reference minus variant, so a value at or above zero means
+    the variant has repaid its extra cost by that year. Example: ``[-100, -40, 10, -5, 20, 30]`` pays back in year 4,
+    not year 2, because the curve falls below zero again in year 3 (a replacement, say). A curve that ends below zero
+    never stays repaid and gives None, so a stated year never contradicts a positive NPV delta. Year 0 counts: a
+    variant that is no dearer from the start (its investment covered by grants, or no investment) pays back in year 0.
 
     Args:
-        cumulative_savings: One slot's curve from :func:`cumulative_discounted_savings`.
+        cumulative_savings: One slot's curve from :func:`cumulative_discounted_savings`, index = year.
 
     Returns:
-        The year, or None when the curve never reaches zero within the horizon.
+        The first year of the last run of non-negative values that reaches the horizon, or None when the last value is
+            negative (or the curve is empty).
     """
-    for year, value in enumerate(cumulative_savings):
-        if year > 0 and value >= 0:
-            return year
-    return None
+    payback_year: Optional[int] = None
+    for year in range(len(cumulative_savings) - 1, -1, -1):
+        if cumulative_savings[year] < 0:
+            break
+        payback_year = year
+    return payback_year
 
 
 @dataclass(frozen=True)
@@ -1100,9 +1107,9 @@ def compare(
     uncertainty (the same gas price band, the same devices) cancels and the delta band shows only what the variants do
     not share. Differencing averages would discard the band, and differencing intervals would add two widths. The slots
     are three coherent scenarios, not an outer envelope of the difference; a mixed world (gas expensive while the heat
-    pump is cheap) belongs to the scenario axes. Payback is the zero crossing of each slot's own savings curve,
-    with the range taken by value (:meth:`PaybackEnvelope.of`). Warm-rent neutrality is evaluated per slot; neutrality
-    in HIGH is the robust statement.
+    pump is cheap) belongs to the scenario axes. Payback is the first year from which each slot's own savings curve
+    stays at or above zero (:func:`discounted_payback_year`), with the range taken by value (:meth:`PaybackEnvelope.of`).
+    Warm-rent neutrality is evaluated per slot; neutrality in HIGH is the robust statement.
 
     Args:
         reference: The base variant's result.

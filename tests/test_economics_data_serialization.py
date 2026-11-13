@@ -838,7 +838,7 @@ class TestSerializationRoundtrip:
 class TestVariantComparison:
     """§3.7 differential analysis."""
 
-    def _result(self, investment, energy_kwh, band=None):
+    def _result(self, investment, energy_kwh, band=None, lifetime_in_years=20.0):
         """One evaluated variant: a device of the given cost running the given consumption.
 
         The two arguments are exactly the capex/opex trade-off a comparison is about — a
@@ -846,14 +846,15 @@ class TestVariantComparison:
         The service life is set to the horizon and maintenance to zero, which removes replacements
         and recurring costs from the delta and leaves the payback curve a function of the
         investment and the energy bill alone. `band` replaces the exact investment when the test
-        is about how a *shared* uncertainty behaves across two variants.
+        is about how a *shared* uncertainty behaves across two variants. `lifetime_in_years` shorter
+        than the horizon brings replacements back, for a curve that falls below zero again.
         """
         facts = ComponentCostFacts(
             asset_class=ComponentType.HEAT_PUMP,
             size=10.0,
             size_unit=Units.KILOWATT,
             investment_cost_override_in_euro=band or UncertainValue.exact(investment),
-            lifetime_override_in_years=20.0,
+            lifetime_override_in_years=lifetime_in_years,
             maintenance_rate_override=UncertainValue.exact(0.0),
             override_source="test",
         )
@@ -904,15 +905,44 @@ class TestVariantComparison:
                 expected.append(running)
             assert comparison.cumulative_discounted_savings_in_euro[slot] == pytest.approx(expected)
 
-    def test_payback_year_is_the_curves_zero_crossing(self):
-        """The printed payback and the drawn curve cannot disagree (W4.4)."""
+    @pytest.mark.parametrize("variant_lifetime_in_years", [20.0, 6.0])
+    def test_payback_year_is_where_the_curve_stays_repaid(self, variant_lifetime_in_years):
+        """The printed payback and the drawn curve cannot disagree (W4.4), and a stated year never loses money.
+
+        The payback year is the first year from which the savings curve stays at or above zero (renovisorissues #102).
+        The six-year variant is replaced in years 6, 12 and 18, so its curve falls back below zero after it first
+        reaches it; the check holds for both shapes, and for every slot a year is stated exactly when the slot's NPV
+        delta is at or below zero.
+        """
         reference = self._result(0.0, 20000.0)
-        variant = self._result(15000.0, 5000.0)
+        variant = self._result(15000.0, 5000.0, lifetime_in_years=variant_lifetime_in_years)
         comparison = compare(reference, variant)
+        npv_delta_by_slot = {
+            "low": comparison.npv_delta_in_euro.minimum,
+            "best_estimate": comparison.npv_delta_in_euro.best_estimate,
+            "high": comparison.npv_delta_in_euro.maximum,
+        }
         for slot, curve in comparison.cumulative_discounted_savings_in_euro.items():
             year = comparison.discounted_payback_years[slot]
-            crossings = [index for index, value in enumerate(curve) if index > 0 and value >= 0]
-            assert year == (crossings[0] if crossings else None)
+            repaid_from = [index for index in range(len(curve)) if all(value >= 0 for value in curve[index:])]
+            assert year == (repaid_from[0] if repaid_from else None)
+            assert (year is not None) == (npv_delta_by_slot[slot] <= 1e-6), (slot, year, npv_delta_by_slot[slot])
+
+    def test_a_variant_cheap_to_buy_and_dear_to_run_states_no_payback(self):
+        """A curve that starts above zero and ends below it states no payback year (renovisorissues #102).
+
+        The reference buys a 15,000 EUR device and uses 5,000 kWh a year; the variant buys nothing and uses
+        20,000 kWh. Its savings curve is above zero in year 1, so the old rule (the first year after 0 at or above
+        zero) said "pays back in year 1"; the curve ends below zero and the NPV delta is positive, so no year is
+        stated now.
+        """
+        reference = self._result(15000.0, 5000.0)
+        variant = self._result(0.0, 20000.0)
+        comparison = compare(reference, variant)
+        for slot, curve in comparison.cumulative_discounted_savings_in_euro.items():
+            assert curve[1] >= 0 > curve[-1], (slot, curve)
+            assert comparison.discounted_payback_years[slot] is None
+        assert comparison.npv_delta_in_euro.minimum > 0
 
     def test_final_curve_point_is_the_npv_saving(self):
         """The curve ends at the NPV delta of that slot — same flows, same discounting."""

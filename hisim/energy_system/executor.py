@@ -145,7 +145,7 @@ class SimulationParametersReader:
 
         Raises:
             EnergySystemFormatError: ``EF-07`` if a date or an option cannot be interpreted, if
-                a key is not a parameter at all, if the window breaks the window contract
+                ``PLOT_SANKEY`` comes without ``COMPUTE_KPIS``, if a key is not a parameter at all, if the window breaks the window contract
                 (:meth:`SimulationParameters.validated_window`), if ``weather_year`` is not a year in
                 range, or if ``part_load_above_seconds`` is not a step length.
         """
@@ -154,6 +154,7 @@ class SimulationParametersReader:
             if isinstance(prepared.get(key), str):
                 prepared[key] = datetime.datetime.fromisoformat(prepared[key])
         prepared[cls.OPTIONS_KEY] = cls._options(prepared.get(cls.OPTIONS_KEY) or [], location)
+        cls.refuse_sankey_without_kpis(prepared[cls.OPTIONS_KEY], location)
         try:
             return SimulationParameters(**prepared)
         except (TypeError, SimulationWindowError, WeatherYearError, PartLoadThresholdError) as error:
@@ -162,6 +163,27 @@ class SimulationParametersReader:
                 location,
                 f"the simulation parameters could not be built: {error}",
             ) from error
+
+    @staticmethod
+    def refuse_sankey_without_kpis(options: List[PostProcessingOptions], location: str) -> None:
+        """Refuses ``PLOT_SANKEY`` without ``COMPUTE_KPIS``: the figure's values come from the run's KPIs.
+
+        ``PLOT_SANKEY`` draws the matplotlib Sankey figure, whose metrics (self-consumption, coefficients of
+        performance) are the KPIs of the run (the matplotlib Sankey spec, D14 and §4.3).
+
+        Args:
+            options: The decoded post-processing options.
+            location: Path of the file, used in the message.
+
+        Raises:
+            EnergySystemFormatError: ``EF-07`` if ``PLOT_SANKEY`` is set and ``COMPUTE_KPIS`` is not.
+        """
+        if PostProcessingOptions.PLOT_SANKEY in options and PostProcessingOptions.COMPUTE_KPIS not in options:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.MALFORMED_BLOCK,
+                location,
+                "PLOT_SANKEY draws the Sankey figure from the run's KPIs, so it requires COMPUTE_KPIS; add COMPUTE_KPIS or drop PLOT_SANKEY.",
+            )
 
     @classmethod
     def _options(cls, written: Any, location: str) -> List[PostProcessingOptions]:

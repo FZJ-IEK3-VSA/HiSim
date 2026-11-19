@@ -39,6 +39,7 @@ components:
       predictive_control: false
       prediction_horizon: null
       power_in_watt: 4000.0
+      installation_location: HEATED_ZONE
       weather_identity: Seville/NSRDB/weather/NSRDB/Seville/Seville
     inputs:
       - Weather
@@ -90,6 +91,7 @@ components:
     inputs:
       - Weather
       - UTSPConnector
+      - PVSystem
       - input: HeatReceivedInWatt
         from: AirConditioner.HeatDeliveredInWatt
       - input: HeatRemovedByCoolingInWatt

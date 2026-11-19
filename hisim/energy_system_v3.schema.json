@@ -400,6 +400,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -407,7 +421,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "pv_peak_power_in_watt"
+                    "pv_peak_power_in_watt",
+                    "technical_room_location"
                   ]
                 }
               }
@@ -4236,6 +4251,20 @@
                       }
                     ]
                   },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
                   "weather_identity": {
                     "anyOf": [
                       {
@@ -4253,6 +4282,7 @@
                 "propertyNames": {
                   "enum": [
                     "roof_area_in_m2",
+                    "technical_room_location",
                     "weather_identity"
                   ]
                 }
@@ -5511,6 +5541,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -5518,7 +5562,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "number_of_apartments"
+                    "number_of_apartments",
+                    "technical_room_location"
                   ]
                 }
               }
@@ -5631,6 +5676,20 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "installation_location": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "HEATED_ZONE",
+                          "UNHEATED_SPACE",
+                          "OUTDOORS"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -5638,7 +5697,8 @@
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
                   "enum": [
-                    "maximal_thermal_power_in_watt"
+                    "maximal_thermal_power_in_watt",
+                    "technical_room_location"
                   ]
                 }
               }
@@ -6823,6 +6883,10 @@
                       "STORED_ENERGY_INCREASE",
                       "MAXIMUM_CHARGING_POWER",
                       "MINIMUM_CHARGING_POWER",
+                      "FULL_LOAD_ELECTRICITY",
+                      "MINIMUM_LOAD_ELECTRICITY",
+                      "OWN_NEED_ELECTRICITY",
+                      "OWN_NEED_CHARGE",
                       "CHARGE_DISCHARGE",
                       "CHARGE",
                       "DISCHARGE",
@@ -6859,6 +6923,10 @@
                         "STORED_ENERGY_INCREASE",
                         "MAXIMUM_CHARGING_POWER",
                         "MINIMUM_CHARGING_POWER",
+                        "FULL_LOAD_ELECTRICITY",
+                        "MINIMUM_LOAD_ELECTRICITY",
+                        "OWN_NEED_ELECTRICITY",
+                        "OWN_NEED_CHARGE",
                         "CHARGE_DISCHARGE",
                         "CHARGE",
                         "DISCHARGE",

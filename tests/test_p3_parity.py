@@ -290,6 +290,36 @@ class Rig:
         )
 
     @classmethod
+    def twin_bare_feeds(cls) -> Set[Tuple[str, str]]:
+        """Every ``(component, source)`` pair a committed twin writes as a bare input item.
+
+        A bare item names only the source component (``- DHWStorage``); the receiving component's default
+        connections decide which outputs it reads, so the item spells no port and :meth:`twin_port_spellings`
+        cannot derive one. The building takes the heat its devices release into the heated zone this way
+        (device location, #1213). Example: a twin whose ``Building`` lists ``- DHWStorage`` yields
+        ``("Building", "DHWStorage")``.
+
+        Returns:
+            The set of ``(component name, source component name)`` pairs of bare items in all twins.
+        """
+        pairs: Set[Tuple[str, str]] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, dict):
+                for name, spec in node.items():
+                    if isinstance(name, str) and isinstance(spec, dict) and isinstance(spec.get("inputs"), list):
+                        pairs.update((name, item) for item in spec["inputs"] if isinstance(item, str))
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value)
+
+        for path in sorted(cls.ENERGY_SYSTEMS.glob("*.energy_system.yaml")):
+            walk(yaml.safe_load(path.read_text(encoding="utf-8")))
+        return pairs
+
+    @classmethod
     def twin_port_spellings(cls) -> Set[Tuple[str, str]]:
         """Every ``(aggregator, declarative port)`` pair a committed twin implies.
 
@@ -578,8 +608,11 @@ def test_every_declared_declarative_port_is_implied_by_a_committed_twin() -> Non
     """
     implied = Rig.twin_port_spellings()
     assert implied, "no committed twin declares any feed, so the cross-check checks nothing"
+    # a bare item spells no port; an entry naming its source ("...From<source>") counts when a twin writes that item
+    bare = Rig.twin_bare_feeds()
     for key, declarative in DeclaredPortRenamings.pairs().items():
-        assert (key[0], declarative) in implied, (
+        from_bare_item = any(declarative.endswith(f"From{source}") for aggregator, source in bare if aggregator == key[0])
+        assert (key[0], declarative) in implied or from_bare_item, (
             f"the table claims '{key[0]}.{key[1]}' is '{key[0]}.{declarative}', but no committed twin "
             "grows that port — either the entry has a typo, or the fleet stopped growing the feed "
             "and the entry is dead"

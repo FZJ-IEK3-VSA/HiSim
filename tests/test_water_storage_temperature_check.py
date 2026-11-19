@@ -30,7 +30,7 @@ def dhw_storage_with_fake_inputs(seconds_per_timestep: int) -> Any:
     """Build a 250 l DHW storage whose five inputs are fed by fake outputs, all zero."""
     parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
     config = simple_water_storage.SimpleDHWStorageConfig(
-        component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0
+        component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0, installation_location=lt.InstallationLocation.UNHEATED_SPACE
     )
     storage = simple_water_storage.SimpleDHWStorage(my_simulation_parameters=parameters, config=config)
     channels = [
@@ -94,6 +94,7 @@ def test_the_space_heating_storage_checks_its_converged_temperature_too() -> Non
     parameters = SimulationParameters.one_day_only(2021, 3600)
     config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer("Buffer")
     config.volume_heating_water_storage_in_liter = 200.0
+    config.installation_location = lt.InstallationLocation.UNHEATED_SPACE
     storage = simple_water_storage.SimpleHotWaterStorage(my_simulation_parameters=parameters, config=config)
     storage.mean_water_temperature_in_water_storage_in_celsius = 95.0
 

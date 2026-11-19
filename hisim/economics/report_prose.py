@@ -568,8 +568,8 @@ class ReportProse:
                 "curve's highest point is the deepest out-of-pocket position — the most money that is ever tied"
                 " up. The lower panel accumulates the same flows discounted to today; its endpoint is, by "
                 "construction, the headline NPV. The shaded envelope spans the all-cheap and all-expensive "
-                "worlds; where a reference variant exists, the savings panel's zero crossing is the payback, "
-                "stated as a range across the worlds."
+                "worlds; where a reference variant exists, the year from which the savings panel stays at or "
+                "above zero is the payback, stated as a range across the worlds."
             ),
             adds=(
                 "Liquidity. Totals answer \"is it worth it\"; this section answers \"can I afford the path\" — how "
@@ -606,8 +606,8 @@ class ReportProse:
                  )),
                 ("Payback",
                  (
-                     "the first year cumulative discounted savings versus the reference reach zero; reported "
-                     "per world, hence a range."
+                     "the first year from which cumulative discounted savings versus the reference stay at or "
+                     "above zero until the horizon; reported per world, hence a range."
                  )),
             ),
             calculation=(
@@ -616,7 +616,9 @@ class ReportProse:
                     "the rate at which the decision-maker could otherwise invest (see *Bank benchmark* for that"
                     " rate made visible). Cumulative curves are computed per world: the lower band edge is the "
                     "*whole horizon* in the cheap world, not a per-year minimum. The payback year in each world"
-                    " is the first year its cumulative discounted savings reach zero; reporting the range "
+                    " is the first year from which its cumulative discounted savings stay at or above zero until "
+                    "the horizon, so a curve that falls below zero again moves the year, and one that ends below "
+                    "zero never pays back; reporting the range "
                     "across worlds replaces false single-year precision."
                 ),
             ),
@@ -1442,8 +1444,8 @@ class ReportProse:
         "Comparison": SectionProse(
             shows=(
                 "This evaluation against its reference variant: the per-component NPV differences (what the "
-                "switch adds, what it saves) and the cumulative discounted savings over time, whose zero "
-                "crossing is the payback."
+                "switch adds, what it saves) and the cumulative discounted savings over time; the year from which "
+                "they stay at or above zero is the payback."
             ),
             adds=(
                 "The decision frame. A single evaluation states a cost; only the comparison states whether the "
@@ -1462,13 +1464,13 @@ class ReportProse:
                  "variant minus reference, per component or per year; negative deltas are savings."),
                 ("Cumulative discounted savings",
                  (
-                     "the running total of the yearly deltas, discounted; the curve whose zero crossing is the "
-                     "payback."
+                     "the running total of the yearly deltas, discounted; the first year from which it stays at "
+                     "or above zero is the payback."
                  )),
                 ("Payback",
                  (
-                     "the first year the accumulated savings have repaid the extra investment; reported per "
-                     "world (see the primer's bands)."
+                     "the first year from which the accumulated savings have repaid the extra investment and stay "
+                     "repaid until the horizon; reported per world (see the primer's bands)."
                  )),
             ),
             calculation=(
@@ -2037,7 +2039,7 @@ def payback_interval_sentence(
     if central is None:
         return (
             f"Payback lands in year {earliest} at the earliest, but not in the central world: there "
-            "the curve never reaches zero within the horizon."
+            "the curve does not stay at or above zero until the horizon."
         )
     return (
         f"Payback lands in {payback_year_phrase(central)} in the central world; across the three "

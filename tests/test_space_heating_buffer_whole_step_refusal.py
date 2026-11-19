@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from hisim import loadtypes as lt
 from hisim.calculation_scope import CalculationScope
 from hisim.components.simple_water_storage import (
     SimpleHotWaterStorage,
@@ -62,6 +63,7 @@ class BufferBuild:
             SimpleHotWaterStorageConfig.preset_buffer("Buffer"),
             volume_heating_water_storage_in_liter=cls.VOLUME_IN_LITER,
             heat_exchanger_is_present=heat_exchanger_is_present,
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
         )
         buffer: SimpleHotWaterStorage = SimpleHotWaterStorage(Parameters.one_day(seconds_per_timestep, **extra), config)
         return buffer

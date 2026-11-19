@@ -230,7 +230,7 @@ class StagedDocument:
     """
 
     #: Version of this document format, bumped whenever a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 8
+    SCHEMA_VERSION: ClassVar[int] = 9
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -468,8 +468,8 @@ class StagedDocument:
     BAND_KEYS: ClassVar[Tuple[str, str, str]] = ("min", "best", "max")
 
     #: The bands whose ends may be ``null`` with a stated meaning, by the key they sit under, and
-    #: the value a ``null`` end is ordered as. A payback year is ``null`` when that end never pays
-    #: back within the horizon, which is later than any year. Every other
+    #: the value a ``null`` end is ordered as. A payback year is ``null`` when that end does not
+    #: stay repaid until the horizon, which is later than any year. Every other
     #: band of the schema has numeric ends (or is ``null`` whole), so a ``null`` end anywhere else
     #: is left to the schema, which refuses it.
     NULL_END_MEANS: ClassVar[Dict[str, float]] = {"discounted_payback_year": math.inf}

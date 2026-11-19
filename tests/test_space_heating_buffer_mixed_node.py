@@ -22,6 +22,7 @@ from typing import ClassVar, Dict, List, Tuple
 import pytest
 
 from hisim import hydronics
+from hisim import loadtypes as lt
 from hisim.components.simple_water_storage import SimpleHotWaterStorage, SimpleHotWaterStorageConfig
 from tests.part_load_rigs import AllInputsRig, Parameters
 
@@ -39,6 +40,8 @@ class ExampleSystem:
     #: The floor heating's flow, kg/s, and the drop it holds below the temperature it reads, K.
     DISTRIBUTION_MASS_FLOW_IN_KG_PER_SECOND: ClassVar[float] = 0.5
     DISTRIBUTION_DROP_IN_KELVIN: ClassVar[float] = 4.0
+    #: The temperature of the room the buffer stands in, which it loses its standby heat to, °C.
+    SURROUNDING_TEMPERATURE_IN_CELSIUS: ClassVar[float] = 20.0
     #: The simulator's convergence tolerance, K.
     TOLERANCE_IN_KELVIN: ClassVar[float] = 1e-4
     #: Joules per watt hour.
@@ -57,11 +60,13 @@ class ExampleSystem:
             dataclasses.replace(
                 SimpleHotWaterStorageConfig.preset_buffer("Buffer"),
                 volume_heating_water_storage_in_liter=volume_in_liter,
+                installation_location=lt.InstallationLocation.UNHEATED_SPACE,
             ),
         )
         config = dataclasses.replace(
             SimpleHotWaterStorageConfig.preset_buffer("Buffer"),
             volume_heating_water_storage_in_liter=volume_in_liter,
+            installation_location=lt.InstallationLocation.UNHEATED_SPACE,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.HEAT_LOSS_COEFFICIENT_IN_WATT_PER_KELVIN
             / probe.storage_surface_in_m2,
         )
@@ -93,6 +98,7 @@ class ExampleSystem:
                 ),
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: read_in_celsius
                 - self.DISTRIBUTION_DROP_IN_KELVIN,
+                SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius: self.SURROUNDING_TEMPERATURE_IN_CELSIUS,
             },
         )
 
@@ -169,7 +175,7 @@ def test_the_iterated_buffer_closes_its_balance_on_every_pass(seconds_per_timest
             + outputs[SimpleHotWaterStorage.ThermalEnergyFromSecondaryHeatGenerator]
             + outputs[SimpleHotWaterStorage.ThermalEnergyFromHeatDistribution]
         )
-        loss_in_watt_hour = outputs[SimpleHotWaterStorage.StandbyHeatLoss] * hours
+        loss_in_watt_hour = outputs[SimpleHotWaterStorage.HeatLossInWatt] * hours
         stored_in_watt_hour = outputs[SimpleHotWaterStorage.ThermalEnergyIncreaseInStorage]
         assert heats_in_watt_hour - loss_in_watt_hour == pytest.approx(stored_in_watt_hour, rel=1e-9, abs=1e-9)
         read_in_celsius = outputs[SimpleHotWaterStorage.WaterTemperatureToHeatGenerator]

@@ -47,9 +47,9 @@ class Real:
 
     ``WEATHER``, ``OCCUPANCY`` and ``BUILDING`` are written as the composed files and
     ``energy_systems/assemblies/test_partners.yaml`` write them, so a build constructs what a composed
-    file constructs; a test holds them equal to the partners. ``HEAT_DISTRIBUTION_CONTROLLER`` and
-    ``HEAT_DISTRIBUTION`` are reduced for expansion only: they read no other site entry,
-    so :meth:`heating_site` needs no building, and a site of them expands but does not build. A build of
+    file constructs; a test holds them equal to the partners. ``BUILDING_FOR_EXPANSION``,
+    ``HEAT_DISTRIBUTION_CONTROLLER`` and ``HEAT_DISTRIBUTION`` are reduced for expansion only: they read no other
+    site entry, so a site of them expands but does not build. A build of
     a PV array states its power: at its default the array is sized from the building's roof, which needs
     a ``Building``.
     """
@@ -77,9 +77,22 @@ class Real:
         "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
         "config: {number_of_apartments: 1.0, enable_opening_windows: true, weather_identity: "
         "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
-        "inputs: [Weather, UTSPConnector, {$port: heating}], "
-        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}}}"
+        "inputs: [Weather, UTSPConnector, {$port: heating}, {$port: battery_heat}, {$port: pv_heat}, {$port: buffer_heat}, "
+        "{$port: cylinder_heat}], "
+        "ports: {heating: {partner: [HeatDistribution, ElectricHeating], optional: true}, "
+        "battery_heat: {partner: Battery, optional: true}, "
+        "pv_heat: {partner: PVSystem, optional: true}, "
+        "buffer_heat: {partner: SimpleHotWaterStorage, optional: true}, "
+        "cylinder_heat: {partner: SimpleDHWStorage, optional: true}}}"
     )
+    #: The building reduced for expansion only, the partner of every tank's ``surroundings`` need: it reads no other
+    #: site entry, so it binds no port of its own.
+    BUILDING_FOR_EXPANSION: ClassVar[str] = (
+        "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home}"
+    )
+    #: :attr:`BUILDING` beside the PV import ``pv``, whose inverter heat its ``pv_heat`` port reads: an array's
+    #: ``HeatToHeatedZoneInWatt`` needs a reader in every location (D-h of ``roadmap/device_location_spec.md``).
+    BUILDING_BESIDE_PV: ClassVar[str] = BUILDING[:-1] + ", optional-bind: {pv_heat: pv}}"
     HEAT_DISTRIBUTION_CONTROLLER: ClassVar[str] = (
         "HeatDistributionController: "
         "{class: hisim.components.heat_distribution_system.HeatDistributionController, preset: building_derived}"
@@ -99,24 +112,53 @@ class Real:
     )
     METER_CLASS: ClassVar[str] = "hisim.components.electricity_meter.ElectricityMeter"
 
-    #: A site PV array of the real class at a stated power: a provider of the arrays' peak power by its class.
+    #: A site PV array of the real class at a stated power: a provider of the arrays' peak power by its class. Its
+    #: inverter stands outdoors, so it needs no building's technical room.
     ROOF: ClassVar[str] = (
         "Roof: {class: hisim.components.generic_pv_system.PVSystem, preset: rooftop, "
-        "config: {power_in_watt: 3000}, inputs: [Weather]}"
+        "config: {power_in_watt: 3000, installation_location: OUTDOORS}, inputs: [Weather]}"
     )
-    #: A PV array at a stated power, which a build sizes without a building.
-    PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000}}"
+    #: A PV array at a stated power with its inverter outdoors, which a build sizes without a building.
+    PV: ClassVar[str] = "pv: {assembly: pv/array, parameters: {power_in_watt: 5000, inverter_location: OUTDOORS}}"
     #: The energy manager, and the grid, whose meter reads every electricity port, beside a manager too.
     CONTROL: ClassVar[str] = "control: {assembly: control/ems_self_consumption}"
     GRID: ClassVar[str] = "grid: {assembly: supply/electricity_grid}"
 
+    @staticmethod
+    def building_beside_batteries(*batteries: str) -> str:
+        """A building the given batteries stand beside: it reads the weather, the residents and each battery's heat.
+
+        A battery's ``installation_location`` follows the building's technical room (the fact
+        ``technical_room_location``), so a built system with a battery needs a building, and the building reads the
+        battery's ``HeatToHeatedZoneInWatt`` in every location (D-h of ``roadmap/device_location_spec.md``). A port
+        binds one battery, so the building has one port per battery, ``battery_heat_<n>``. For example,
+        ``Real.building_beside_batteries("battery.garage", "battery.cellar")`` reads both instances of the import
+        ``battery``; ``"battery"`` alone names an import of one instance.
+
+        Args:
+            batteries: The import, or the import and the instance, of each battery, as ``optional-bind:`` names them.
+
+        Returns:
+            The site entry of the building, one line of YAML.
+        """
+        ports = [f"battery_heat_{index}" for index in range(len(batteries))]
+        return (
+            "Building: {class: hisim.components.building.building.Building, preset: german_single_family_home, "
+            "config: {number_of_apartments: 1.0, weather_identity: "
+            "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center}, "
+            f"inputs: [Weather, UTSPConnector, {', '.join(f'{{$port: {port}}}' for port in ports)}], "
+            f"ports: {{{', '.join(f'{port}: {{partner: Battery, optional: true}}' for port in ports)}}}, "
+            f"optional-bind: {{{', '.join(f'{port}: {battery}' for port, battery in zip(ports, batteries))}}}}}"
+        )
+
     @classmethod
     def heating_site(cls, *extra: str) -> str:
-        """The site a heating assembly binds to: weather, residents, heat distribution, its controller, the curve.
+        """The site a heating assembly binds to: weather, residents, the building, heat distribution, its controller, the curve.
 
         Example: ``Real.heating_site() + imports("gas: {assembly: supply/gas_connection}", ...)``. The
-        distribution is the other end of every space-heating assembly's ``space_heating`` circuit. The site has
-        no building, so it expands but does not build; a build of a heating assembly reads a composed file.
+        distribution is the other end of every space-heating assembly's ``space_heating`` circuit, and the building
+        the partner of every tank's ``surroundings`` need. The building, the distribution and its controller are
+        reduced, so the site expands but does not build; a build of a heating assembly reads a composed file.
 
         Args:
             extra: Further site entries, each one indented YAML block.
@@ -127,6 +169,7 @@ class Real:
         return site(
             cls.WEATHER,
             cls.OCCUPANCY,
+            cls.BUILDING_FOR_EXPANSION,
             cls.HEAT_DISTRIBUTION_CONTROLLER,
             cls.HEATING_CURVE,
             cls.HEAT_DISTRIBUTION,

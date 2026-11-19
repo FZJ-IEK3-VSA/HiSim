@@ -232,9 +232,7 @@ def test_house(
 
     # Build Fuel Meter
     fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
-        generic_boiler.GenericBoilerConfig.fuel_constants(
-            my_oil_heater_config.energy_carrier, my_oil_heater_config.boiler_type
-        )
+        generic_boiler.GenericBoilerConfig.fuel_constants(my_oil_heater_config.energy_carrier)
     )
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
         SizingContext(
@@ -359,9 +357,7 @@ def test_the_preset_copies_carrier_and_fuel_constants_from_the_generator_beside_
     stated twice. The expected numbers are the unrounded ones the twins carry -- the deleted
     factory's 9.82 was a rounded oil value every one of these setups overrode.
     """
-    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(
-        carrier, generic_boiler.BoilerType.CONVENTIONAL
-    )
+    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(carrier)
 
     resolved = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
         SizingContext(

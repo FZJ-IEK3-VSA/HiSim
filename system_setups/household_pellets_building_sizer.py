@@ -442,10 +442,8 @@ def setup_function(
     # converts kilowatt hours with are facts of the boiler's configuration. They are read off
     # `fuel_constants`, which is the same source the boiler's own contribution uses, instead of
     # off the built component as they used to be.
-    fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
-        generic_boiler.GenericBoilerConfig.fuel_constants(
-            my_pellet_heater_config.energy_carrier, my_pellet_heater_config.boiler_type
-        )
+    fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = generic_boiler.GenericBoilerConfig.fuel_constants(
+        my_pellet_heater_config.energy_carrier
     )
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
         SizingContext(

@@ -139,6 +139,62 @@ class LoadTypes(str, enum.Enum):
 
 
 @enum.unique
+class CalorificBasis(str, enum.Enum):
+    """The calorific value an amount of fuel energy is stated on: the gross (GCV) or the net (NCV) calorific value.
+
+    The gross calorific value (GCV, Brennwert, Hs) counts the heat the water vapour of the flue gas gives off when it
+    condenses; the net calorific value (NCV, Heizwert, Hi) does not. One cubic metre of natural gas is 11.06 kWh on the
+    GCV and 9.97 kWh on the NCV (``PhysicsConfig``), so a kWh of fuel is a quantity only once its basis is named. The
+    same boiler likewise has a higher efficiency on the NCV than on the GCV, by the fuel's ratio GCV/NCV; Ecodesign
+    product fiches state the GCV, IWU 2002 and most German test reports the NCV.
+    """
+
+    GROSS = "GROSS"
+    NET = "NET"
+
+    @classmethod
+    def reported_for(cls, fuel: LoadTypes) -> "CalorificBasis":
+        """Return the basis HiSim reports a fuel's energy on: in the meters, the KPIs, the CO2 and the fuel costs.
+
+        Every fuel has one basis, the one its price and emission factor are stated on (owner decision of 2026-11-13,
+        bead hisim-boiler-fuel-one-basis-b7e2). Each fuel row of the cost database (``hisim/cost_database``) declares
+        its ``calorific_basis``, and the database refuses a row that declares another basis than this one. A boiler
+        converts the fuel it burns to this basis, so a condensing and a conventional boiler of the same fuel report
+        energy in proportion to the fuel they burn.
+
+        - Natural gas and hydrogen: GCV. Gas is billed per kWh of GCV (DVGW G 685, "Gasabrechnung": the volume times
+          the Zustandszahl times the billing Brennwert), and the Ecodesign seasonal efficiency of Regulation (EU)
+          813/2013 is stated on the GCV. Hydrogen follows gas.
+        - Heating oil, pellets, wood chips and diesel: NCV. The cost database's rows of these fuels are published
+          quotes per litre or tonne, converted to kWh with a net calorific value: 9.82167 kWh/l for heating oil
+          (35.358 MJ/l, ``PhysicsConfig``), 5000 kWh/t for pellets (18 MJ/kg, "Heizwert Hi", ``PhysicsConfig``),
+          4333.3 kWh/t for wood chips (15.6 GJ/t, the UBA's lower heating value) and 9.8 kWh/l for diesel (the value
+          ``generic_car`` books diesel with).
+
+        Args:
+            fuel: The fuel.
+
+        Returns:
+            The basis of every kWh of that fuel HiSim reports.
+
+        Raises:
+            ValueError: If ``fuel`` is no fuel: electricity, district heating and water have no calorific basis.
+        """
+        reported_bases = {
+            LoadTypes.GAS: cls.GROSS,
+            LoadTypes.GREEN_HYDROGEN: cls.GROSS,
+            LoadTypes.OIL: cls.NET,
+            LoadTypes.PELLETS: cls.NET,
+            LoadTypes.WOOD_CHIPS: cls.NET,
+            LoadTypes.DIESEL: cls.NET,
+        }
+        if fuel not in reported_bases:
+            fuels = ", ".join(load_type.value for load_type in reported_bases)
+            raise ValueError(f"{fuel.value} is no fuel and has no calorific basis; the fuels are {fuels}.")
+        return reported_bases[fuel]
+
+
+@enum.unique
 class Units(str, enum.Enum):
 
     """Unit Constants."""

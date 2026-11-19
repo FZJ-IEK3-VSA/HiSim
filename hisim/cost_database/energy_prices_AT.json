@@ -42,12 +42,13 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "GROSS",
       "source_ids": [
         "src_opex_26",
         "src_opex_24",
         "src_opex_34"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -59,12 +60,13 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_27",
         "src_opex_24",
         "src_opex_35"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.089 EUR/l and 0.352 kg CO2/l using 9.82167 kWh/l (PhysicsConfig OIL)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.089 EUR/l and 0.352 kg CO2/l using 9.82167 kWh/l (PhysicsConfig OIL). Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "DIESEL",
@@ -76,11 +78,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_28",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.54 EUR/l and 0.332 kg CO2/l using 9.8 kWh/l (HiSim generic_car diesel heating value)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.54 EUR/l and 0.332 kg CO2/l using 9.8 kWh/l (HiSim generic_car diesel heating value). Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "PELLETS",
@@ -92,11 +95,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5. Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -108,11 +112,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5. Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -140,10 +145,11 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "GROSS",
       "source_ids": [
         "src_opex_32"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (roadmap/cost_module_issues.md #19)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (roadmap/cost_module_issues.md #19). Stated per kWh of gross calorific value (calorific_basis GROSS), as natural gas (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "ELECTRICITY",
@@ -187,12 +193,13 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "GROSS",
       "source_ids": [
         "src_opex_26",
         "src_opex_24",
         "src_opex_34"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -204,12 +211,13 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_27",
         "src_opex_24",
         "src_opex_35"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.5 EUR/l and 0.352 kg CO2/l using 9.82167 kWh/l (PhysicsConfig OIL)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.5 EUR/l and 0.352 kg CO2/l using 9.82167 kWh/l (PhysicsConfig OIL). Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "DIESEL",
@@ -221,11 +229,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_28",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.54 EUR/l and 0.332 kg CO2/l using 9.8 kWh/l (HiSim generic_car diesel heating value)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 1.54 EUR/l and 0.332 kg CO2/l using 9.8 kWh/l (HiSim generic_car diesel heating value). Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "PELLETS",
@@ -237,11 +246,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_29",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 297.98 EUR/t using 5000 kWh/t (PhysicsConfig PELLETS). The as-published emission factor 0.026 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5. Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "WOOD_CHIPS",
@@ -253,11 +263,12 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "NET",
       "source_ids": [
         "src_opex_30",
         "src_opex_24"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Converted to kWh basis from the as-published quote 307.02 EUR/t using 4333.3 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ per tonne of fresh mass at 15 % water content, UBA factsheet 2024 table 1; until hisim-cost-data-l07.15 the figure had been read as GJ/m3 and the row was divided by 17333.3 kWh/t). The as-published emission factor 0.019 is per kWh — the legacy dict quoted it per kWh against the per-ton price (roadmap/cost_module_issues.md 24) — and is carried undivided; dividing it by the heating value understated the carrier's CO2 by the heating-value factor until hisim-cost-data-l07.5. Stated per kWh of net calorific value (calorific_basis NET): the as-published quote is converted with a net calorific value, the basis HiSim reports this fuel on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     },
     {
       "carrier": "DISTRICT_HEATING",
@@ -285,10 +296,11 @@
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
+      "calorific_basis": "GROSS",
       "source_ids": [
         "src_opex_32"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (roadmap/cost_module_issues.md #19)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (roadmap/cost_module_issues.md #19). Stated per kWh of gross calorific value (calorific_basis GROSS), as natural gas (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
     }
   ]
 }

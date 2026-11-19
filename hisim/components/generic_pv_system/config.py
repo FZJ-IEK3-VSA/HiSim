@@ -97,6 +97,10 @@ class PVSystemConfig(ConfigBase):
     ``power_in_watt`` is sizable, so the preset leaves it ``AUTO`` and ``.resolve(ctx)`` computes
     it from the roof the array stands on. An author who knows the array's power pins the field
     instead.
+
+    Where the inverter stands is sizable too: ``installation_location`` follows the building's technical room
+    unless a file pins it. It decides where the inverter's loss goes, into the building's heated zone or out of
+    the house (``roadmap/device_location_spec.md``, D-d and D-h; bead hisim-device-location-820d.5).
     """
 
     MAIN_CLASS = "hisim.components.generic_pv_system.PVSystem"
@@ -169,6 +173,17 @@ class PVSystemConfig(ConfigBase):
         metadata={"capacity": True},
         note="usable roof area times the module's power per m², times the share of it that is installed",
     )
+    #: Where the array's inverter stands: in the heated zone, in an unheated space or outdoors. Sizable: left
+    #: ``AUTO`` it follows the building's technical room, the fact ``technical_room_location``: the string inverter
+    #: of a single-family house is usually mounted close to the meter cabinet, which stands in the house connection
+    #: room of DIN 18012, the technical room (an installer's practice for a short AC line, not a measured share). A
+    #: file pins it for an inverter elsewhere, ``OUTDOORS`` for a module inverter on the roof or one in the garage.
+    #: It decides only where the inverter's loss goes, into the building's heated zone or out of the house: pvlib's
+    #: inverter model does not depend on the temperature of the surroundings. The modules' own loss is on the roof
+    #: whatever this says.
+    installation_location: Sizable[lt.InstallationLocation] = sized_field(
+        rule=Size.TECHNICAL_ROOM_LOCATION, value_type=lt.InstallationLocation
+    )
     #: The weather this system is computed with, as ``WeatherConfig.identity()`` spells it, sized
     #: from the weather by the sizing engine. It is not cache-key material — the series are keyed
     #: by the weather producer's own artifact key — but it is a sized field of the declarative
@@ -219,13 +234,14 @@ class PVSystemConfig(ConfigBase):
         the CEC inverter database, filling the whole usable roof. What it does not fix is the
         array's power: ``power_in_watt`` stays ``AUTO`` so that :data:`ROOFTOP_POWER_LAW` derives
         it from the building's roof area, and an author who knows the power pins the field
-        instead.
+        instead. Nor does it fix where the inverter stands: ``installation_location`` stays
+        ``AUTO`` and follows the building's technical room.
 
         Args:
             name: The instance name, which becomes the configuration's component identity.
 
         Returns:
-            PVSystemConfig: The preset configuration, with ``power_in_watt`` unsized.
+            PVSystemConfig: The preset configuration, with ``power_in_watt`` and the location unsized.
         """
         return cls(component_id=ComponentID(name=name))
 

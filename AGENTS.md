@@ -37,6 +37,7 @@ Where each document belongs -- the root, the binding guidelines in `system_docs/
   in every docstring; no `print` outside `hisim/log.py` (enforced by `.semgrep/no_print.yml`); commit messages and
   PR descriptions in its form.
 - A change that moves simulation results, or renames an output, KPI, config field or the energy-system format, is made as `system_docs/results_and_interfaces.md` says: KPI deltas in the PR description, goldens blessed only through `golden-update.yml`, refactoring commits free of result changes, a heads-up to the RenoVisor side for a renamed public name.
+- Imports between the parts of `hisim/` follow `system_docs/module_graph.md`: a module imports only the groups its group may import (`system_docs/module_graph.yaml`), nothing by string outside a registry; `tests/test_module_graph.py` fails on a new violation and on a stale entry of its baseline.
 - Tests are written as `system_docs/testing.md` says: one job marker per test, the runtime budget of `base`, a regression test that fails without its fix, explicit configuration over monkeypatching.
 
 ## Pull requests and merging

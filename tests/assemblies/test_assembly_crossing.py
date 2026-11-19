@@ -140,6 +140,8 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
 
     assert model.components["boiler-Boiler"].inputs[1] == DefaultInputs(source="cylinder-DHWStorage")
     assert model.components["cylinder-DHWStorage"].inputs == (
+        DefaultInputs(source="Building"),
+        DefaultInputs(source="Weather"),
         DefaultInputs(source="UTSPConnector"),
         DefaultInputs(source="boiler-Boiler"),
     )
@@ -160,7 +162,7 @@ def test_a_circuit_lowers_to_a_bare_name_of_the_other_end_at_each_end_and_record
 @pytest.mark.assemblies
 def test_a_required_circuit_end_without_the_other_end_is_refused() -> None:
     """Catches a cylinder left without its boiler."""
-    message = refusal(site(Real.WEATHER, Real.OCCUPANCY) + imports(Gas.CYLINDER))
+    message = refusal(site(Real.WEATHER, Real.OCCUPANCY, Real.BUILDING_FOR_EXPANSION) + imports(Gas.CYLINDER))
     assert message.startswith("EF-7A at import 'cylinder'")
     assert "an end of the circuit dhw" in message
 
@@ -177,7 +179,14 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "ports:", "bind: {space_heating: two}, ports:"
         ),
     )
-    house = site(Real.WEATHER, Real.OCCUPANCY, Real.HEAT_DISTRIBUTION_CONTROLLER, Real.HEATING_CURVE, *distributions)
+    house = site(
+        Real.WEATHER,
+        Real.OCCUPANCY,
+        Real.BUILDING_FOR_EXPANSION,
+        Real.HEAT_DISTRIBUTION_CONTROLLER,
+        Real.HEATING_CURVE,
+        *distributions,
+    )
     boilers = ("one: {assembly: heating/gas_condensing_boiler}", "two: {assembly: heating/gas_condensing_boiler}")
     message = refusal(house + imports(Gas.CONNECTION, Gas.CYLINDER, *boilers))
     assert message.startswith("EF-7B at import 'cylinder'") and "one.dhw, two.dhw" in message
@@ -193,7 +202,7 @@ def test_two_other_ends_need_a_verb_and_bind_decides() -> None:
             "two: {assembly: heating/gas_condensing_boiler, bind: {dhw_temperature: cylinder}}",
         )
     )
-    assert model.components["cylinder-DHWStorage"].inputs[1] == DefaultInputs(source="two-Boiler")
+    assert model.components["cylinder-DHWStorage"].inputs[3] == DefaultInputs(source="two-Boiler")
     assert model.components["one-Boiler"].inputs[1] == DefaultInputs(source="tank-DHWStorage")
 
 
@@ -831,12 +840,12 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
 ) -> None:
     """5 kWp + 3 kWp give 8 kWh; the record writes the list, the audit one lookup per array, and re-runs."""
     arrays = (
-        "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90, power_in_watt: 5000}, "
-        "west: {azimuth_in_degree: 270, power_in_watt: 3000}}}"
+        "pv: {assembly: pv/array, instances: {east: {azimuth_in_degree: 90, power_in_watt: 5000, "
+        "inverter_location: OUTDOORS}, west: {azimuth_in_degree: 270, power_in_watt: 3000, inverter_location: OUTDOORS}}}"
     )
     house = tmp_path / "two_arrays.energy_system.yaml"
     house.write_text(
-        site(Real.WEATHER, Real.OCCUPANCY)
+        site(Real.WEATHER, Real.OCCUPANCY, Real.building_beside_batteries("battery"))
         + imports(arrays, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID),
         encoding="utf-8",
     )
@@ -854,6 +863,8 @@ def test_the_two_array_house_sizes_its_battery_to_both_arrays_and_its_record_rer
     assert [(item["source"], item["value"], item.get("many")) for item in lookups] == [
         ("pv-east-PVSystem", 5000, True),
         ("pv-west-PVSystem", 3000, True),
+        # where the battery stands: the building's technical room, its TABULA row's unheated cellar
+        ("Building", "UNHEATED_SPACE", None),
     ]
     code = main(
         [

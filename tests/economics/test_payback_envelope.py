@@ -61,6 +61,44 @@ def _band(payback_by_slot: dict) -> dict:
     return PaybackEnvelope.of(payback_by_slot).to_band()
 
 
+class TestThePaybackYear:
+    """A world's payback year is the first year from which its savings curve stays at or above zero (#102).
+
+    The curves are cumulative discounted savings, reference minus plan, so at or above zero means repaid. Before
+    renovisorissues #102 the year was the first year after 0 at which the curve reached zero, whatever it did later,
+    and a plan that ended in deficit could state "pays back in year N".
+    """
+
+    def test_a_curve_that_crosses_zero_and_ends_in_deficit_has_no_payback(self):
+        """Repaid in year 2 and 3, in deficit at the horizon: no payback year, so it cannot contradict the NPV."""
+        assert discounted_payback_year([-100.0, -20.0, 30.0, 10.0, -5.0]) is None
+
+    def test_a_curve_that_starts_repaid_and_ends_in_deficit_has_no_payback(self):
+        """A plan cheaper at first and dearer to run: above zero from year 0, below it at the horizon."""
+        assert discounted_payback_year([50.0, 20.0, -10.0, -40.0]) is None
+
+    def test_a_curve_that_dips_rises_and_falls_back_pays_back_at_its_last_return(self):
+        """Repaid in year 2, below zero again in year 3 (a replacement), repaid for good from year 4."""
+        assert discounted_payback_year([-100.0, -40.0, 10.0, -5.0, 20.0, 30.0]) == 4
+
+    def test_a_curve_repaid_from_year_zero_pays_back_in_year_zero(self):
+        """A plan no dearer from the start (grants covering the investment) pays back in year 0."""
+        assert discounted_payback_year([0.0, 5.0, 10.0]) == 0
+        assert discounted_payback_year([200.0, 150.0, 120.0]) == 0
+
+    def test_a_curve_that_never_reaches_zero_has_no_payback(self):
+        """Below zero to the horizon: no payback year."""
+        assert discounted_payback_year([-100.0, -80.0, -60.0]) is None
+
+    def test_a_curve_that_reaches_zero_exactly_at_the_horizon_pays_back_there(self):
+        """Zero counts as repaid, so a curve ending at exactly zero pays back in its last year."""
+        assert discounted_payback_year([-100.0, -50.0, 0.0]) == 2
+
+    def test_an_empty_curve_has_no_payback(self):
+        """No years, no payback year."""
+        assert discounted_payback_year([]) is None
+
+
 class TestTheEnvelope:
     """The band is ordered whichever uncertainty dominates the savings."""
 

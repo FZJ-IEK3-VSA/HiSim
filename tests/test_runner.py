@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,7 @@ from scripts.runner import (
     filter_config,
     load_config,
     parse_pair,
+    read_layout_faults,
     resolve_composed_path,
     resolve_twin_path,
     resolve_setup_path,
@@ -133,7 +135,7 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
 
 
 def test_load_config_real_file_setups_and_params() -> None:
-    """The shipped config declares uniquely-named setups and 5 parameter sets.
+    """The shipped config declares uniquely-named setups and 5 parameter sets; the week sets plot the Sankey.
 
     They are the January week, the July week and the full year at 60 s, and the January week and the full
     year at 900 s, RenoVisor's step length (hisim-repo-cleanup-o6a.35). Each id ends in the set's step length,
@@ -150,13 +152,16 @@ def test_load_config_real_file_setups_and_params() -> None:
         ("one_week_900s", "one_week_only", 900),
         ("full_year_900s", "full_year", 900),
     ]
+    # The week sets also lay out every pair's Sankey figure, so a layout fault fails the golden check (status
+    # layout_fault); the full-year sets follow in Sankey PR 7.
+    week_sets = {"one_week_60s", "july_week_60s", "one_week_900s"}
     for ps in cfg.parameter_sets:
         assert set(ps.post_processing_options) == {
             "COMPUTE_OPEX",
             "COMPUTE_CAPEX",
             "COMPUTE_KPIS",
             "WRITE_KPIS_TO_JSON",
-        }
+        } | ({"PLOT_SANKEY"} if ps.id in week_sets else set())
 
 
 def test_load_config_real_file_setups_exist_on_disk() -> None:
@@ -776,3 +781,19 @@ def test_resolve_composed_path_finds_the_heat_pump_file() -> None:
     assert twin.rename["heating-HeatPump"] == "MoreAdvancedHeatPumpHPLib"
     with pytest.raises(KeyError, match="no composed file"):
         resolve_composed_path(SetupConfig("s1", "a.py"), REPO_ROOT)
+
+
+def test_read_layout_faults_lists_each_fault_and_each_overlap_and_nothing_without_the_file(tmp_path: Path) -> None:
+    """A run's ``energy_sankeys/overall.layout_error.json`` becomes one line per fault and overlap; no file, no fault."""
+    assert read_layout_faults(tmp_path) == []
+    (tmp_path / "energy_sankeys").mkdir()
+    (tmp_path / "energy_sankeys" / "overall.layout_error.json").write_text(
+        json.dumps({"faults": ["overlap: 1 overlaps left"], "overlaps": ["label a <> b"]}), encoding="utf-8"
+    )
+    assert read_layout_faults(tmp_path) == ["overlap: 1 overlaps left", "overlap left: label a <> b"]
+
+
+def test_a_run_result_with_layout_faults_survives_the_child_file() -> None:
+    """The child writes its ``RunResult`` as JSON and the parent reads it back; the layout faults travel with it."""
+    result = RunResult("setup_a", "one_week_60s", "rd", kpis={}, layout_faults=["layout: no route"])
+    assert RunResult(**json.loads(json.dumps(asdict(result)))) == result

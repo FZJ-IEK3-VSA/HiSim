@@ -10,7 +10,7 @@ totals, so the component's step is a chain of pure functions over them. Nothing 
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, NamedTuple, Optional
 
 from hisim.components.more_advanced_heat_pump.backup_rod import (
     RodAssistedHeating,
@@ -95,6 +95,21 @@ class HplibResult:
             cop=between(lower.cop, upper.cop),
             eer=between(lower.eer, upper.eer),
         )
+
+
+class SpaceHeatingPowerRange(NamedTuple):
+    """The space-heating electricity the hplib heat pump's compressor would draw at full load and at its minimum load, in W.
+
+    The heat pump publishes both once per step, from the step's start temperatures, for its space-heating controller
+    and the energy manager. Both are the compressor's: the backup heating rod is not part of them. For example, a
+    compressor that gives 6,000 W of heat at a COP of 4 with a 1,800 W minimum thermal power has a range of 1,500 W at
+    full load and 450 W at minimum load.
+    """
+
+    #: The compressor's electricity at full load, in W.
+    full_load_electrical_power_in_watt: float
+    #: The compressor's electricity at the minimum thermal power, in W; at most the full-load electricity.
+    minimum_load_electrical_power_in_watt: float
 
 
 @dataclass(frozen=True)
@@ -230,8 +245,54 @@ class HeatPumpOperation:
 
     @property
     def thermal_power_from_environment_in_watt(self) -> float:
-        """Return the heat taken from the source, the heat delivered minus the electricity, in W."""
+        """Return the heat taken from the source, the heat delivered minus the electricity, in W.
+
+        Signed: negative while the machine cools (it rejects the heat it draws plus its electricity) and in a step that
+        heats at a coefficient of performance below 1, which the SCOP calibration on top of the Carnot-efficiency COP
+        can give. The energy balance reads its three parts, :attr:`heat_from_ambient_in_watt`,
+        :attr:`heat_to_ambient_in_watt` and :attr:`electricity_lost_in_watt`, whose difference it is.
+        """
         return self.total_thermal_power_in_watt - self.total_electrical_power_in_watt
+
+    @property
+    def cools(self) -> bool:
+        """Whether the step cools: the space-heating circuit carries heat to the machine (a negative heat)."""
+        return self.thermal_power_space_heating_in_watt < 0.0
+
+    @property
+    def heat_from_ambient_in_watt(self) -> float:
+        """Return the heat the machine takes from its source in a step that does not cool, in W, >= 0.
+
+        For example, 8,000 W of heat delivered for 2,000 W of electricity take 6,000 W from the outside air. Zero in a
+        cooling step, and in a step whose electricity exceeds its heat (:attr:`electricity_lost_in_watt`).
+        """
+        if self.cools:
+            return 0.0
+        return max(self.thermal_power_from_environment_in_watt, 0.0)
+
+    @property
+    def heat_to_ambient_in_watt(self) -> float:
+        """Return the heat the machine rejects to its source while it cools, in W, >= 0: the heat it draws plus its electricity.
+
+        For example, drawing 6,000 W from the space-heating circuit with 2,000 W of compressor electricity rejects
+        8,000 W; passive cooling rejects the drawn heat plus the brine pump's electricity. Zero in a step that does not
+        cool.
+        """
+        if not self.cools:
+            return 0.0
+        return max(-self.thermal_power_from_environment_in_watt, 0.0)
+
+    @property
+    def electricity_lost_in_watt(self) -> float:
+        """Return the electricity beyond the heat delivered in a step that does not cool, in W, >= 0.
+
+        At a calibrated coefficient of performance below 1 the machine draws more electricity than it delivers as
+        heat: 4,000 W for 3,520 W of heat at a COP of 0.88 lose 480 W. That is no heat taken from the source and no
+        heat rejected while cooling, so it is booked as a loss. Zero in a cooling step.
+        """
+        if self.cools:
+            return 0.0
+        return max(-self.thermal_power_from_environment_in_watt, 0.0)
 
     @staticmethod
     def space_heating(

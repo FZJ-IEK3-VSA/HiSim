@@ -275,6 +275,7 @@ def setup_function(
         SizingContext(
             roof_area_in_m2=my_building_information.roof_area_in_m2,
             weather_identity=my_weather_config.identity(),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -367,7 +368,8 @@ def setup_function(
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
 
@@ -419,7 +421,10 @@ def setup_function(
 
     # DHW Storage (needs manual connection to solar thermal and gas heater)
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_building_information.number_of_apartments,
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -455,6 +460,8 @@ def setup_function(
         my_gas_heater.component_name,
         my_gas_heater.WaterOutputMassFlowDhw,
     )
+    # The temperature the cylinder loses its standby heat to, from the building it stands in
+    my_dhw_storage.connect_only_predefined_connections(my_building, my_weather)
     my_sim.add_component(my_dhw_storage)
 
     # Build Electricity Meter
@@ -492,7 +499,10 @@ def setup_function(
 
         # Build Battery
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-            SizingContext(pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),))
+            SizingContext(
+                pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),),
+                technical_room_location=concrete(my_building_config.technical_room_location),
+            )
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
             my_simulation_parameters=my_simulation_parameters,

@@ -488,7 +488,7 @@ def _stacked_subject_svg(result: LifecycleCostResult) -> str:
 
 
 def _payback_svg(comparison: VariantComparison) -> str:
-    """Return the comparison's payback curve per band slot; its zero crossing is the printed payback year.
+    """Return the comparison's payback curve per band slot; the year it stays above zero from is the printed payback.
 
     The curve is `comparison.cumulative_discounted_savings_in_euro`, the same array `discounted_payback_years` comes
     from, so drawing and number agree.

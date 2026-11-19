@@ -53,18 +53,21 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # This setup has no PV array to size a battery from, so neither battery is resolved against a
     # sizing context: both state their own capacity and inverter power, which is what the two
-    # sizable fields of the preset are left open for.
+    # sizable fields of the preset are left open for. Nor has it a building whose technical room
+    # they could follow, so both stand outdoors and their losses leave the system.
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery1")
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
+    my_advanced_battery_config_1.installation_location = lt.InstallationLocation.OUTDOORS
 
     my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery2")
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
     my_advanced_battery_config_2.source_weight = 2
+    my_advanced_battery_config_2.installation_location = lt.InstallationLocation.OUTDOORS
 
     my_advanced_battery_1 = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -103,7 +106,10 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem")
     # A demo array with no building to size it from, so the power is stated here rather than
     # derived: the 10 kW this setup has always run is now written down where it is used (D-13).
+    # Nor has it a building whose technical room the inverter could follow, so it stands outdoors
+    # and its loss leaves the system.
     my_photovoltaic_system_config.power_in_watt = 10000.0
+    my_photovoltaic_system_config.installation_location = lt.InstallationLocation.OUTDOORS
     my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
         SizingContext(weather_identity=my_weather_config.identity())
     )

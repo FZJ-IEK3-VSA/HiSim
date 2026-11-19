@@ -15,7 +15,6 @@ from hisim.components.generic_boiler import (
     BoilerEfficiencySources,
     BoilerType,
     BoilerVintage,
-    CalorificBasis,
     CombustionEfficiencyCurve,
 )
 
@@ -56,7 +55,7 @@ def curve_of(
 
 
 #: Every boiler of the five fuels, as (fuel, type, installation year, expected eta_100 and eta_30 on the boiler's
-#: booking basis at 20 kW), the expected values written out from the cited source rows.
+#: curve basis at 20 kW), the expected values written out from the cited source rows.
 SOURCE_POINTS: Tuple[Tuple[lt.LoadTypes, BoilerType, Optional[int], float, float], ...] = (
     # Viessmann Vitodens 200-W B2HF-11 fiche, GCV
     (lt.LoadTypes.GAS, BoilerType.CONDENSING, None, 0.877, 0.978),
@@ -193,17 +192,19 @@ def test_a_stated_seasonal_efficiency_is_reproduced_by_the_ecodesign_weighting_l
 ) -> None:
     """The label's eta_s (GCV) is ``0.85 eta_30 + 0.15 eta_100 - F(1)``, F(1) = 3 % (2014/C 207/02, 2015/1189).
 
-    The scaled curve keeps its type's shape: both test points scale by the same factor. A boiler booked on the NCV is
-    put on the GCV with its fuel's ratio before the comparison. 0.82 lies below every row's ceiling (the lowest, the
+    The scaled curve keeps its type's shape: both test points scale by the same factor. A boiler whose curve is on the NCV
+    is put on the GCV with its fuel's ratio before the comparison. 0.82 lies below every row's ceiling (the lowest, the
     1970s conventional gas row at 20 kW, is 0.826); a row at its own ceiling is
-    :func:`test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_it_is_refused`.
+    :func:`test_at_its_ceiling_the_curve_reaches_1_on_its_curve_basis_and_just_above_it_is_refused`.
     """
     unscaled = curve_of(energy_carrier, boiler_type, installation_year)
     scaled = curve_of(energy_carrier, boiler_type, installation_year, seasonal_efficiency=seasonal_efficiency)
-    booking = CalorificBasis.of_booking(
+    curve_basis = BoilerEfficiencySources.curve_basis(
         lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier, boiler_type
     )
-    gross_over_net = 1.0 if booking == CalorificBasis.GROSS else BoilerEfficiencySources.gross_over_net(energy_carrier)
+    gross_over_net = (
+        1.0 if curve_basis == lt.CalorificBasis.GROSS else BoilerEfficiencySources.gross_over_net(energy_carrier)
+    )
 
     active_mode_on_gross_basis = (
         0.85 * scaled.efficiency_at(0.3, 30.0) + 0.15 * scaled.efficiency_at(1.0, 60.0)
@@ -223,7 +224,7 @@ def test_a_seasonal_efficiency_that_lifts_the_curve_above_1_on_the_gross_value_i
 
 #: The ceilings of :meth:`BoilerEfficiencySources.highest_seasonal_efficiency` of the current rows, as (fuel, type,
 #: ceiling), written out from the source rows: ``eta_son / (H k) - 0.03`` with ``eta_son = 0.85 eta_30 + 0.15
-#: eta_100``, ``H`` the curve's highest point and ``k`` the fuel's GCV/NCV for a boiler booked on the NCV.
+#: eta_100``, ``H`` the curve's highest point and ``k`` the fuel's GCV/NCV for a boiler whose curve is on the NCV.
 CURRENT_CEILINGS: Tuple[Tuple[lt.LoadTypes, BoilerType, float], ...] = (
     # Vitodens, GCV: the 30 % point at the 30 °C return is the highest
     (lt.LoadTypes.GAS, BoilerType.CONDENSING, (0.85 * 0.978 + 0.15 * 0.877) / 0.978 - 0.03),
@@ -233,7 +234,7 @@ CURRENT_CEILINGS: Tuple[Tuple[lt.LoadTypes, BoilerType, float], ...] = (
     # Logano G125, NCV: 0.8682 for gas, 0.9050 for oil
     (lt.LoadTypes.GAS, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.GAS) - 0.03),
     (lt.LoadTypes.OIL, BoilerType.CONVENTIONAL, (0.85 * 0.960 + 0.15 * 0.937) / (0.960 * Fuel.OIL) - 0.03),
-    # Froeling PE1 (GCV, booked on the NCV): the full-load point is the highest; 0.8678
+    # Froeling PE1 (GCV, curve on the NCV): the full-load point is the highest; 0.8678
     (lt.LoadTypes.PELLETS, BoilerType.CONVENTIONAL, (0.85 * 0.845 + 0.15 * 0.878) / (0.878 * Fuel.PELLETS) - 0.03),
     # Hargassner Eco-HK 20, NCV: 0.8624
     (
@@ -266,7 +267,7 @@ def test_the_highest_seasonal_efficiency_of_a_current_boiler_is_its_rows_closed_
 @pytest.mark.base
 @pytest.mark.parametrize(("energy_carrier", "boiler_type", "installation_year"), [row[:3] for row in SOURCE_POINTS])
 @pytest.mark.parametrize("maximal_power_in_kilowatt", [1.0, 20.0])
-def test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_it_is_refused(
+def test_at_its_ceiling_the_curve_reaches_1_on_its_curve_basis_and_just_above_it_is_refused(
     energy_carrier: lt.LoadTypes,
     boiler_type: BoilerType,
     installation_year: Optional[int],
@@ -274,7 +275,7 @@ def test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_
 ) -> None:
     """The build refuses exactly what lies above the ceiling the RenoVisor request check names.
 
-    At the ceiling the scaled curve's highest point is 1 on the basis the boiler's fuel is booked on: the GCV for a
+    At the ceiling the scaled curve's highest point is 1 on the boiler's curve basis: the GCV for a
     condensing gas, oil or hydrogen boiler, the NCV for every other one, where the combustion loss would otherwise
     turn negative.
     """
@@ -289,7 +290,7 @@ def test_at_its_ceiling_the_curve_reaches_1_on_its_booking_basis_and_just_above_
 
     assert at_ceiling.highest_efficiency() == pytest.approx(1.0, rel=1e-12)
     assert just_below.highest_efficiency() < 1.0
-    basis = "net" if BoilerEfficiencySources.gross_to_booking_factor(energy_carrier, boiler_type) > 1.0 else "gross"
+    basis = "net" if BoilerEfficiencySources.gross_to_curve_basis_factor(energy_carrier, boiler_type) > 1.0 else "gross"
     with pytest.raises(ValueError, match=f"above {ceiling:.4f}.*above 1 on the {basis} calorific value"):
         curve_of(energy_carrier, boiler_type, installation_year, maximal_power_in_kilowatt, ceiling + 1e-9)
 
@@ -387,8 +388,8 @@ def test_every_curve_under_the_directive_meets_its_legal_floor(
     """
     curve = curve_of(energy_carrier, boiler_type, installation_year, maximal_power_in_kilowatt)
     source_carrier = lt.LoadTypes.GAS if energy_carrier == lt.LoadTypes.GREEN_HYDROGEN else energy_carrier
-    is_booked_gross = CalorificBasis.of_booking(source_carrier, boiler_type) == CalorificBasis.GROSS
-    to_net_basis = BoilerEfficiencySources.gross_over_net(source_carrier) if is_booked_gross else 1.0
+    is_curve_gross = BoilerEfficiencySources.curve_basis(source_carrier, boiler_type) == lt.CalorificBasis.GROSS
+    to_net_basis = BoilerEfficiencySources.gross_over_net(source_carrier) if is_curve_gross else 1.0
     full_load_floor, part_load_floor = floor(maximal_power_in_kilowatt)
 
     assert curve.efficiency_at(1.0, 60.0) * to_net_basis >= full_load_floor - tolerance

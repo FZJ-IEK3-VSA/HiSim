@@ -177,7 +177,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_gas_heater_config.maximal_thermal_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
 
@@ -210,6 +211,11 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # The building reads the heat the distribution system delivers (ThermalPowerDelivered); without it the boiler
     # heats a buffer whose heat reaches no room.
     my_building.connect_only_predefined_connections(my_weather, my_occupancy, my_heat_distribution_system)
+    # The building reads the standby heat the buffer releases into its heated zone (HeatToHeatedZoneInWatt), which is
+    # 0 in every step while the buffer stands in an unheated cellar; a run refuses that output unread.
+    my_building.connect_with_dynamic_connections_list(
+        my_building.get_dynamic_default_connections(my_simple_water_storage)
+    )
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

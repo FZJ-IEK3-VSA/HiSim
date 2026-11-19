@@ -15,7 +15,7 @@ from hisim.components import building
 from hisim.components import air_conditioner
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.config import ComponentID, SizingContext
+from hisim.config import ComponentID, SizingContext, concrete
 from hisim.setup_rules.kinds import SetupKind
 
 
@@ -172,6 +172,10 @@ def setup_function(
         prediction_horizon=None,
     )
     my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
+    # The inverter stands in the building's technical room.
+    my_photovoltaic_system_config = my_photovoltaic_system_config.resolve(
+        SizingContext(technical_room_location=concrete(my_building_config.technical_room_location))
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

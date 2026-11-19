@@ -80,9 +80,18 @@ class InputItemWriter:
         """
         feed_labels = set(observed.feed_labels())
         wires = [wire for wire in self.recorded.wires_into(observed.name) if wire not in self.written_at_source]
-        bare = self._bare_sources(observed, [wire for wire in wires if wire.target_input not in feed_labels])
+        static_wires = [wire for wire in wires if wire.target_input not in feed_labels]
+        bare = self._bare_sources(observed, static_wires)
+        transfers = self._bare_transfer_sources(observed, [wire for wire in wires if wire.target_input in feed_labels])
+        static_sources = {wire.source_component for wire in static_wires}
+        # A source whose feeds are the component's own transfers is written bare when its static wires are bare too,
+        # or when it sends none: one bare item states both kinds of default connection.
+        transfer_bare = [source for source in transfers if source in bare or source not in static_sources]
         items: List[AnyInputItem] = [DefaultInputs(source=source) for source in bare]
+        items.extend(DefaultInputs(source=source) for source in transfer_bare if source not in bare)
         for wire in wires:
+            if wire.source_component in transfer_bare:
+                continue
             if wire.target_input in feed_labels:
                 items.append(self._feed(observed, wire))
             elif wire.source_component not in bare:
@@ -240,6 +249,38 @@ class InputItemWriter:
             if declared and len(declared) == len(pairs) and set(declared) == set(pairs):
                 bare.append(source)
         return bare
+
+    def _bare_transfer_sources(self, observed: ObservedComponent, feed_wires: Sequence[ResolvedWire]) -> List[str]:
+        """Names the sources whose feeds are exactly the transfers this physics component declares from them.
+
+        The comparison is over the source outputs read: the feeds arriving from a source must read exactly the
+        outputs :attr:`ObservedComponent.transfer_defaults` names for it, each at the monitored-only weight and
+        without a back-channel. For example, a building's feed of ``SimpleHotWaterStorage.HeatToHeatedZoneInWatt``
+        is written as the bare item ``SimpleHotWaterStorage``, which a file's loader expands to the same feed.
+        Sources are answered in the order their first feed appears.
+
+        Args:
+            observed: The consuming component, carrying its transfers.
+            feed_wires: The wires arriving at it that landed on a grown port.
+
+        Returns:
+            The source names whose feeds may be written as a bare item.
+        """
+        if not observed.transfer_defaults:
+            return []
+        arriving: Dict[str, List[str]] = {}
+        plain: Dict[str, bool] = {}
+        for wire in feed_wires:
+            feed = next(entry for entry in observed.feeds if entry.port_label == wire.target_input)
+            arriving.setdefault(wire.source_component, []).append(wire.source_output)
+            plain[wire.source_component] = plain.get(wire.source_component, True) and (
+                feed.weight == self.MEASURED_ONLY_WEIGHT and (observed.name, feed.port_label) not in self.dispatch_of
+            )
+        return [
+            source
+            for source, outputs in arriving.items()
+            if plain[source] and sorted(outputs) == sorted(observed.transfer_defaults.get(source, ()))
+        ]
 
     def _explicit(self, wire: ResolvedWire) -> ExplicitWire:
         """Writes one wire out in full, naming both of its ports.

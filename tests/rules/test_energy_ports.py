@@ -259,7 +259,7 @@ class TestReceiverUnambiguous:
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", production) is not None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", None) is None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", EnergyPort(lt.EnergyRole.PRODUCTION, lt.EnergyBalanceCarrier.ELECTRICITY)) is None
-        outdoors = EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING, environment=lt.EnvironmentNode.OUTDOORS)
+        outdoors = EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS)
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", outdoors) is None
         assert ReceiverUnambiguous.ambiguity(wiring, "Source", "Heat", EnergyPort(lt.EnergyRole.CONSUMPTION, SPACE_HEATING)) is None
 
@@ -321,14 +321,16 @@ class TestRoomHeatNeedsReceiver:
 
     def test_a_port_that_names_its_environment_is_not_affected(self) -> None:
         """Catches the rule refusing heat whose boundary node takes it."""
-        assert not RoomHeatNeedsReceiver().check(Rig.occupancy(environment=lt.EnvironmentNode.OUTDOORS))
+        assert not RoomHeatNeedsReceiver().check(Rig.occupancy(environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS))
 
     @pytest.mark.parametrize(("kind", "refused"), [("demo", False), ("residential", True)])
     def test_the_demo_twin_without_a_building_passes_as_a_demo_only(self, tmp_path: Path, kind: str, refused: bool) -> None:
         """Catches the rule missing the real occupancy's ports when a file is built, or refusing the demo it waives.
 
         The twin of ``system_setups/dynamic_components.py`` runs residents, PV, batteries and fuel cells without a
-        building; declared ``residential``, its residents' two room-heat outputs are refused.
+        building; declared ``residential``, its residents' two room-heat outputs, each battery's heat into the heated
+        zone and the PV inverter's are refused. The batteries and the inverter stand outdoors, but the rule is
+        structural: the output declares the port in every location, so nothing reads it.
         """
         twin = Path(__file__).resolve().parents[2] / "energy_systems" / "dynamic_components.energy_system.yaml"
         text = twin.read_text(encoding="utf-8")
@@ -339,7 +341,13 @@ class TestRoomHeatNeedsReceiver:
         findings = SetupRuleCommands(SetupRuleRegistry.collect()).findings_of(declared, RuleStage.BUILD)[-1]
 
         assert findings.subject == "BuiltSystem"
-        expected = [("EP-06", "UTSPConnector", output) for output in sorted(Rig.OCCUPANCY_OUTPUTS)] if refused else []
+        expected = (
+            [("EP-06", battery, "HeatToHeatedZoneInWatt") for battery in ("Battery1", "Battery2")]
+            + [("EP-06", "PVSystem", "HeatToHeatedZoneInWatt")]
+            + [("EP-06", "UTSPConnector", output) for output in sorted(Rig.OCCUPANCY_OUTPUTS)]
+            if refused
+            else []
+        )
         assert codes_and_places(findings.faults) == expected
 
     def test_it_waits_for_the_input_ports_to_pair(self) -> None:
@@ -350,7 +358,7 @@ class TestRoomHeatNeedsReceiver:
         ("port", "releases"),
         [
             (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT), True),
-            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=lt.EnvironmentNode.OUTDOORS), False),
+            (EnergyPort(lt.EnergyRole.PRODUCTION, ROOM_HEAT, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS), False),
             (EnergyPort(lt.EnergyRole.LOSS, ROOM_HEAT), False),
             (EnergyPort(lt.EnergyRole.PRODUCTION, SPACE_HEATING), False),
             (None, False),

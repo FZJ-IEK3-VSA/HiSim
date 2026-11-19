@@ -46,7 +46,7 @@ class HotPathScan:
     #:   never per pass, and names the weather gap that caused a NaN.
     EXCEPTIONS: ClassVar[FrozenSet[Tuple[str, str]]] = frozenset(
         {
-            ("hisim/components/generic_pv_system/calculation.py", "simulate_sandia"),
+            ("hisim/components/generic_pv_system/calculation.py", "dc_and_ac_power_ratios"),
             ("hisim/components/generic_pv_system/calculation.py", "simulate_cec"),
             ("hisim/components/solar_thermal_system.py", "plane_of_array_irradiance_w_m2"),
             ("hisim/components/building/window.py", "calc_solar_heat_gains"),

@@ -331,7 +331,12 @@ component's source. A stage directory whose `economic_inputs.json` predates the 
 (renovisorissues #73): `min` the earliest world, `max` the latest (`null` as soon as one world never
 pays back within the horizon, `null` reading as later than every year), `best` the central world.
 Which world pays back first depends on whether the reference's energy bill or the plan's investment
-dominates the uncertainty, so the band is never read off the LOW and HIGH slots by position.
+dominates the uncertainty, so the band is never read off the LOW and HIGH slots by position. A
+world's payback year is the first year from which its cumulative discounted difference
+(`cumulative_delta[].discounted_in_euro`) stays at or below zero until the horizon (schema version 9,
+renovisorissues #102): a difference that rises above zero again moves the year to its last return,
+one that ends above zero gives `null`, so a world with a positive `npv_delta_in_euro` never states a
+year, and year 0 is a valid value for a plan no dearer than the reference from the start.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

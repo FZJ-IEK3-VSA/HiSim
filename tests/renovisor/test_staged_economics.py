@@ -647,6 +647,21 @@ class TestTheEquipmentTheHouseAlreadyHas:
         reference = {row["subject"] for row in document["reference"]["by_subject"]}
         assert "hot_water_tank_and_pipe_insulation" not in reference
 
+    def test_the_unpriced_lagging_withholds_the_payback(self, document) -> None:
+        """A plan that buys an unpriced measure states no payback year and names it (renovisorissues #87).
+
+        The lagging has no price anywhere (hisim-5j3h), so the package's investment is unknown, not the sum of its
+        priced rows; the comparison says so instead of stating a year over part of it.
+        """
+        comparison = document["comparison"]
+        assert comparison["discounted_payback_year"] == {"min": None, "best": None, "max": None}
+        reason = comparison["discounted_payback_year_null_reason"]
+        assert reason["code"] == "unpriced_subjects"
+        assert "hot_water_tank_and_pipe_insulation" in reason["unpriced_subjects"]
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        for subject in reason["unpriced_subjects"]:
+            assert rows[subject]["unpriced"] is True and rows[subject]["measure_id"] is not None
+
     def test_every_measure_a_stage_carries_out_has_a_row(self, document) -> None:
         """What the document refuses to be written without, checked on the written file."""
         named = {row["measure_id"] for row in document["plan"]["by_subject"]}

@@ -23,6 +23,7 @@ from hisim.components.weather import LocationEnum, WeatherConfig
 from hisim.config import AUTO, ConfigSizingError, SizingContext
 from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.loader import load_energy_system
+from hisim.loadtypes import InstallationLocation
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"
@@ -141,6 +142,7 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 
     pv = PVSystemConfig.preset_rooftop("PVSystem")
     pv.power_in_watt = 10000.0
+    pv.installation_location = InstallationLocation.UNHEATED_SPACE
     building = BuildingConfig.preset_german_single_family_home("Building")
 
     assert Keys.of(Keys.sized_from(pv, weather_identity=aachen)) != Keys.of(Keys.sized_from(pv, weather_identity=seville))

@@ -470,6 +470,9 @@ class DeviceEnergySpecs:
         # device, or the arithmetic of one. The energy they refer to is metered at the device
         # that follows the instruction, and counting both would count it twice.
         "L2GenericEnergyManagementSystem": (),
+        # The hplib heat pump's space-heating controller publishes its own need, the electricity it would run the heat
+        # pump at without the energy manager's raise: a signal, metered at the heat pump.
+        "MoreAdvancedHeatPumpHPLibControllerSpaceHeating": (),
         "FuelCellController": (),
         "L1Controller": (),
         "PTXController": (),

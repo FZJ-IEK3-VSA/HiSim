@@ -552,7 +552,7 @@ class TestTheSemanticChecks:
     def test_a_non_condensing_boiler_is_refused_above_its_own_ceiling(
         self, generator: str, installation_year: Any, ceiling_in_percent: float
     ) -> None:
-        """Owner decision of 2026-10-21: above its ceiling the boiler's curve exceeds 1 on the NCV, its booking basis.
+        """Owner decision of 2026-10-21: above its ceiling the boiler's curve exceeds 1 on the NCV, its curve basis.
 
         The ceiling the message names (rounded down to a hundredth) passes, a hundredth more is refused, and the
         frontend's 90 % default is refused for every one of them but oil, whose ceiling is 90.49 %.
@@ -581,7 +581,7 @@ class TestTheSemanticChecks:
 
     @pytest.mark.parametrize("generator", ["condensing_gas_heating", "condensing_oil_heating", "hydrogen_heating"])
     def test_a_condensing_boiler_is_left_to_its_build(self, generator: str) -> None:
-        """Owner decision of 2026-10-21: a boiler booked on the GCV is refused above its ceiling by its build only."""
+        """Owner decision of 2026-10-21: a boiler whose curve is on the GCV is refused above its ceiling by its build only."""
         document = mockup()
         document["measures"] = []
         document["house"]["heating"] = {"type_of_system": generator, "seasonal_efficiency_in_percent": 96.5}

@@ -231,8 +231,9 @@ def check_file(
         results, f"{buffer} - {SimpleHotWaterStorage.ThermalEnergyFromHeatDistribution}"
     )
     loss_in_watt_hour = (
-        BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.StandbyHeatLoss}") * hours_per_step
-    )
+        BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.HeatLossInWatt}")
+        + BufferTwins.column(results, f"{buffer} - {SimpleHotWaterStorage.HeatToHeatedZoneInWatt}")
+    ) * hours_per_step
     stored_in_watt_hour = BufferTwins.column(
         results, f"{buffer} - {SimpleHotWaterStorage.ThermalEnergyIncreaseInStorage}"
     )

@@ -263,7 +263,7 @@ class StorageHeatBalance:
 
     @staticmethod
     def key(storage_name: str, field_name: str) -> str:
-        """Return the yearly-result key of a storage's heating output, e.g. ``DHWStorage|Heating|StandbyHeatLoss``.
+        """Return the yearly-result key of a storage's heating output, e.g. ``DHWStorage|Heating|HeatLossInWatt``.
 
         Args:
             storage_name: The storage's configured name.
@@ -352,10 +352,18 @@ class StorageHeatBalance:
         """
         storage_class: Any
         storage_class, draw_field_name, draw_sign = cls.STORAGES[storage_name]
+        # the standby loss is on one of the two released-heat outputs, by where the storage stands; the other is 0
+        loss_powers_in_watt = [
+            loss + released
+            for loss, released in zip(
+                cls.values(result_dict, storage_name, storage_class.HeatLossInWatt),
+                cls.values(result_dict, storage_name, storage_class.HeatToHeatedZoneInWatt),
+            )
+        ]
         for charged, draw, loss_power_in_watt, stored in zip(
             cls.charged_in_watt_hour(result_dict, storage_name),
             cls.values(result_dict, storage_name, draw_field_name),
-            cls.values(result_dict, storage_name, storage_class.StandbyHeatLoss),
+            loss_powers_in_watt,
             cls.values(result_dict, storage_name, storage_class.ThermalEnergyIncreaseInStorage),
         ):
             drawn_in_watt_hour = draw_sign * draw
@@ -626,6 +634,7 @@ def run_cluster_house(
         SizingContext(
             roof_area_in_m2=my_building_information.roof_area_in_m2,
             weather_identity=my_weather_config.identity(),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -743,7 +752,10 @@ def run_cluster_house(
 
     # DHW storage configs
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_building_information.number_of_apartments,
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -763,7 +775,8 @@ def run_cluster_house(
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -809,7 +822,10 @@ def run_cluster_house(
 
     # Build Battery
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),))
+        SizingContext(
+            pv_peak_power_in_watt=(concrete(my_photovoltaic_system_config.power_in_watt),),
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,

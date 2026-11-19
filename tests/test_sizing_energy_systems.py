@@ -16,6 +16,7 @@ from hisim.components import (
 from hisim.components.more_advanced_heat_pump.heat_pump import MoreAdvancedHeatPumpHPLibConfig
 
 from hisim import log
+from hisim import loadtypes as lt
 from hisim import utils
 from hisim.config import SizingContext, concrete
 
@@ -149,7 +150,11 @@ def simulation_for_one_timestep(
     # No weather component in this sweep, so the weather identity -- which only enters the cache
     # key -- is a stand-in; the roof area is the fact under test.
     my_pv_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=my_residence_information.roof_area_in_m2, weather_identity="Aachen")
+        SizingContext(
+            roof_area_in_m2=my_residence_information.roof_area_in_m2,
+            weather_identity="Aachen",
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     # Set hplib
@@ -171,20 +176,28 @@ def simulation_for_one_timestep(
     my_simple_hot_water_storage_config.sizing_option = (
         simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
     )
+    # The sweep sizes volumes only, so where the vessels stand is stated rather than derived from the building.
     my_simple_hot_water_storage_config = my_simple_hot_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_hplib_config.set_thermal_output_power_in_watt),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
         )
     )
 
     # Set Battery
     my_battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-        SizingContext(pv_peak_power_in_watt=(concrete(my_pv_config.power_in_watt),))
+        SizingContext(
+            pv_peak_power_in_watt=(concrete(my_pv_config.power_in_watt),),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     # Set DHW Storage
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_residence_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_residence_information.number_of_apartments,
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
 
     # Energy system sizes

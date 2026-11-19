@@ -32,6 +32,7 @@ from hisim.setup_rules.results import (
     EnergyBalanceError,
     EnergyBalanceRule,
     Finite,
+    HeatingOnlyLoopNeverCools,
     LinkCloses,
     NonFiniteColumn,
     NonFiniteResultsError,
@@ -176,7 +177,7 @@ class TestPortFinite:
         findings = SetupRuleRegistry.collect().findings(RuleStage.AFTER_RUN, fft.AfterRunRules.subject(report(columns)), SetupKind.RESIDENTIAL)
 
         assert [fault.code for fault in findings.faults] == ["AR-03"]
-        assert {skip.code for skip in findings.skipped} == {"AR-04", "AR-05", "AR-06", "AR-09", "AR-10", "MT-01", "MT-02"}
+        assert {skip.code for skip in findings.skipped} == {"AR-04", "AR-05", "AR-06", "AR-09", "AR-10", "AR-11", "MT-01", "MT-02"}
         assert findings.violation_type is EnergyBalanceError
 
 
@@ -337,7 +338,7 @@ class TestPortLinked:
         """Catches energy drawn to nowhere, and a fault for a port its carrier's boundary node takes."""
         unread = EnergyPort(CONSUMPTION, lt.EnergyBalanceCarrier.ELECTRICITY)
         (fault,) = PortLinked().check(fft.AfterRunRules.subject(report([("Pump", "Power", lt.Units.KWH, unread, [0.1])])))
-        outdoors = EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.OUTDOORS)
+        outdoors = EnergyPort(PRODUCTION, SH, environment=lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS)
 
         assert codes_and_places([fault]) == [("AR-09", "Pump", "Power")]
         assert "the energy port Pump.Power (consumption, electricity, 0.1 kWh) has no peer" in fault.message
@@ -388,13 +389,44 @@ class TestComponentDeclared:
         assert not ComponentDeclared.ENFORCED
 
 
+class TestHeatingOnlyLoopNeverCools:
+    """``AR-11``: no supplier of a loop that may not cool removes heat from its water beyond the noise."""
+
+    @staticmethod
+    def boiler_cooling_the_tank(return_temperature_in_celsius: float, may_cool: bool) -> EnergyBalanceReport:
+        """The rig's boiler and tank, the tank's return at ``return_temperature_in_celsius`` against the 60 °C supply."""
+        return LoopRig.cooling(return_temperature_in_celsius, may_cool=may_cool)
+
+    def test_a_heating_only_loop_that_cools_is_a_fault_at_the_supplier_s_flow(self) -> None:
+        """Catches cooling booked on a loop whose members do not all allow it, as the hot-water loop showed (hisim-false-cooling-edge-7130)."""
+        (fault,) = HeatingOnlyLoopNeverCools().check(fft.AfterRunRules.subject(self.boiler_cooling_the_tank(70.0, may_cool=False)))
+
+        assert codes_and_places([fault]) == [("AR-11", "Boiler", "Flow")]
+        assert fault.message.startswith(
+            "the loop Boiler.space_heating heats only (Boiler.space_heating, Tank.space_heating say may_cool=False), and its "
+            "supplier Boiler removed heat from the water in 1 steps, first in step 0 (2021-01-01T00:00:00), up to 4,180 W"
+        )
+
+    def test_a_loop_that_may_cool_or_noise_below_one_watt_is_no_fault(self) -> None:
+        """Catches a refused cooling loop, or convergence noise refused as cooling."""
+        assert not HeatingOnlyLoopNeverCools().check(fft.AfterRunRules.subject(self.boiler_cooling_the_tank(70.0, may_cool=True)))
+        # 0.1 kg/s over 2e-3 K is 0.836 W: noise
+        assert not HeatingOnlyLoopNeverCools().check(fft.AfterRunRules.subject(self.boiler_cooling_the_tank(60.002, may_cool=False)))
+
+    def test_its_faults_raise_energy_balance_error(self) -> None:
+        """Catches a heating-only loop that cooled passing the run."""
+        with pytest.raises(EnergyBalanceError, match="AR-11"):
+            fft.AfterRunRules.refuse(self.boiler_cooling_the_tank(70.0, may_cool=False))
+        assert HeatingOnlyLoopNeverCools.ENFORCED and HeatingOnlyLoopNeverCools.REQUIRES == frozenset({"AR-03"})
+
+
 class TestTheFamily:
     """What the rules of the balance share: the error they raise and the one balance they read."""
 
     @staticmethod
     def linked_vessel() -> EnergyBalanceReport:
-        """A vessel that closes and whose heat comes from and goes to the outdoors, so every port has a peer."""
-        outdoors = lt.EnvironmentNode.OUTDOORS
+        """A vessel that closes and whose heat comes from and goes to the boundary "heat loss to outdoors", so every port has a peer."""
+        outdoors = lt.EnvironmentNode.HEAT_LOSS_TO_OUTDOORS
         heat_in, heat_out, loss, stored = vessel(4000.0, 700.0, 200.0, 250.0)
         return report(
             [
@@ -407,7 +439,10 @@ class TestTheFamily:
 
     def test_the_balance_rules_raise_energy_balance_error(self) -> None:
         """Catches an ``except EnergyBalanceError`` (the assembly harness has one) that a balance fault would slip past."""
-        rules = (ColumnsReadable, NoPortOnANode, PortFinite, ComponentBalanceCloses, LinkCloses, LoopFaults, PortLinked, ComponentDeclared)
+        rules = (
+            ColumnsReadable, NoPortOnANode, PortFinite, ComponentBalanceCloses, LinkCloses, LoopFaults, PortLinked, ComponentDeclared,
+            HeatingOnlyLoopNeverCools,
+        )
         assert all(rule.VIOLATION is EnergyBalanceError for rule in rules)
         assert issubclass(EnergyBalanceError, ValueError) and EnergyBalanceRule.VIOLATION is EnergyBalanceError
 

@@ -264,7 +264,10 @@ def check_tank_closure(results: pd.DataFrame) -> None:
     primary_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromHeatGenerator)
     secondary_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyFromSecondaryHeatGenerator)
     tap_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyConsumptionDHW)
-    loss_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.StandbyHeatLoss) * seconds_per_timestep / 3600.0
+    loss_in_watt_hour = (
+        DhwTwins.column(results, tank, SimpleDHWStorage.HeatLossInWatt)
+        + DhwTwins.column(results, tank, SimpleDHWStorage.HeatToHeatedZoneInWatt)
+    ) * seconds_per_timestep / 3600.0
     stored_in_watt_hour = DhwTwins.column(results, tank, SimpleDHWStorage.ThermalEnergyIncreaseInStorage)
     residual_in_watt_hour = (
         primary_in_watt_hour + secondary_in_watt_hour - tap_in_watt_hour - loss_in_watt_hour - stored_in_watt_hour

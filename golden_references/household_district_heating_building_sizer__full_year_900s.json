@@ -270,7 +270,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1176.69
+    "value": 1179.09
   },
   "BUI1.Costs.Energy grid costs for simulated period": {
     "building": "BUI1",
@@ -278,7 +278,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": -282.977441
+    "value": -280.57744100000014
   },
   "BUI1.Costs.Investment costs for equipment only heatpump per simulated period": {
     "building": "BUI1",
@@ -366,7 +366,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1674.962559
+    "value": 1677.362559
   },
   "BUI1.Costs.Total costs only heatpump for simulated period": {
     "building": "BUI1",
@@ -382,7 +382,7 @@
     "source": null,
     "tag": "Costs",
     "unit": "EUR",
-    "value": 1674.962559
+    "value": 1677.362559
   },
   "BUI1.District Heating.CAPEX - CO2 Footprint (DistrictHeating)": {
     "building": "BUI1",
@@ -427,7 +427,7 @@
     },
     "tag": "District Heating",
     "unit": "kWh",
-    "value": 3286.3
+    "value": 3315.2
   },
   "BUI1.District Heating.Energy consumption for space heating (DistrictHeating)": {
     "building": "BUI1",
@@ -457,7 +457,7 @@
     },
     "tag": "District Heating",
     "unit": "kg",
-    "value": 3980.6200000000003
+    "value": 3988.712000000001
   },
   "BUI1.District Heating.OPEX - Energy costs (DistrictHeating)": {
     "building": "BUI1",
@@ -472,7 +472,7 @@
     },
     "tag": "District Heating",
     "unit": "EUR",
-    "value": 1176.699705
+    "value": 1179.091758
   },
   "BUI1.District Heating.OPEX - Maintenance costs (DistrictHeating)": {
     "building": "BUI1",
@@ -502,7 +502,7 @@
     },
     "tag": "District Heating",
     "unit": "kg",
-    "value": 3994.2700000000004
+    "value": 4002.362000000001
   },
   "BUI1.District Heating.Total Costs (CAPEX for simulated period + OPEX fuel and maintenance) (DistrictHeating)": {
     "building": "BUI1",
@@ -517,7 +517,7 @@
     },
     "tag": "District Heating",
     "unit": "EUR",
-    "value": 1778.4397050000002
+    "value": 1780.8317580000003
   },
   "BUI1.District Heating.Total energy consumption (DistrictHeating)": {
     "building": "BUI1",
@@ -532,7 +532,7 @@
     },
     "tag": "District Heating",
     "unit": "kWh",
-    "value": 14216.5
+    "value": 14245.400000000001
   },
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid (ElectricityMeter)": {
     "building": "BUI1",
@@ -730,7 +730,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 3980.6
+    "value": 3988.7
   },
   "BUI1.Emissions.Total CO2 emissions for simulated period": {
     "building": "BUI1",
@@ -738,7 +738,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 4505.8817
+    "value": 4513.9817
   },
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": {
     "building": "BUI1",
@@ -754,7 +754,7 @@
     "source": null,
     "tag": "Emissions",
     "unit": "kg",
-    "value": 4505.8817
+    "value": 4513.9817
   },
   "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_4 (L2EMSElectricityController)": {
     "building": "BUI1",
@@ -814,7 +814,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kg",
-    "value": 3980.6
+    "value": 3988.7
   },
   "BUI1.Fuel Meter.OPEX - Energy costs (FuelMeter)": {
     "building": "BUI1",
@@ -829,7 +829,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "EUR",
-    "value": 1176.69
+    "value": 1179.09
   },
   "BUI1.Fuel Meter.OPEX - Maintenance costs (FuelMeter)": {
     "building": "BUI1",
@@ -859,7 +859,7 @@
     },
     "tag": "Fuel Meter",
     "unit": "kWh",
-    "value": 14216.43
+    "value": 14245.35
   },
   "BUI1.General.Grid injection of electricity": {
     "building": "BUI1",
@@ -883,7 +883,7 @@
     "source": null,
     "tag": "General",
     "unit": "kWh",
-    "value": 14727.800201174245
+    "value": 14756.720201174245
   },
   "BUI1.General.Ratio between Building production and total consumption": {
     "building": "BUI1",
@@ -987,7 +987,7 @@
     "source": null,
     "tag": "General",
     "unit": "%",
-    "value": 24.96
+    "value": 24.93
   },
   "BUI1.General.Windturbine production": {
     "building": "BUI1",
@@ -1205,7 +1205,7 @@
     },
     "tag": "Storage For Domestic Hot Water",
     "unit": "kWh",
-    "value": 243.1
+    "value": 272.6
   },
   "BUI1.Storage For Domestic Hot Water.Unmet DHW heat demand (DHWStorage)": {
     "building": "BUI1",
@@ -1220,6 +1220,6 @@
     },
     "tag": "Storage For Domestic Hot Water",
     "unit": "kWh",
-    "value": 4.1
+    "value": 4.7
   }
 }

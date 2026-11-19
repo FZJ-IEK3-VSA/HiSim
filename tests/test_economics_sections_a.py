@@ -926,7 +926,7 @@ class TestThePaybackSentence:
         """The weakest case a reader can still act on, and it has to be marked as weak."""
         assert payback_interval_sentence(6, None, None) == (
             "Payback lands in year 6 at the earliest, but not in the central world: there the "
-            "curve never reaches zero within the horizon."
+            "curve does not stay at or above zero until the horizon."
         )
 
     def test_an_open_latest_end_is_spelled_out(self):

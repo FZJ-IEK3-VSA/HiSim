@@ -87,6 +87,10 @@ class HeatPumpHouse:
         heating["assembly"] = "heating/air_source_heat_pump_space_heating_only"
         heating["optional-bind"] = {"ems_modifier": "control"}
         del document["imports"]["dhw"]
+        # without the cylinder the building has no cylinder's heat to read
+        building = document["components"]["Building"]
+        building["inputs"] = [item for item in building["inputs"] if item != {"$port": "cylinder_heat"}]
+        del building["ports"]["cylinder_heat"]
         return cls.text(document)
 
     @classmethod
@@ -110,6 +114,15 @@ class HeatPumpHouse:
 def light_house(*lines: str) -> str:
     """A house of the real weather station and residents with the given imports; it builds without a building."""
     return site(Real.WEATHER, Real.OCCUPANCY) + imports(*lines)
+
+
+def battery_house(*lines: str, batteries: Tuple[str, ...] = ("battery",)) -> str:
+    """A house of the real weather station, residents and a building reading the given batteries, with the imports.
+
+    A battery stands where the building's technical room is, so a built battery needs a building beside it
+    (:meth:`Real.building_beside_batteries`).
+    """
+    return site(Real.WEATHER, Real.OCCUPANCY, Real.building_beside_batteries(*batteries)) + imports(*lines)
 
 
 def build(text: str, directory: Path) -> EnergySystemFile:
@@ -153,7 +166,9 @@ def test_the_metered_directly_shape_writes_exactly_the_twins_feeds(tmp_path: Pat
 def test_one_device_each_gives_the_class_defaults_and_a_second_battery_follows_the_first(tmp_path: Path) -> None:
     """The weights are the controller class's own (DEFAULT_WEIGHTS); the k-th further battery gets default + k."""
     batteries = "battery: {assembly: storage/battery, instances: {garage: {}, cellar: {}}}"
-    model = build(light_house(Real.PV, batteries, Real.CONTROL, Real.GRID), tmp_path)
+    model = build(
+        battery_house(Real.PV, batteries, Real.CONTROL, Real.GRID, batteries=("battery.garage", "battery.cellar")), tmp_path
+    )
     ranked = [(feed.source, feed.weight) for feed in feeds(model, "control-EMS") if feed.weight != MEASURED]
     defaults = L2GenericEnergyManagementSystem.DEFAULT_WEIGHTS
     assert ranked == [
@@ -294,7 +309,11 @@ def test_a_declared_output_the_built_source_does_not_have_is_no_candidate(tmp_pa
     assert [(feed.source, feed.output) for feed in feeds(model, "control-EMS")] == [
         ("UTSPConnector", "ElectricalPowerConsumption"),
         ("pv-pv_system-PVSystem", "ElectricityOutput"),
+        # the PV mode's signals (#1237): the space-heating controller's own need, the heat pump's full and minimum load
+        ("heating-ControllerSH", "OwnNeedElectricalPowerInWatt"),
         ("heating-HeatPump", "ElectricalInputPowerSH"),
+        ("heating-HeatPump", "ElectricalPowerAtFullLoadSpaceHeatingInWatt"),
+        ("heating-HeatPump", "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt"),
         ("battery-battery-Battery", "AcBatteryPowerUsed"),
         ("battery-battery-Battery", "MaximumChargingPowerInWatt"),
         ("battery-battery-Battery", "MinimumChargingPowerInWatt"),
@@ -419,9 +438,9 @@ components:
 @pytest.mark.parametrize(
     ("text", "fragment"),
     [
-        (light_house(Real.PV, "battery: {assembly: storage/battery}"), "is ranked by no controller"),
+        (battery_house(Real.PV, "battery: {assembly: storage/battery}"), "is ranked by no controller"),
         (
-            light_house(
+            battery_house(
                 Real.PV,
                 "battery: {assembly: storage/battery}",
                 Real.CONTROL,
@@ -452,12 +471,12 @@ def test_a_controllable_output_is_actuated_by_exactly_the_one_controller_it_bind
 def test_derived_port_names_replace_the_address_separator_and_a_collision_is_refused(tmp_path: Path) -> None:
     """``-`` becomes ``_`` in a derived port; a site entry named like the result collides (EF-32)."""
     assert NameSyntax.port_name_part("pv-east-PVSystem") == "pv_east_PVSystem"
-    house = light_house(Real.PV, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID)
+    house = battery_house(Real.PV, "battery: {assembly: storage/battery}", Real.CONTROL, Real.GRID)
     ems = build_text(house, tmp_path / "a").wired.component_of("control-EMS")
     assert "DispatchTobattery_Battery_LoadingPowerInput" in [output.field_name for output in ems.outputs]
     roof = (
         "pv_PVSystem: {class: hisim.components.generic_pv_system.PVSystem, preset: rooftop, "
-        "config: {power_in_watt: 3000}, inputs: [Weather]}"
+        "config: {power_in_watt: 3000, installation_location: OUTDOORS}, inputs: [Weather]}"
     )
     grid = "grid: {assembly: supply/electricity_grid, observes: [{component_type: PV}]}"
     message = refusal(site(Real.WEATHER, Real.OCCUPANCY, roof) + imports(Real.PV, grid), tmp_path / "b")
@@ -504,13 +523,18 @@ def test_the_heat_pump_house_runs_a_day_with_the_balance_closed_and_its_record_r
     assert [(item["from"], item["weight"]) for item in written] == [
         ("UTSPConnector.ElectricalPowerConsumption", weights[lt.ComponentType.RESIDENTS]),
         ("pv-pv_system-PVSystem.ElectricityOutput", MEASURED),
+        # the PV mode's signals (#1237), measured only: the controllers' own need and charge, the heat pump's range
+        ("heating-ControllerSH.OwnNeedElectricalPowerInWatt", MEASURED),
+        ("heating-ControllerDHW.ChargesWithoutRaise", MEASURED),
         ("heating-HeatPump.ElectricalInputPowerSH", weights[lt.ComponentType.HEAT_PUMP_BUILDING]),
         ("heating-HeatPump.ElectricalInputPowerDHW", weights[lt.ComponentType.HEAT_PUMP_DHW]),
+        ("heating-HeatPump.ElectricalPowerAtFullLoadSpaceHeatingInWatt", MEASURED),
+        ("heating-HeatPump.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt", MEASURED),
         ("battery-battery-Battery.AcBatteryPowerUsed", weights[lt.ComponentType.BATTERY]),
         ("battery-battery-Battery.MaximumChargingPowerInWatt", MEASURED),
         ("battery-battery-Battery.MinimumChargingPowerInWatt", MEASURED),
     ]
-    battery = written[4]
+    battery = written[8]
     assert (battery["component_type"], battery["tags"], battery["dispatch"]["target_input"]) == (
         "BATTERY",
         ["ELECTRICITY_CONSUMPTION_EMS_CONTROLLED"],

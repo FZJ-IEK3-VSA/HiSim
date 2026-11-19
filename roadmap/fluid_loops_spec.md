@@ -397,7 +397,11 @@ the building to the HDS.
 July week of the heat-pump twin: the supply 3.9e-8 K below the tank's step mean, −4.4e-5 W, booked as 1.1e-8 kWh of
 `COOLING`. The split by sign uses the energy check's tolerance, `max(1 W, 0.1 %)` (D17): a supplier heat within it is
 booked as the loop's carrier, never as a cooling step, and the heating-only check (stage 2) applies the same bound.
-Built with stage 2.
+Built with stage 2. *Built 2026-11 (bead hisim-false-cooling-edge-7130) in the balance rather than in the post-run
+check: `DeclaredPorts.book_by_the_supplier_s_sign` books a negative supplier heat of at most 1 W per step on the
+loop's carrier with its sign, and the heating-only check is the setup rule after the run `AR-11`
+(`heating-only-loop-never-cools`, `hisim/setup_rules/results.py`), judged per loop by the ends that resolve to its
+three outputs.*
 
 **A loop that may cool says so.** A loop whose every member's `FluidLoop` says `may_cool=True` may run either way. On
 any other loop a step in which the supplier removed heat fails the run, from stage 2 on (D24):

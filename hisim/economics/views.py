@@ -1730,14 +1730,15 @@ def _fold_small_flows(flows: List[ActorFlow]) -> Tuple[List[ActorFlow], int, flo
 # ============================================================================ liquidity fan
 
 def band_zero_crossings(series_by_slot: Mapping[Any, List[float]]) -> Dict[Any, Optional[int]]:
-    """Return the first non-negative year of each slot's series, or None where it never crosses.
+    """Return, per slot, the first year from which the series stays at or above zero to the horizon, or None.
 
-    Calls `results.discounted_payback_year` per slot, so the chart and the printed payback year use the same crossing
-    rule (year 0 excluded, first crossing only). Keys are the caller's: `Slot` members or the
-    `"low"/"best_estimate"/"high"` strings of a `VariantComparison`.
+    Calls `results.discounted_payback_year` per slot, so the chart and the printed payback year use the same rule
+    (year 0 counts; a later fall below zero moves the year to the last re-entry; a series that ends below zero gives
+    None). Keys are the caller's: `Slot` members or the `"low"/"best_estimate"/"high"` strings of a
+    `VariantComparison`.
 
     Returns:
-        One crossing year per input key; None means no crossing within the horizon.
+        One payback year per input key; None means the series does not end at or above zero.
     """
     return {key: discounted_payback_year(series) for key, series in series_by_slot.items()}
 

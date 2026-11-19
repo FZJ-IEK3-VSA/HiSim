@@ -119,6 +119,11 @@ jobs:
     # class ends up with an 'Any' base and accepts any attribute. Pure AST, no deps.
     - name: Check config attribute accesses
       run: python scripts/check_config_attrs.py
+    # The module graph's ratchet baseline per bead and per edge, for the job summary only: the check itself is
+    # tests/test_module_graph.py (marker base). Static like the step above; PyYAML comes with the test image.
+    - name: Report the module graph baseline
+      if: always()
+      run: python scripts/module_graph.py report >> "$GITHUB_STEP_SUMMARY"
     # Kept on failure too: a job killed for running out of memory is the one
     # whose measurement matters most.
     - name: Report the resource usage

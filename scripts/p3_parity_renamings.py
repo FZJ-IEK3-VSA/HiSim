@@ -176,13 +176,18 @@ class DeclaredPortRenamings:
                 "BatteryChargingPowerToEMSFromL1EVChargeControl_1"
             ),
             # The battery's realised charge or discharge, fed back so the controller sees what its
-            # own dispatch achieved. Four indices: no controlled heater (district heating, gas,
-            # hydrogen, pellets, wood chips), one (gas solar thermal), two (electric heating,
-            # heat pump) and three (heat pump plus solar thermal, and heat pump plus car).
+            # own dispatch achieved. Indices four to six: no controlled heater (district heating, gas,
+            # hydrogen, pellets, wood chips), one (gas solar thermal), two (electric heating). The
+            # heat-pump sizers feed the manager the heat pump's two PV-mode loads beside its two draws
+            # and the collector's pump, and the heat-pump sizer and the car sizer the space-heating
+            # controller's own need and the hot-water controller's own charge before them: nine (heat
+            # pump plus solar thermal), ten (heat pump) and eleven (heat pump plus car).
             "Input_Battery_AcBatteryPowerUsed_4": "AcBatteryPowerUsedFromBattery",
             "Input_Battery_AcBatteryPowerUsed_5": "AcBatteryPowerUsedFromBattery",
             "Input_Battery_AcBatteryPowerUsed_6": "AcBatteryPowerUsedFromBattery",
-            "Input_Battery_AcBatteryPowerUsed_7": "AcBatteryPowerUsedFromBattery",
+            "Input_Battery_AcBatteryPowerUsed_9": "AcBatteryPowerUsedFromBattery",
+            "Input_Battery_AcBatteryPowerUsed_10": "AcBatteryPowerUsedFromBattery",
+            "Input_Battery_AcBatteryPowerUsed_11": "AcBatteryPowerUsedFromBattery",
             # The two batteries of the dynamic-components example, which is the setup proving the
             # derived names stay distinct when one participant class appears twice.
             "Input_Battery1_AcBatteryPowerUsed_3": "AcBatteryPowerUsedFromBattery1",
@@ -190,15 +195,19 @@ class DeclaredPortRenamings:
             # The battery's two charging limits, measured only. The battery's default connections
             # list them right after its realised charge, so each sizer grows them at the two
             # indices that follow its 'Input_Battery_AcBatteryPowerUsed_<n>' above: n + 1 and
-            # n + 2 for n from four to seven.
+            # n + 2 for n from four to six and from nine to eleven.
             "Input_Battery_MaximumChargingPowerInWatt_5": "MaximumChargingPowerInWattFromBattery",
             "Input_Battery_MaximumChargingPowerInWatt_6": "MaximumChargingPowerInWattFromBattery",
             "Input_Battery_MaximumChargingPowerInWatt_7": "MaximumChargingPowerInWattFromBattery",
-            "Input_Battery_MaximumChargingPowerInWatt_8": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_10": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_11": "MaximumChargingPowerInWattFromBattery",
+            "Input_Battery_MaximumChargingPowerInWatt_12": "MaximumChargingPowerInWattFromBattery",
             "Input_Battery_MinimumChargingPowerInWatt_6": "MinimumChargingPowerInWattFromBattery",
             "Input_Battery_MinimumChargingPowerInWatt_7": "MinimumChargingPowerInWattFromBattery",
             "Input_Battery_MinimumChargingPowerInWatt_8": "MinimumChargingPowerInWattFromBattery",
-            "Input_Battery_MinimumChargingPowerInWatt_9": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_11": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_12": "MinimumChargingPowerInWattFromBattery",
+            "Input_Battery_MinimumChargingPowerInWatt_13": "MinimumChargingPowerInWattFromBattery",
             # The same limits of the dynamic-components example's two batteries, which that setup
             # wires after both CHPs.
             "Input_Battery1_MaximumChargingPowerInWatt_7": "MaximumChargingPowerInWattFromBattery1",
@@ -208,19 +217,59 @@ class DeclaredPortRenamings:
             # The two CHPs of the same example.
             "Input_CHP1_ElectricityOutput_5": "ElectricityOutputFromCHP1",
             "Input_CHP2_ElectricityOutput_6": "ElectricityOutputFromCHP2",
-            # The hplib heat pump's two controlled draws in the heat-pump sizers, and the same two
-            # one index later in the car sizer, where the car's charge control precedes them.
+            # The hplib heat pump's two controlled draws and its two PV-mode loads, measured only: at
+            # four to seven in the heat-pump plus solar-thermal sizer, which adds the heat pump before
+            # its controllers; at six to nine in the heat-pump sizer, where the space-heating
+            # controller's own need (four) and the hot-water controller's own charge (five) come
+            # first; and one index later in the car sizer, where the car's charge control precedes
+            # them all. The solar-thermal sizer feeds the two controllers' signals after the battery.
             "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_4": (
                 "ElectricalInputPowerSHFromMoreAdvancedHeatPumpHPLib"
             ),
             "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5": (
                 "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
             ),
-            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_5": (
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtFullLoadSpaceHeatingInWatt_6": (
+                "ElectricalPowerAtFullLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtMinimumLoadSpaceHeatingInWatt_7": (
+                "ElectricalPowerAtMinimumLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLibControllerSH_OwnNeedElectricalPowerInWatt_12": (
+                "OwnNeedElectricalPowerInWattFromMoreAdvancedHeatPumpHPLibControllerSH"
+            ),
+            "Input_HeatPumpControllerDHW_ChargesWithoutRaise_13": "ChargesWithoutRaiseFromHeatPumpControllerDHW",
+            "Input_MoreAdvancedHeatPumpHPLibControllerSH_OwnNeedElectricalPowerInWatt_4": (
+                "OwnNeedElectricalPowerInWattFromMoreAdvancedHeatPumpHPLibControllerSH"
+            ),
+            "Input_HeatPumpControllerDHW_ChargesWithoutRaise_5": "ChargesWithoutRaiseFromHeatPumpControllerDHW",
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_6": (
                 "ElectricalInputPowerSHFromMoreAdvancedHeatPumpHPLib"
             ),
-            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_6": (
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_7": (
                 "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtFullLoadSpaceHeatingInWatt_8": (
+                "ElectricalPowerAtFullLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtMinimumLoadSpaceHeatingInWatt_9": (
+                "ElectricalPowerAtMinimumLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLibControllerSH_OwnNeedElectricalPowerInWatt_5": (
+                "OwnNeedElectricalPowerInWattFromMoreAdvancedHeatPumpHPLibControllerSH"
+            ),
+            "Input_HeatPumpControllerDHW_ChargesWithoutRaise_6": "ChargesWithoutRaiseFromHeatPumpControllerDHW",
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_7": (
+                "ElectricalInputPowerSHFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_8": (
+                "ElectricalInputPowerDHWFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtFullLoadSpaceHeatingInWatt_9": (
+                "ElectricalPowerAtFullLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
+            ),
+            "Input_MoreAdvancedHeatPumpHPLib_ElectricalPowerAtMinimumLoadSpaceHeatingInWatt_10": (
+                "ElectricalPowerAtMinimumLoadSpaceHeatingInWattFromMoreAdvancedHeatPumpHPLib"
             ),
             # The resistive heater's two controlled draws in the electric-heating sizer.
             "Input_ElectricHeating_ElectricOutputShPower_4": "ElectricOutputShPowerFromElectricHeating",
@@ -230,7 +279,7 @@ class DeclaredPortRenamings:
             "Input_SolarThermalSystem_ElectricityConsumptionOutput_4": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
-            "Input_SolarThermalSystem_ElectricityConsumptionOutput_6": (
+            "Input_SolarThermalSystem_ElectricityConsumptionOutput_8": (
                 "ElectricityConsumptionOutputFromSolarThermalSystem"
             ),
         },
@@ -248,6 +297,23 @@ class DeclaredPortRenamings:
             "Input_CondensingGasBoiler_EnergyDemandDhw_1": "EnergyDemandDhwFromCondensingGasBoiler",
             "Input_CondensingHydrogenBoiler_EnergyDemandSh_0": "EnergyDemandShFromCondensingHydrogenBoiler",
             "Input_CondensingHydrogenBoiler_EnergyDemandDhw_1": "EnergyDemandDhwFromCondensingHydrogenBoiler",
+        },
+        # The building, which takes in the heat a device releases into its heated zone (device location, #1213):
+        # the PV inverter's heat (#1247) first, as the sizers add the PV system before the tanks, then the buffer's
+        # and the hot-water tank's standby heat, then the house battery's (#1233), all after the building's static
+        # inputs. The twins write these feeds as bare items, which test_p3_parity's cross-check accepts by their source.
+        "Building": {
+            "Input_PVSystem_HeatToHeatedZoneInWatt_15": "HeatToHeatedZoneInWattFromPVSystem",
+            # The tanks in the order a sizer adds them: the buffer first in the two solar-thermal sizers (16, 17), the
+            # hot-water tank first in the other sizers with a buffer (16, 17), the hot-water tank alone at 16 in the
+            # electric-heating and the district-heating sizer, which have no buffer.
+            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
+            "Input_SimpleHotWaterStorage_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromSimpleHotWaterStorage",
+            "Input_DHWStorage_HeatToHeatedZoneInWatt_16": "HeatToHeatedZoneInWattFromDHWStorage",
+            "Input_DHWStorage_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromDHWStorage",
+            # The house battery's heat after the tanks': 17 in the sizers without a buffer, 18 in the others.
+            "Input_Battery_HeatToHeatedZoneInWatt_17": "HeatToHeatedZoneInWattFromBattery",
+            "Input_Battery_HeatToHeatedZoneInWatt_18": "HeatToHeatedZoneInWattFromBattery",
         },
         # The fuel meter, which plays the same role for the solid-fuel and district-heating
         # sizers as the gas meter does for the gas ones.

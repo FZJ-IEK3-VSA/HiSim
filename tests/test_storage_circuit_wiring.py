@@ -19,6 +19,7 @@ from typing import List, Sequence, Union
 import pytest
 
 from hisim import component as cp
+from hisim import loadtypes as lt
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components.generic_district_heating import DistrictHeating, DistrictHeatingConfig
 from hisim.components.generic_electric_heating import ElectricHeating, ElectricHeatingConfig
@@ -64,7 +65,9 @@ class StorageWiring:
         Returns:
             The buffer.
         """
-        config = dataclasses.replace(SimpleHotWaterStorageConfig.preset_buffer("Buffer"), volume_heating_water_storage_in_liter=200.0)
+        config = dataclasses.replace(
+            SimpleHotWaterStorageConfig.preset_buffer("Buffer"), volume_heating_water_storage_in_liter=200.0, installation_location=lt.InstallationLocation.UNHEATED_SPACE
+        )
         # The constructor is wrapped by a timing decorator that mypy reads as returning Any.
         buffer: SimpleHotWaterStorage = SimpleHotWaterStorage(cls.parameters(), config)
         return buffer
@@ -76,7 +79,9 @@ class StorageWiring:
         Returns:
             The tank.
         """
-        config = SimpleDHWStorageConfig(component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0)
+        config = SimpleDHWStorageConfig(
+            component_id=ComponentID(name="DHWStorage"), volume_heating_water_storage_in_liter=250.0, installation_location=lt.InstallationLocation.UNHEATED_SPACE
+        )
         tank: SimpleDHWStorage = SimpleDHWStorage(my_simulation_parameters=cls.parameters(), config=config)
         return tank
 
@@ -117,7 +122,7 @@ class StorageWiring:
 
     @staticmethod
     def buffer_primary_inputs() -> List[str]:
-        """Return the buffer's inputs a complete build wires: both primary circuits and the controller's state.
+        """Return the buffer's inputs a complete build wires: both primary circuits and its surrounding temperature.
 
         Returns:
             The field names.
@@ -127,11 +132,14 @@ class StorageWiring:
             SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem,
             SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
             SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+            SimpleHotWaterStorage.IndoorAirTemperatureInCelsius,
+            SimpleHotWaterStorage.UnheatedCellarTemperatureInCelsius,
+            SimpleHotWaterStorage.OutsideAirTemperatureInCelsius,
         ]
 
     @staticmethod
     def tank_primary_inputs() -> List[str]:
-        """Return the tank's inputs a complete build wires: the tap demand and the primary coil.
+        """Return the tank's inputs a complete build wires: the tap demand, the primary coil and its surroundings.
 
         Returns:
             The field names.
@@ -140,6 +148,9 @@ class StorageWiring:
             SimpleDHWStorage.WaterConsumption,
             SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
             SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+            SimpleDHWStorage.IndoorAirTemperatureInCelsius,
+            SimpleDHWStorage.UnheatedCellarTemperatureInCelsius,
+            SimpleDHWStorage.OutsideAirTemperatureInCelsius,
         ]
 
 

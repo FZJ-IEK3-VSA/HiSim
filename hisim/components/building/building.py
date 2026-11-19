@@ -1462,60 +1462,17 @@ class Building(DynamicComponent, cp.PhysicsComponent):
         Returns the geometry of every window as plain numbers rather than as
         :class:`hisim.components.building.window.Window` objects: the optics live in the solar-gains
         producer now, and these seven numbers per window are exactly what travels in its calculation
-        DTO and therefore in its cache key.
+        DTO and therefore in its cache key. The geometries are ``BuildingInformation``'s: one per
+        TABULA direction, or one per configured window (``BuildingConfig.windows``).
 
         Returns:
             Tuple[Tuple[WindowGeometry, ...], float]: the windows and their total scaled area in m².
         """
-
-        windows = []
+        windows = self.my_building_information.window_geometries()
         total_windows_area = 0.0
-        south_angle = 180
-
-        windows_azimuth_angles = {
-            "South": south_angle,
-            "East": south_angle - 90,
-            "North": south_angle - 180,
-            "West": south_angle + 90,
-            "Horizontal": None,
-        }
-
-        reduction_factor_for_non_perpedicular_radiation = (
-            self.my_building_information.reduction_factor_for_non_perpedicular_radiation
-        )
-        reduction_factor_for_frame_area_fraction_of_window = (
-            self.my_building_information.reduction_factor_for_frame_area_fraction_of_window
-        )
-        reduction_factor_for_external_vertical_shading = (
-            self.my_building_information.reduction_factor_for_external_vertical_shading
-        )
-        total_solar_energy_transmittance_for_perpedicular_radiation = (
-            self.my_building_information.total_solar_energy_transmittance_for_perpedicular_radiation
-        )
-
-        for index, windows_direction in enumerate(self.my_building_information.windows_directions):
-            if windows_direction == "Horizontal":
-                window_tilt_angle = 0.0
-            else:
-                window_tilt_angle = 90.0
-
-            azimuth_angle = windows_azimuth_angles[windows_direction]
-            azimuth_angle_in_degrees = None if azimuth_angle is None else float(azimuth_angle)
-            windows.append(
-                WindowGeometry(
-                    tilt_angle_in_degrees=window_tilt_angle,
-                    azimuth_angle_in_degrees=azimuth_angle_in_degrees,
-                    area_in_m2=float(self.my_building_information.scaled_window_areas_in_m2[index]),
-                    frame_area_fraction_reduction_factor=float(reduction_factor_for_frame_area_fraction_of_window),
-                    glass_solar_transmittance=float(total_solar_energy_transmittance_for_perpedicular_radiation),
-                    nonperpendicular_reduction_factor=float(reduction_factor_for_non_perpedicular_radiation),
-                    external_shading_vertical_reduction_factor=float(reduction_factor_for_external_vertical_shading),
-                )
-            )
-
-            total_windows_area += self.my_building_information.scaled_window_areas_in_m2[index]
-
-        return tuple(windows), total_windows_area
+        for window in windows:
+            total_windows_area += window.area_in_m2
+        return windows, total_windows_area
 
     def __str__(
         self,

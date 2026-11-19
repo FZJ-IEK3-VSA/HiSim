@@ -21,3 +21,5 @@ class ExitCodes:
     OK: int = 0
     FILE_REJECTED: int = 1
     USAGE: int = 2
+    #: ``hisim energy-system sankey`` drew the figure, but its layout has faults (overlaps, routes it could not find).
+    LAYOUT_FAULTS: int = 4

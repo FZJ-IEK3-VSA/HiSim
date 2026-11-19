@@ -47,17 +47,23 @@ class Expected:
         "july": ("2021-07-27", "2021-08-03"),
     }
 
-    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first four are inputs.
+    #: The building's ports as ``channel -> (role, carrier, peer kind, peer)``; the first eight are inputs. Both tanks, the
+    #: battery and the PV inverter stand in the unheated cellar of the twins' TABULA row, so the four ports of their heat
+    #: into the heated zone book zero.
     PORTS: ClassVar[Dict[str, Tuple[str, str, str, str]]] = {
         "HeatReceivedInWatt": ("consumption", "space_heating_heat", "component", "HeatDistributionSystem"),
         "HeatRemovedByCoolingInWatt": ("production", "cooling", "component", "HeatDistributionSystem"),
         "HeatingByResidents": ("consumption", "room_heat", "component", "UTSPConnector"),
         "HeatingByDevices": ("consumption", "room_heat", "component", "UTSPConnector"),
+        "HeatToHeatedZoneInWattFromBattery": ("consumption", "room_heat", "component", "Battery"),
+        "HeatToHeatedZoneInWattFromSimpleHotWaterStorage": ("consumption", "room_heat", "component", "SimpleHotWaterStorage"),
+        "HeatToHeatedZoneInWattFromDHWStorage": ("consumption", "room_heat", "component", "DHWStorage"),
+        "HeatToHeatedZoneInWattFromPVSystem": ("consumption", "room_heat", "component", "PVSystem"),
         "SolarGainThroughWindows": ("consumption", "solar", "boundary", "sun"),
-        "VentilationLossInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "TransmissionLossOpaqueInWatt": ("loss", "room_heat", "boundary", "outdoors"),
-        "GainsLostThroughWindowsInWatt": ("loss", "room_heat", "boundary", "outdoors"),
+        "VentilationLossInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "TransmissionLossWindowsAndDoorsInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "TransmissionLossOpaqueInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
+        "GainsLostThroughWindowsInWatt": ("loss", "room_heat", "boundary", "heat loss to outdoors"),
         "ThermalMassStoredEnergyIncreaseInWattHour": ("stored_change", "room_heat", "store", "Building · stored"),
     }
 
@@ -68,6 +74,9 @@ class Expected:
         ("Building", "SolarGainThroughWindows"),
         ("UTSPConnector", "HeatingByResidents"),
         ("UTSPConnector", "HeatingByDevices"),
+        ("Battery", "HeatToHeatedZoneInWatt"),
+        ("SimpleHotWaterStorage", "HeatToHeatedZoneInWatt"),
+        ("DHWStorage", "HeatToHeatedZoneInWatt"),
     )
     OUTPUTS: ClassVar[Tuple[Tuple[str, str], ...]] = (("HeatDistributionSystem", "HeatDrawnForCoolingInWatt"),)
     LOSSES: ClassVar[Tuple[str, ...]] = (
@@ -87,7 +96,7 @@ class Expected:
         ("solar", "sun", "Building"),
         ("room_heat", "UTSPConnector", "Building"),
         ("room_heat", "Building", "Building · VentilationLossInWatt"),
-        ("room_heat", "Building · VentilationLossInWatt", "outdoors"),
+        ("room_heat", "Building · VentilationLossInWatt", "heat loss to outdoors"),
         ("room_heat", "Building", "Building · TransmissionLossWindowsAndDoorsInWatt"),
         ("room_heat", "Building", "Building · TransmissionLossOpaqueInWatt"),
         ("room_heat", "Building", "Building · GainsLostThroughWindowsInWatt"),

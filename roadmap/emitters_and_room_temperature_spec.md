@@ -146,9 +146,14 @@ during the raise. The rule:
    points on the step's start state and, above 600 s, the part-load ratio to the unraised target; the hot-water
    controller reports whether its charge would run without the raise. Taken from the step's start, the own need does
    not depend on the raise.
-3. **Enable and target.** The energy manager enables PV mode when the budget in W ≥ the heat pump's minimum electrical
-   power in W + a margin of 100 W, with hysteresis across steps (its previous step's decision as memory), and sends an
-   electrical power target in W = the budget, clamped to [P_min, P_max]. The heat pump's L1 space-heating controller
+3. **Enable and target.** The budget is extra power on top of the heat pump's own need, so the thresholds and the
+   target count the heat pump's total draw, own need + budget (owner, 2026-11-07). The energy manager enables PV mode
+   when the budget in W ≥ max(P_min − own need, 0) + a margin of 100 W, with hysteresis across steps (its previous
+   step's decision as memory): PV mode ends when the budget falls below max(P_min − own need − 100 W, 0.01 W), the floor
+   keeping PV mode from running on grid electricity when the own need alone exceeds P_min. It sends an electrical power
+   target in W = own need + budget, clamped to [P_min, P_full]. Example: own need 1,000 W, budget 800 W, full load
+   2,000 W gives a target of 1,800 W (ratio 0.9); the budget alone, 800 W, would lie below the own need and leave the
+   surplus to the grid. The heat pump's L1 space-heating controller
    runs the heat pump at ratio = max(its own ratio, min(target / full-load electrical power, the ratio to the raised
    buffer limit)).
 4. **The heat pump's powers.** The heat pump publishes its electrical power in W at full load and at minimum load,

@@ -17,6 +17,10 @@ components:
       - L2EMSElectricityController
       - HeatDistributionSystem
       - UTSPConnector
+      - Battery
+      - DHWStorage
+      - PVSystem
+      - SimpleHotWaterStorage
   UTSPConnector:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
     preset: couple_both_at_work
@@ -71,6 +75,8 @@ components:
     config:
       sizing_option: SIZE_ACCORDING_TO_HEAT_PUMP
     inputs:
+      - Building
+      - Weather
       - HeatDistributionSystem
       - MoreAdvancedHeatPumpHPLib
   HeatDistributionSystem:
@@ -97,6 +103,8 @@ components:
     class: hisim.components.simple_water_storage.SimpleDHWStorage
     preset: standard
     inputs:
+      - Building
+      - Weather
       - UTSPConnector
       - MoreAdvancedHeatPumpHPLib
       - SolarThermalSystem
@@ -169,6 +177,16 @@ components:
         tags:
           - MINIMUM_CHARGING_POWER
         weight: 999
+      - from: HeatPumpControllerDHW.ChargesWithoutRaise
+        component_type: HEAT_PUMP_DHW
+        tags:
+          - OWN_NEED_CHARGE
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLibControllerSH.OwnNeedElectricalPowerInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - OWN_NEED_ELECTRICITY
+        weight: 999
       - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
         component_type: HEAT_PUMP_DHW
         tags:
@@ -181,6 +199,16 @@ components:
           - ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
         weight: 2
         dispatch: {}
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - FULL_LOAD_ELECTRICITY
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - MINIMUM_LOAD_ELECTRICITY
+        weight: 999
       - from: PVSystem.ElectricityOutput
         component_type: PV
         tags:

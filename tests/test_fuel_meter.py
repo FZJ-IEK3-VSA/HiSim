@@ -97,7 +97,11 @@ def test_house(
 
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.preset_rooftop("PVSystem").resolve(
-        SizingContext(roof_area_in_m2=120, weather_identity=my_weather_config.identity())
+        SizingContext(
+            roof_area_in_m2=120,
+            weather_identity=my_weather_config.identity(),
+            technical_room_location=lt.InstallationLocation.UNHEATED_SPACE,
+        )
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -197,7 +201,8 @@ def test_house(
     )
     my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
         SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_oil_heater_config.maximal_thermal_power_in_watt)
+            maximal_thermal_power_in_watt=concrete(my_oil_heater_config.maximal_thermal_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
         )
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -207,7 +212,10 @@ def test_house(
 
     # DHW storage
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.preset_standard("DHWStorage").resolve(
-        SizingContext(number_of_apartments=my_building_information.number_of_apartments)
+        SizingContext(
+            number_of_apartments=my_building_information.number_of_apartments,
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -224,9 +232,7 @@ def test_house(
 
     # Build Fuel Meter
     fuel_heating_value_in_kwh_per_liter, fuel_density_in_kg_per_m3 = (
-        generic_boiler.GenericBoilerConfig.fuel_constants(
-            my_oil_heater_config.energy_carrier, my_oil_heater_config.boiler_type
-        )
+        generic_boiler.GenericBoilerConfig.fuel_constants(my_oil_heater_config.energy_carrier)
     )
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
         SizingContext(
@@ -351,9 +357,7 @@ def test_the_preset_copies_carrier_and_fuel_constants_from_the_generator_beside_
     stated twice. The expected numbers are the unrounded ones the twins carry -- the deleted
     factory's 9.82 was a rounded oil value every one of these setups overrode.
     """
-    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(
-        carrier, generic_boiler.BoilerType.CONVENTIONAL
-    )
+    heating_value, density = generic_boiler.GenericBoilerConfig.fuel_constants(carrier)
 
     resolved = fuel_meter.FuelMeterConfig.preset_standard("FuelMeter").resolve(
         SizingContext(

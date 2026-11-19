@@ -69,7 +69,7 @@ class MeteredHouse:
             my_simulation_parameters=parameters, config=heat_pump_config
         )
         battery_config = advanced_battery_bslib.BatteryConfig.preset_sized_to_pv("Battery").resolve(
-            SizingContext(pv_peak_power_in_watt=(5000.0,))
+            SizingContext(pv_peak_power_in_watt=(5000.0,), technical_room_location=lt.InstallationLocation.UNHEATED_SPACE)
         )
         self.battery = advanced_battery_bslib.Battery(my_simulation_parameters=parameters, config=battery_config)
         self.meter = electricity_meter.ElectricityMeter(

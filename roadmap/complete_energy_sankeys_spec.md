@@ -109,7 +109,9 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 - **Boundary node**: where energy enters or leaves the system: grid import, grid export, the supply of each bought
   carrier, the ambient heat source and the ambient heat sink (the outside air as a device's source and as its sink,
   Q-M), the heat source of a ground collector (Q-O), sun, the wind turbine a series stands for (Q-Q), the residents'
-  body heat, hot water drawn at the taps, outdoors, driving.
+  body heat, hot water drawn at the taps, driving, and the two sinks of a loss: unconverted sunlight (a `LOSS` of
+  carrier `SOLAR`) and heat loss to outdoors (every other `LOSS`). The two sinks replaced the single sink "outdoors"
+  with decision D-e of `roadmap/device_location_spec.md` (2026-11-04).
 - **Loss node**: one per `LOSS` port, named after its component and port (`Battery · inverter loss`).
 - **Storage node**: one per component with a `STORED_CHANGE` port (`Battery · stored`).
 - **Residual**: `ΣIN − ΣOUT − ΣLOSS − ΣSTORED_CHANGE` of a component over the run, drawn to or from the red
@@ -126,7 +128,7 @@ The epic's earlier decisions stand: the tolerance (decision 6 of hisim-energy-sa
 |---|---|---|---|
 | component | every component that declares at least one port | `MoreAdvancedHeatPumpHPLib`, `Building`, `UTSPConnector` | blue |
 | meter | each component that declares a metered exchange (§4.4) | `ElectricityMeter`, `GasMeter` | dark grey |
-| boundary | the environment of a port (§4.3) or of a meter's published exchange (§4.4) | `grid import`, `natural gas supply`, `ambient heat source`, `ambient heat sink`, `sun`, `outdoors` | green |
+| boundary | the environment of a port (§4.3) or of a meter's published exchange (§4.4) | `grid import`, `natural gas supply`, `ambient heat source`, `ambient heat sink`, `sun`, `unconverted sunlight`, `heat loss to outdoors` | green |
 | loss | each `LOSS` port | `SimpleHotWaterStorage · standby loss` | orange |
 | storage change | each `STORED_CHANGE` port | `Battery · stored` | gold |
 | unaccounted | each component residual, each meter residual and each link difference | `unaccounted` | red |
@@ -159,9 +161,10 @@ total turns the edge round, as `SankeyBuilder.add` does) and the ports it came f
 5. **Boundary edge**: an `IN` port from its environment node (fuel, district heat, ambient heat source, heat source,
    sun, body heat), or an `OUT` port to its environment node (hot water drawn at the taps, ambient heat sink,
    driving).
-6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to `outdoors` only in the
-   aggregate (the drawing merges small loss nodes, §4.8); the graph keeps one node per loss so that every loss is
-   readable where it occurs.
+6. **Loss edge**: a `LOSS` port to its loss node. A loss node carries its total onward to its sink, `unconverted
+   sunlight` for a `SOLAR` loss and `heat loss to outdoors` for every other (D-e of `roadmap/device_location_spec.md`),
+   only in the aggregate (the drawing merges small loss nodes, §4.8); the graph keeps one node per loss so that every
+   loss is readable where it occurs.
 7. **Storage edge**: a `STORED_CHANGE` port between the component and its storage node, component → storage when
    the run's net is positive (it charged), storage → component when negative.
 8. **Residual edge**: a component's or a meter's residual, to or from `unaccounted`, drawn only where it is beyond
@@ -193,15 +196,15 @@ preferring declared readers. Three changes make D1 and Q-J hold:
 
 | Carrier | Default for `IN` | Default for `OUT` | Default for `LOSS` |
 |---|---|---|---|
-| `ELECTRICITY` | none: unlinked (and unmetered) | none: unlinked (and unmetered) | outdoors |
-| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary (unmetered) | none: an error | outdoors |
-| `DISTRICT_HEAT` | `district heat supply` boundary (unmetered) | none: an error | outdoors |
-| `AMBIENT_HEAT` | `ambient heat source` (Q-M; `ambient heat` until 5a) | `ambient heat sink` (heat rejected by a cooling device, Q-M) | outdoors |
-| `SOLAR` | `sun` (today `solar`) | none: an error | outdoors |
-| heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | outdoors |
-| `VEHICLE_ELECTRICITY` (Q-K) | none: the car's input port names the car battery it reads | none: the car reads it | outdoors |
-| `DRIVING` (Q-L) | none: an error | none: the car's port names `driving` | outdoors |
-| `WIND_ELECTRICITY` (Q-Q) | none: the reader's port names `wind turbine` | none: an error | outdoors |
+| `ELECTRICITY` | none: unlinked (and unmetered) | none: unlinked (and unmetered) | heat loss to outdoors |
+| `NATURAL_GAS`, `HEATING_OIL`, `PELLETS`, `WOOD_CHIPS`, `HYDROGEN`, `DIESEL` | `<carrier> supply` boundary (unmetered) | none: an error | heat loss to outdoors |
+| `DISTRICT_HEAT` | `district heat supply` boundary (unmetered) | none: an error | heat loss to outdoors |
+| `AMBIENT_HEAT` | `ambient heat source` (Q-M; `ambient heat` until 5a) | `ambient heat sink` (heat rejected by a cooling device, Q-M) | heat loss to outdoors |
+| `SOLAR` | `sun` (today `solar`) | none: an error | unconverted sunlight |
+| heat carriers (`SPACE_HEATING_HEAT`, `DOMESTIC_HOT_WATER_HEAT`, `COOLING`, `ROOM_HEAT`) | none: names a component, a circuit or an environment node | same | heat loss to outdoors |
+| `VEHICLE_ELECTRICITY` (Q-K) | none: the car's input port names the car battery it reads | none: the car reads it | heat loss to outdoors |
+| `DRIVING` (Q-L) | none: an error | none: the car's port names `driving` | heat loss to outdoors |
+| `WIND_ELECTRICITY` (Q-Q) | none: the reader's port names `wind turbine` | none: an error | heat loss to outdoors |
 
 So the heat pump's electricity ports drop `peer_output` and link to the electricity meter that reads them;
 the boiler's fuel ports drop `peer_output=EnergyDemandSh` and link to the gas or fuel meter that reads them; the
@@ -217,6 +220,14 @@ ambient-heat `OUT` port, so the Sankey draws the source left and the sink right;
 node the ground collector's ports name. Q-Q: `WIND_TURBINE` ("wind turbine") is the node a reader of a wind turbine's
 series names on its `WIND_ELECTRICITY` port. The `<carrier> supply` nodes are derived from the carrier, not listed;
 so are the `<carrier> export` nodes a meter's export of a bought carrier goes to ("hydrogen export").
+
+The `LOSS` column, revised by decision D-e of `roadmap/device_location_spec.md` (owner, 2026-11-04; bead
+hisim-device-location-820d.4): the single sink `OUTDOORS` ("outdoors") is replaced by two, chosen by the loss's
+carrier alone in `EnergyPort.default_boundary`, with no list of devices. `UNCONVERTED_SUNLIGHT` ("unconverted
+sunlight") takes a `LOSS` of carrier `SOLAR`, the light a PV module or a collector does not convert;
+`HEAT_LOSS_TO_OUTDOORS` ("heat loss to outdoors") takes every other `LOSS`, which ends as heat outside the house: the
+building's envelope losses, the devices' losses, the appliance electricity not released indoors. A port that names
+its environment still goes there. The node names change in `balance_report.json` and the Sankeys; no number does.
 
 New carrier `lt.EnergyBalanceCarrier.ROOM_HEAT` (Q-G): heat released into or lost from the heated zone, the carrier
 of internal gains, of the building's losses and of its thermal mass. Space heating keeps `SPACE_HEATING_HEAT` up to
@@ -368,7 +379,7 @@ circuit are replaced by it (`hydronic_coupling_spec.md` §3.5).
 | SH heat | `IN` circuit from generator | generator's `MassFlowOutputSH`/`WaterOutputMassFlowSh`, generator's supply temperature, buffer's `WaterTemperatureToHeatGenerator` | the generator |
 | SH heat | `IN` secondary circuit | `...SecondaryHeatGenerator` outputs | second generator |
 | SH heat | `OUT` circuit to HDS | HDS's `WaterMassFlowHDS`, buffer's `WaterTemperatureToHeatDistribution`, HDS's `WaterTemperatureOutput` | the HDS |
-| SH heat | `LOSS` | `StandbyHeatLoss` (W) | outdoors (Q-F) |
+| SH heat | `LOSS` | `StandbyHeatLoss` (W) | heat loss to outdoors (Q-F) |
 | SH heat | `STORED_CHANGE` | `ThermalEnergyIncreaseInStorage` (Wh) | its storage node |
 
 **`SimpleDHWStorage` (hot-water tank)**, twins: every household twin.
@@ -377,7 +388,7 @@ circuit are replaced by it (`hydronic_coupling_spec.md` §3.5).
 |---|---|---|---|
 | DHW heat | `IN` circuit(s) | generator's DHW mass flow and supply temperature, tank's `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (and the secondary one) | the generator(s) |
 | DHW heat | `OUT` | `ThermalPowerConsumptionDHW` (W) | `HOT_WATER_USE` boundary |
-| DHW heat | `LOSS` | `StandbyHeatLoss` (W) | outdoors |
+| DHW heat | `LOSS` | `StandbyHeatLoss` (W) | heat loss to outdoors |
 | DHW heat | `STORED_CHANGE` | `ThermalEnergyIncreaseInStorage` (Wh) | storage node |
 
 The tap draw goes to a boundary node, not to the occupancy: the occupancy is a data source, which reads nothing and
@@ -412,7 +423,7 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 | Component | `IN` | `OUT` | `LOSS` | Change in PR 1 |
 |---|---|---|---|---|
 | `GenericBoiler` | fuel (`EnergyDemandSh`, `EnergyDemandDhw`, Wh) | SH and DHW circuits | `CombustionHeatLoss` (W) | fuel peer: the gas or fuel meter that reads it (Q-J) |
-| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `ThermalPowerInputFromEnvironment` (W) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`) | none (hplib is a converter: heat = electricity + ambient) | electricity peer: the electricity meter, which reads all four by their role (Q-J; `...ForCooling` and `...BrinePump` since hisim-component-physics-4g9.39) |
+| `MoreAdvancedHeatPumpHPLib` | `ElectricalInputPowerSH`, `...DHW`, `...ForCooling`, `...BrinePump` (W); `HeatFromAmbientInWatt` (W, from `ambient heat source`; until hisim-hplib-cooling-rejection-node-q4m7 the signed `ThermalPowerInputFromEnvironment`, which keeps no port) | SH, DHW circuits; `ThermalPowerDrawnForCooling` (`COOLING` `IN`); `HeatToAmbientInWatt` (W, the drawn heat plus the electricity while cooling, to `ambient heat sink`) | `ElectricityLostInWatt` (electricity beyond the heat at a calibrated COP below 1, to `heat loss to outdoors`; hplib is a converter: heat = electricity + ambient) | electricity peer: the electricity meter, which reads all four by their role (Q-J; `...ForCooling` and `...BrinePump` since hisim-component-physics-4g9.39) |
 | `DistrictHeating` | `ThermalOutputShEnergy`, `ThermalOutputDhwEnergy` as `DISTRICT_HEAT` (Wh) | SH, DHW | none today; the substation's pipe water is hisim-pnw7 | district heat peer: the fuel meter |
 | `ElectricHeating` | `ElectricOutputShPower`, `...DhwPower` (W) | `ThermalOutputShPower` to the building, DHW circuit | none (efficiency 1) | electricity peer: the electricity meter |
 | `SolarThermalSystem` | `SolarPowerOnCollector` (W, `SOLAR`), `ElectricityConsumptionOutput` (W) | DHW circuit | `CollectorHeatLoss` (`SOLAR`), `SolarPumpHeatLoss` (`ELECTRICITY`) | electricity peer: the electricity meter; sun node renamed |
@@ -425,7 +436,7 @@ The generators' circuit ends (boiler, heat pump, district heating, electric heat
 |---|---|---|---|
 | `ELECTRICITY` | `OUT` | `ElectricityOutput` (W, AC) | the electricity meter, which reads it by its role |
 | `SOLAR` | `IN` | **new** `SolarPowerOnModulesInWatt`: plane-of-array irradiance times module area (Q-D) | sun |
-| `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | outdoors |
+| `SOLAR` | `LOSS` | **new** `ModuleAndInverterLossInWatt`: solar in minus AC out | unconverted sunlight |
 
 The two new outputs need the plane-of-array irradiance in the PV series (`produce_pv_series` in
 `generic_pv_system/calculation.py` returns AC power ratios only), so the PV cache key changes; no KPI moves. If Q-D
@@ -455,7 +466,7 @@ energy: it declares.
 | `ROOM_HEAT` | `IN` | `HeatingByResidents` (W) | `RESIDENTS` boundary |
 | `ROOM_HEAT` | `OUT` | `HeatingByDevices` (W) | the building (reads it) |
 | `ROOM_HEAT` | `OUT` | **new** `BodyHeatToBuildingInWatt`, equal to `HeatingByResidents` (an output carries one port, so the body heat's way out needs its own output) | the building |
-| `ELECTRICITY` | `LOSS` | **new** `ApplianceElectricityNotReleasedIndoorsInWatt` = consumption − device heat gains | outdoors |
+| `ELECTRICITY` | `LOSS` | **new** `ApplianceElectricityNotReleasedIndoorsInWatt` = consumption − device heat gains | heat loss to outdoors |
 
 The LoadProfileGenerator gives device heat gains as a profile of its own, not as the electricity: 2,887 of
 4,659 kWh a year become gains, 1,772 kWh leave with waste water, exhaust air and light (§7); the device gains never
@@ -476,10 +487,10 @@ Crank-Nicolson (`calc_crank_nicolson`): the air and surface nodes have no heat c
 | `COOLING` | `OUT` | **new** `HeatRemovedByCoolingInWatt` = minus the input when `< 0` | air conditioner, cooling HDS |
 | `ROOM_HEAT` | `IN` | `InternalHeatGainsFromOccupancy` (W, residents plus devices; `peer_input=HeatingByDevices`) | the occupancy; the link pairs it with the sum of the occupancy's two `OUT` ports |
 | `SOLAR` | `IN` | `SolarGainThroughWindows` (W) | sun |
-| `ROOM_HEAT` | `LOSS` | **new** `VentilationLossInWatt` = `H_ve (θ_air − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossWindowsAndDoorsInWatt` = `H_tr_w (θ_s − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossOpaqueInWatt` = `H_tr_em (θ_m − θ_e)` | outdoors |
-| `ROOM_HEAT` | `LOSS` | **new** `GainsLostThroughWindowsInWatt` = `H_tr_w / (9.1 A_t) · (0.5 Φ_int + Φ_sol)` | outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `VentilationLossInWatt` = `H_ve (θ_air − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossWindowsAndDoorsInWatt` = `H_tr_w (θ_s − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `TransmissionLossOpaqueInWatt` = `H_tr_em (θ_m − θ_e)` | heat loss to outdoors |
+| `ROOM_HEAT` | `LOSS` | **new** `GainsLostThroughWindowsInWatt` = `H_tr_w / (9.1 A_t) · (0.5 Φ_int + Φ_sol)` | heat loss to outdoors |
 | `ROOM_HEAT` | `STORED_CHANGE` | **new** `ThermalMassStoredEnergyIncreaseInWattHour` = `C_m (θ_m,end − θ_m,start)` of the state | storage node |
 
 Notes:
@@ -607,6 +618,11 @@ Not components (helpers, no verdict): `configuration`, `dual_circuit_system`, `g
   loop's three outputs under `loop` (was `circuit`), and its `output` reads `loop <component>.<mass flow>` (was
   `circuit …`), as its node does in the Sankeys; the fault sentences say "loop" where they said "circuit". No number
   changes.
+- D-e of `roadmap/device_location_spec.md` (hisim-device-location-820d.4, §4.3): `lt.EnvironmentNode.OUTDOORS`
+  ("outdoors") is replaced by `UNCONVERTED_SUNLIGHT` ("unconverted sunlight"), the sink of a `SOLAR` loss, and
+  `HEAT_LOSS_TO_OUTDOORS` ("heat loss to outdoors"), the sink of every other loss (`EnergyPort.default_boundary`).
+  The node names in `balance_report.json` and the Sankeys change, no number does; the report schema stays
+  `hisim.energy_balance/5`, since a node's name is data, as with the split of `ambient heat` in PR 5a.
 - New outputs of §5 (named with their units). No output is renamed, except the transformer's under Q-Q.
 
 ### 6.3 What does not change
@@ -657,7 +673,7 @@ condensing gas boiler: 17,182.7, residual 0.0) and 14 components are undeclared.
 | Building | HDS 11,408.2, internal 4,576.3, solar 3,821.6 | – | ventilation 5,662.6, windows and doors 3,315.4, opaque 10,820.7, gains through windows 46.7 | step equation −39.4; persistent −19.7 | with B2 declared and the step's own stored change: yes, 0.0000 W; with the persistent change: no (B1) |
 
 Sources of the connected diagram: sun 3,821.6 (windows; PV's sun input depends on Q-D), PV 26,315.1, ambient heat
-11,650.6, grid import 1,708.8, body heat 1,689.6. Sinks: grid export 18,760.3, outdoors (building 19,845.4, tanks
+11,650.6, grid import 1,708.8, body heat 1,689.6. Sinks: grid export 18,760.3, outdoors (since D-e of `roadmap/device_location_spec.md` "heat loss to outdoors"; building 19,845.4, tanks
 861.3, battery 965.5, appliances not released 1,771.8), hot water drawn 3,037.3.
 
 ### 7.2 `household_gas_building_sizer`
@@ -693,7 +709,7 @@ reads in every step once the electricity devices declare their ports.
 | Q-J no bus; meters are nodes and follow their wiring (2026-10-20) | "HiSim explicitly does not use buses as a concept, since they bring a whole host of problems." The house electricity bus of the first D1 is removed with its derived residual: it closed by construction, so electricity a port got wrong or missed vanished into grid import or export. And: "verifying if all the electricity is metered is a really good check", so D1 is revised for meters: every meter is a node under its own name, between its boundary node and the devices whose flows it reads through explicit connections, traced through exempt controllers (§4.3); grid import and export are the meter's published outputs; per step what a meter publishes equals what it reads, a gap is a red `unaccounted` flow at the meter and a failing entry; every metered port passes a meter, or it is an `unmetered` finding. Both findings follow Q-H. Controllers stay exempt and are never nodes. Built in PR 1 (#1086). Follow-up answers the same day: a meter keeps its component name as its label; a residual (component, meter or transfer) is drawn only beyond the tolerance and always listed in the report; the setups that buy a carrier without a meter get one in hisim-meter-bought-carriers-lyfl, not in PR 1 |
 | Q-K the car battery's electricity to the car (2026-10-27) | "a separate carrier instead" of a flag on the port that would exempt it from the meter: the electricity that flows from the car battery into the car, past every meter, is booked under the carrier `VEHICLE_ELECTRICITY`, which the electricity meter never reads (it reads only `ELECTRICITY`). The battery's discharge is its `PRODUCTION` port, the car's battery input its `CONSUMPTION` port (an input port, D9 of `roadmap/fluid_loops_spec.md`). Built in PR 5b |
 | Q-L the energy a car drives with (2026-10-27) | kept as built in PR 5b: the carrier `DRIVING` and the boundary node `lt.EnvironmentNode.DRIVING` ("driving"); the electric car's `ElectricityOutput` is its `PRODUCTION` port to that node, and a diesel car will declare the same port (hisim-diesel-car-ports-q3v8) |
-| Q-M the outside air as a device's source and sink (2026-10-28) | "Separate source and sink nodes": heat a device takes from the outside air while heating comes from the boundary node `ambient heat source` (`lt.EnvironmentNode.AMBIENT_HEAT_SOURCE`, the former `ambient heat`), heat it rejects to the outside air while cooling goes to `ambient heat sink` (`AMBIENT_HEAT_SINK`), so the Sankey draws the one left and the other right. `EnergyPort.default_boundary` gives an ambient-heat `CONSUMPTION` port the source and a `PRODUCTION` port the sink: the `HeatFromAmbientInWatt` and `HeatToAmbientInWatt` of `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner` and `IdealizedElectricHeater`, and `MoreAdvancedHeatPumpHPLib.ThermalPowerFromEnvironment` (#871), which books the heat it rejects while cooling as negative intake from the source (hisim-hplib-cooling-rejection-node-q4m7). Built in PR 5a; no number changes (bead hisim-heat-cooling-port-choices-w2nj) |
+| Q-M the outside air as a device's source and sink (2026-10-28) | "Separate source and sink nodes": heat a device takes from the outside air while heating comes from the boundary node `ambient heat source` (`lt.EnvironmentNode.AMBIENT_HEAT_SOURCE`, the former `ambient heat`), heat it rejects to the outside air while cooling goes to `ambient heat sink` (`AMBIENT_HEAT_SINK`), so the Sankey draws the one left and the other right. `EnergyPort.default_boundary` gives an ambient-heat `CONSUMPTION` port the source and a `PRODUCTION` port the sink: the `HeatFromAmbientInWatt` and `HeatToAmbientInWatt` of `GenericHeatPump`, `AirConditioner`, `SimpleAirConditioner` and `IdealizedElectricHeater`, and `MoreAdvancedHeatPumpHPLib.ThermalPowerFromEnvironment` (#871), which booked the heat it rejects while cooling as negative intake from the source until hisim-hplib-cooling-rejection-node-q4m7 split it into `HeatFromAmbientInWatt`, `HeatToAmbientInWatt` and `ElectricityLostInWatt`. Built in PR 5a; no number changes (bead hisim-heat-cooling-port-choices-w2nj) |
 | Q-N the idealized electric heater's electricity (2026-10-28) | "Keep electricity = heat": it heats with as much electricity (`ElectricityConsumptionInWatt`, a resistance heater without losses) and cools without electricity, as built in PR 5a; no meter reads it in the tests that run it, which PR 6 has to settle when it enforces unmetered ports |
 | Q-Q `electrolyzer_with_renewables`' wind and surplus (2026-10-28, hisim-component-physics-4g9.69) | option (b), "grid-connected": the transformer and rectifier delivers up to its rating; what the electrolyzer does not take is exported to the grid through an electricity meter, which reads the transformer's delivery and the electrolyzer's draw by their roles. Built with these choices of the implementing change: the series is a wind turbine's electricity, the new carrier `WIND_ELECTRICITY` from the new boundary node `wind turbine`, booked on the transformer's received port (`TransformerConfig.received_carrier`); the wind beyond what the transformer can carry at its rating is curtailed (published as `CurtailedInputInWatt`, no port: never generated); the transformer publishes in W; the electrolyzer's hydrogen leaves through a hydrogen `GasMeter` with an export output (`GasToGridInWattHour`, node "hydrogen export"), on its mass flow in kg/s (the electrolyzer's half of B11). Rating (2026-10-28, "Rate transformer at 5 MW"): the setup rates the transformer at the wind turbine's 5,000 kW, the peak of its series, instead of the electrolyzer's 1,028 kW maximum load, so no wind is curtailed and all of it reaches the grid connection; the curtailment stays in the transformer for an undersized unit. Its investment cost and embodied CO2 scale with the rating, about 4.9 times (150 EUR/kW: 750,000 EUR instead of 154,234 EUR). Year 2021 at 900 s: wind 10,847,997 kWh, received 10,847,997, curtailed 0 (in every step), delivered 10,305,597, transformer loss 542,400, electrolyzer 5,272,972 (its loss 2,067,061), exported 5,033,067, imported 442, hydrogen 3,205,911 kWh (96,211 kg) |
 | Q-O the ground collector's heat (2026-10-28) | "Separate 'heat source' node", as §5.5 first proposed: `SimpleHeatSource` takes the heat it gives its brine from the boundary node `heat source` (`lt.EnvironmentNode.HEAT_SOURCE`), and heat the returning brine gives back goes to the same node, both named on its ports; not the outside air's `ambient heat source`. The brine loop keeps the carrier `AMBIENT_HEAT`: the carrier says what the loop carries, environmental heat for a heat pump to lift, the node where it comes from, so a heat pump reading the loop books ambient heat as the air-source one does. Built in PR 5a |

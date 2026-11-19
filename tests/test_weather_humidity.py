@@ -59,6 +59,13 @@ class ShippedWeatherFiles:
     #: Europe and the Balkans, around 55 to 70 %.
     SOUTHERN_BAND_IN_PERCENT: ClassVar[Tuple[float, float]] = (45.0, 80.0)
 
+    #: The band of the annual mean relative humidity, in percent, of the semi-arid high plains of
+    #: Colorado, around 50 %.
+    SEMI_ARID_BAND_IN_PERCENT: ClassVar[Tuple[float, float]] = (35.0, 65.0)
+
+    #: The files of the semi-arid band, by their path relative to :attr:`WEATHER_DIRECTORY`.
+    SEMI_ARID_FILES: ClassVar[Tuple[str, ...]] = ("EPW/Denver_Intl_AP/725650TYCST.epw",)
+
     #: The files of the southern band, by their path relative to :attr:`WEATHER_DIRECTORY`. Every
     #: other shipped file belongs to the temperate band.
     SOUTHERN_FILES: ClassVar[Tuple[str, ...]] = (
@@ -86,6 +93,7 @@ class ShippedWeatherFiles:
         WeatherDataSourceEnum.NSRDB_15MIN: ("NSRDB_15min/*/*.csv", ""),
         WeatherDataSourceEnum.DWD_10MIN: ("dwd_10min_data/*.csv", ""),
         WeatherDataSourceEnum.DWD_15MIN: ("dwd_15min_data/*.csv", ""),
+        WeatherDataSourceEnum.EPW: ("EPW/*/*.epw", ""),
     }
 
     @classmethod
@@ -112,6 +120,8 @@ class ShippedWeatherFiles:
         Returns:
             Tuple[float, float]: the lowest and the highest annual mean, in percent.
         """
+        if relative_path in cls.SEMI_ARID_FILES:
+            return cls.SEMI_ARID_BAND_IN_PERCENT
         return cls.SOUTHERN_BAND_IN_PERCENT if relative_path in cls.SOUTHERN_FILES else cls.TEMPERATE_BAND_IN_PERCENT
 
 

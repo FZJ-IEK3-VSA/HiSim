@@ -193,13 +193,14 @@ DECLARED_PER_SOURCE: Dict[WeatherDataSourceEnum, Optional[frozenset]] = {
     WeatherDataSourceEnum.DWD_TRY: None,
     WeatherDataSourceEnum.NSRDB: frozenset({2019}),
     WeatherDataSourceEnum.NSRDB_15MIN: frozenset({2019}),
+    WeatherDataSourceEnum.EPW: None,
 }
 
 
 @pytest.mark.base
 @pytest.mark.parametrize("location", list(weather.LocationEnum), ids=lambda location: location.name)
 def test_every_catalogue_station_declares_the_years_expected_of_its_source(location: Any) -> None:
-    """Every shipped station of the catalogue: 2019 for both NSRDB sets, no year for a TRY."""
+    """Every shipped station of the catalogue: 2019 for both NSRDB sets, no year for a TRY or an EPW typical year."""
     config = weather.WeatherConfig.for_location("Weather", location, -10.0)
     assert WeatherSourceFiles.data_years(config.data_source, config.source_path) == (
         DECLARED_PER_SOURCE[config.data_source]

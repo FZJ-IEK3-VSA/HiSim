@@ -1,0 +1,4 @@
+# Weather files redistributed from third parties are committed byte for byte:
+# no end-of-line normalisation, so the copy in the repository stays identical
+# to the original (see hisim/inputs/weather/EPW/*/PROVENANCE.md).
+*.epw -text

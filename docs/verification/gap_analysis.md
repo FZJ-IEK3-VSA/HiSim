@@ -257,7 +257,7 @@ Further facts the implementation relies on:
 | D9 | ISO suite (`iso52016`) in phase 1, after F3: the §7.4 bypass needs a new Building input | option 2 of F3 (optional gain input as input infrastructure) | deferred: phase 1 runs the ASHRAE suite only; no new Building input | hisim-x6c7.5 |
 | D10 | Spec §3.2.1: printed air-to-air U-values, no thermal bridges, floor to outdoor air without a ground factor, no solar radiation on the floor; printed value over the layer recomputation (Case 900 floor) | as stated | as recommended | hisim-x6c7 (comment) |
 | D11 | Spec §3.2.3: κ per element by the ISO 13786 effective-thickness rule, conditions (a) half thickness, (b) up to the first insulation layer, (c) 0.10 m; no class table, no full-layer sum | rule with all three conditions | as recommended. ISO 13790 (FDIS 2007 text, 12.3.1.1 and Table 11) states only the 0.10 m cap and refers to ISO 13786, which is not in the private folder: (a) and (b) stay [verify]. The rule is applied in the suite's system builder (step 3); the explicit description takes κ per element | hisim-x6c7 (comment) |
-| D12 | Spec §3.2.4: A_tot as the actual area of all surfaces facing the zone, A_m = C_m²/Σ A_j κ_j² | actual A_tot, A_m by the formula | as recommended (ISO 13790 7.2.2.2 and 12.2.2; FDIS 2007 equation (66)) | hisim-x6c7.6 |
+| D12 | Spec §3.2.4: A_tot as the actual area of every surface that faces the zone, A_m = C_m²/Σ A_j κ_j² | actual A_tot, A_m by the formula | as recommended (ISO 13790 7.2.2.2 and 12.2.2; FDIS 2007 equation (66)) | hisim-x6c7.6 |
 | D13 | Who resolves the [verify] marks against the standards in the private folder | the agent reads them; only clause and table numbers and the suite's own derived values enter the repository | as recommended; ISO 13790 marks resolved against the FDIS 2007 text on 2026-11-02, ASHRAE marks and Appendix B layer data open. Added 2026-11-03: the standards are read in place, no text is extracted or copied into any file, not even temporarily | – |
 
 Beads: epic hisim-x6c7 (the suite); hisim-x6c7.1 stays open as the `owner-decision` for D1 (a) and no
@@ -518,6 +518,7 @@ morning/afternoon asymmetry) needs the per-window geometry anyway.
 - §3.1: the parametrisation bullet. §3.2 introduction and rules 3 and 4: rules 1 to 4 live in the
   system builder, HiSim receives the results as overrides; rule 5 stays HiSim's.
 - FR2 rewritten; §11 steps 2b and 3; §A: D16 and D17 recorded.
+- §3 and §4 of this document are left as written; D6 points here.
 
 ## 9. ASHRAE 140 [verify] marks resolved against the standard (2026-11-03)
 
@@ -537,8 +538,8 @@ solar absorptance 0.6, infrared emittance 0.9); surface coefficients Tables 7-7 
 mullions: none), Informative Table 7-11, Table 7-12 (SHGC 0.769 at normal incidence), 7.2.1.11.3
 a) (a program without angle-dependent inputs skips the section); interior solar distribution
 7.2.1.12.2 with Tables 7-13 (600) and 7-15 (620); mechanical system 7.2.1.13, thermostat
-7.2.1.13.1 (senses only the air temperature; heat on below 20 °C, cool on above 27 °C); Case 640
-in 7.2.2.1.4 (cooling at 27 °C at all hours); Case 650 in 7.2.2.1.5 (1700 standard m³/h); 660
+7.2.1.13.1 (control on the zone air temperature alone; set points 20 °C for heating, 27 °C for
+cooling); Case 640 in 7.2.2.1.4 (cooling set point 27 °C throughout); Case 650 in 7.2.2.1.5 (1700 standard m³/h); 660
 Table 7-17 (7.2.2.1.6); 670 Table 7-21 (7.2.2.1.7); 900 in 7.2.2.2.1; in-depth cases 7.2.3 from
 Case 195 (7.2.3.5) to Case 810 (7.2.3.25); outputs Table 7-47 with 7.3.8, the 1 °C bins of 7.3.7;
 site Table A1-1; Annex A3: Table A3-14 counts (low mass 21 ranges, 18 required; high mass 19 and
@@ -576,4 +577,408 @@ case runs without it); (c) the step at 08:00 (the hourly programs' reading, wron
 - §2.1, §2.2, §2.4, §3.1, §3.2 rules 1, 2, 6 to 10 and 11, §7.3, §8.1: the confirmed clause and
   table numbers replace their [verify] marks; the marks of §9.2 stay.
 - §3.2.10: the ramp hour of 7.2.2.1.4 c; D18 in §A.
-- §3 and §4 of this document are left as written; D6 points here.
+
+## 10. Step 3a (2026-11-03): case files, derivation and system builder
+
+### 10.1 Decisions
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D19 | Where the 18 case files live: in the repository (public, as pyBuildingEnergy publishes the same inputs) or in the private folder | in the repository | private for now, `$HISIM_VERIFICATION_DATA/cases/ashrae140/`, until the human's supervisor has decided their publication; 2026-11-03 | hisim-x6c7.8 |
+| D20 | Source of the case inputs | pyBuildingEnergy's transcription, checked | the standard is the only source cited; pyBuildingEnergy is the starting point, every value is checked against the standard by the agent's in-place search or by the human; 2026-11-03 | hisim-x6c7.8 |
+| D21 | The register entry "thermostat on the air temperature" for the ASHRAE suite | drop it | dropped: 7.2.1.13.1 b requires the air temperature; the entry stays only for the ISO suite; 2026-11-03 | – |
+
+### 10.2 What was built
+
+`hisim/verification/`: `schema.py` (a case as dataclasses, checked field by field), `case_loader.py`
+(YAML directory, `derives_from` resolved by recursive mapping merge with list replacement),
+`derivation.py` (rules 3, 4, 6 and 8 of spec §3.2 as pure functions) and `system_builder.py` (the
+building on the carrier row `DE.N.SFH.05.Gen.ReEx.001.002` with every override, the Denver weather,
+the night-setback controller for 640/940, the origin check, the record for `parameters/<case>.json`).
+Public: `hisim/verification/suites/ashrae140/suite.yaml` with the range structure and eleven proposed
+register entries (`approved_by: null`). Private: the 18 case files. Tests in `tests/verification/`
+(marker `base`, skipping without `HISIM_VERIFICATION_DATA`): the derivation of 600 and 900 gives
+Appendix B, the altitude adjustment gives Table 7-4's 0.414 ach, F_w behaves as defined, case 600 builds
+with no origin in the row and the conductances follow.
+
+### 10.3 Findings
+
+- Spec §3.2.6 scaled the air change rate with (ρ·c_p)_site / 1224; the standard's own rule
+  (7.2.1.6.1, Table 7-4, Annex B3.1) is the density ratio 1.0156 / 1.2255 for programs with standard
+  air density, which gives the printed 0.414 ach. The suite applies the standard's rule.
+- Three input values could not be read by the in-place search; the human read them off the
+  standard the same day. The air-to-air U-value of the Case 600 window is 2.10 W/(m²K) (Table 7-11):
+  the case file had carried 3.0, the value of the former edition, and was corrected before any run.
+  The SHGC at 0° of the low-e glazing, 0.440 (Table 7-19), and the specific heat of the Case 680 foam
+  insulation, 1400 J/(kg K) (Table 7-25), were as carried.
+- F_w is the suite's own implementation of the definition in §3.2.8 (beam weighted with the table
+  interpolated in the cosine, 7.2.1.11.3; diffuse with the hemispherical value; isotropic sky and
+  ground reflectance 0.2 as HiSim's optics use them), on the hourly EPW labels.
+
+### 10.4 Step 3b (2026-11-03): the run, and the first numbers of case 600
+
+`hisim/verification/runner.py` assembles weather, building, a constant internal gain (`CSVLoader`
+with a frame of the case's watts), the ideal heater with its L1 controller (none in a free-float
+case) and the night-setback controller where the case has one; it runs two full-year passes, the
+second from the thermal-mass temperature the first ends with, and writes `BESTEST_output/` with
+`parameters/<case>.json`, `timeseries/<case>_<step>s.csv` (the second pass, operative temperature
+computed as 0.3·θ_air + 0.7·θ_s) and `summary/<case>_<step>s.json`. `python -m hisim.verification
+--case 600 --output-dir <dir>` runs the three time steps (FR14, the part of step 3). The write guard
+collects (D8). Test: `test_run.py` runs case 600 at 3600 s under the marker `verification`.
+
+First run of case 600 (HiSim's own results, no comparison; the acceptance ranges stay private):
+
+| Time step | Annual heating [MWh] | Annual sensible cooling [MWh] | Peak heating [kW] | θ_air min/max [°C] | θ_m at the end of pass 1 [°C] |
+|---|---:|---:|---:|---|---:|
+| 3600 s | 3.700 | 5.521 | 2.81 (31 Dec 23:00) | 20.0 / 27.0 | 15.16 |
+| 900 s | 3.721 | 5.530 | – | 20.0 / 27.0 | 15.17 |
+| 60 s | 3.722 | 5.531 | – | 20.0 / 27.0 | 15.17 |
+
+Observations, to be read with the first full report: the three time steps agree to 0.6 % in heating
+and 0.2 % in cooling (§8.4); the second pass ends at the same mass temperature as the first to
+nine digits, so the periodic state is reached within one year (D3); the air temperature sits exactly
+on the set points when the heater acts (ISO 13790 C.4); the operative temperature reaches 33.4 °C and
+the mass node 39.9 °C in summer, which is the lightweight 5R1C mass node under the C.1 to C.3 split of
+10.1 MWh of transmitted solar gains. The whole run of three time steps takes about 85 s on the
+developer's machine, the two passes included.
+
+### 10.5 Findings after the first run (2026-11-03)
+
+- **F6, weather smoothing** (register entry `weather_interpolation`). HiSim's weather pipeline
+  (`hisim/components/weather/calculation.py`, `interpolate` and `aggregate_to_timestep`) places each
+  value of an hourly source at the middle of its hour, interpolates linearly to one minute and
+  averages over the time step. At 3600 s an hour's value is (previous + 6·own + next)/8 of the file's
+  values: a few tenths of a kelvin off the file in the Denver temperatures, peaks flattened, the
+  annual mean kept; the irradiance goes the same way. This is HiSim's treatment of every hourly
+  source, not the suite's. No change; the report quantifies the effect.
+- **F7, start padding** (register entry `weather_start_padding`). Before interpolating, the series is
+  padded at 1 January 00:00 with zero for every column except the relative humidity. For the
+  irradiance that is the night; for the air temperature it is 0 °C, so the first hour of the Denver
+  year is −13.2 °C instead of the file's −18.0 °C. A defect of HiSim's weather pipeline in every run
+  on an hourly source, one hour of 8760 here; it is fixed in HiSim outside the verification, and the
+  register entry holds until then.
+- Time labels: a row's label is the start of its step in the station's standard time, so the label
+  00:00 is the EPW's hour 1 and the standard's hour of a peak is the label's hour plus one.
+- Warm-up (D3): 5.1.1.7.2 requires preconditioning where the program allows it; HiSim has none of its
+  own, the first pass is it. A single pass from 20 °C against the second pass, which starts from the
+  settled mass temperature of 15.2 °C (600) and 17.2 °C (900), at 3600 s: annual heating −0.06 % (600) and −0.6 % (900),
+  January heating −0.4 % and −3.6 %, first week −1.4 % and −8.6 %; cooling and the annual peak
+  heating load unchanged.
+
+## 11. Step 4 (2026-11-04): the hours, the quantities of Section 7.3, comparison and accounting
+
+### 11.1 What was built
+
+- `aggregate.py` forms the hours (FR10): the mean of each hour's time steps; the delivered power is
+  split into heating and sensible cooling before the mean, because Section 3 defines the two loads
+  apart. At 3600 s only the split is made.
+- `metrics.py` computes the quantities of 7.3 from the hours: annual loads (7.3.1.1, 7.3.1.2); annual
+  hourly peaks with month, day and hour (7.3.1.3, 7.3.1.4), Hour 1 being 00:00 to 01:00 (Table 7-47
+  note a), so the hour is the label's hour plus one; monthly loads and peaks (7.3.2.4, required for
+  600 and 900, computed for every conditioned case); mean, minimum and maximum of the zone air
+  temperature, which is the air node θ_air (Section 3, 7.3.6); 1 K bins for 900FF, a bin holding its
+  lower bound (7.3.7.1); 24 hourly values on the days of Table 7-47. The operative and the mass
+  temperature, the solar gain through the windows and the largest single time step are HiSim's
+  diagnostics. The runner's summary is these quantities; its step-based summary of 3b is gone.
+- `suite.py` reads and checks `suite.yaml`: each group against its counts, each range with its
+  reference key, the register entries by category (a `known_deviation` names case, output and
+  optionally time step), the outputs. `suite.yaml` gains `reference_file` and `outputs`.
+- `compare.py` takes each range's value (the case's load, case minus parent, or parent minus case
+  for 910) and compares it with the private bounds: `pass`, `fail`, `known_deviation` (outside, with
+  an entry of the human), `skipped` (a case not run, or no bounds), `not_modelled`; with the position
+  in the range (0 at the lower, 1 at the upper bound) and the signed distance to the nearer bound.
+  The group accounting per time step counts attempted = pass + fail + known_deviation; a range not
+  attempted counts as not met; the formal result is `pass` only at met ≥ minimum (Table A3-14).
+  No error message shows a bound.
+- `suites/ashrae140/reference_template.json`: the private file's layout, every value null,
+  generated from the suite file; a test keeps the two equal, another checks the private file's keys
+  against it (skipped without the data).
+- Tests: `test_aggregation.py` and `test_compare.py`, base, with synthetic numbers.
+
+### 11.2 Deviations from the spec
+
+- Spec §7.3 keyed a difference range by the case alone (`"610"`); the filled reference file keys it
+  minuend-subtrahend as the tables state it (`"610-600"`, `"900-910"`). The suite follows the file;
+  the spec example is corrected (revision 10).
+- Outputs of 7.3 that HiSim's building does not produce are listed in `suite.yaml` as
+  `not_available`: the incident solar radiation by orientation (7.3.2.1, Table 7-47) and the
+  transmitted solar radiation through the windows (7.3.2.2, 7.3.4.1, Table 7-47), since the window
+  output is the solar heat gain through g_gl,n. The sky temperature (7.3.2.3) is `not_applicable`:
+  HiSim applies none. Nothing is computed outside the model to fill them.
+- `deviations.py` of the layout (§6) is not created: `suite.py` reads the register; its export as
+  `deviations.md` belongs to step 5.
+
+### 11.3 End-to-end check: case 600 at 3600 s
+
+Case 600 ran through the hours, the quantities and the comparison with the private file. The
+comparison results are not recorded here. HiSim's own values: peak heating 2.805 kW on 31 December,
+hour 24; peak sensible cooling 5.337 kW on 22 January, hour 14.
+
+### 11.4 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D22 | Statuses per range and group accounting in the public report (spec §9.3, §10 and §12 allowed them, as pyBuildingEnergy publishes them) | private | private for now: the statuses, the group accounting and its headline appear only in the private report; the public report carries HiSim's values and the deviation register; spec revision 11; 2026-11-04 | – |
+| D23 | Whether step 5 builds the public report (spec §10, FR14 `--public`) | defer: no reader yet (the CI of step 9 and the paper come later), and every public output is a place where something could slip out | deferred until a reader needs it; step 5 builds the private report only, without plots; the plots follow with the review of step 6; spec revision 11; 2026-11-04 | – |
+
+## 12. Step 5 (2026-11-04): the private report
+
+### 12.1 What was built
+
+- `export.py` reads the runner's summaries below the output directory, compares every time step
+  (`compare`) and writes four files beside them: `results.csv` (each range with value, bounds,
+  position, distance and status; HiSim's diagnostics with status `info`: annual loads of the cases
+  that are not a range of their own, annual peaks with month, day and hour, the free-float
+  temperatures), `summary.json` (metadata, rows, group accounting, register), `summary.md` (the
+  same for a reader, with the time-step consistency of spec §8.4) and `deviations.md` (the register
+  and the outputs the suite does not report). The report says it is private and not a claim of
+  conformity; it carries the bounds, statuses and group accounting (D22). No plots, no public
+  variant (D23).
+- Because it is built from the summaries on disk, cases run one by one into one directory end up in
+  one report. Each summary records the HiSim commit of its run, and the report flags a directory
+  whose runs come from more than one commit.
+- CLI: `--suite`, every case of the suite when no `--case` is given, `--report-only` to rebuild the
+  report without running. The log line of a run names the file only; the loads are in the report.
+  An output directory inside the HiSim checkout is refused, so that the private report cannot be
+  committed by accident (spec §10: nothing is written to the repository).
+- Tests: `test_export.py` (base, synthetic numbers); the made-up suite and ranges moved to
+  `tests/verification/synthetic.py`.
+
+### 12.2 Deviations from the spec
+
+- `results.csv` drops `ref_value`, `deviation_abs` and `deviation_rel_pct`, which belong to single
+  reference values (the deferred ISO suite), and adds `position_in_range` and
+  `distance_to_nearer_bound`, which spec §8.1 asks of a range.
+- No `deviations.py`: `export.py` writes `deviations.md` from the register `suite.py` reads.
+- The commit recorded is the one checked out (`HiSimCommit`); uncommitted changes do not show. The
+  runs of a report to keep are therefore made from a committed state.
+
+## 13. Before step 6 (2026-11-04)
+
+- The private reference file was filled and confirmed by the human against Tables A3-1 to A3-4
+  (21 keys, 40 ranges), and the counts of Table A3-14 (low mass 21 ranges, 18 to meet; high mass
+  19, 17).
+- Cases a program cannot model: Annex A3 has no rule of its own. A group passes when the count of
+  results within their ranges meets the minimum (A3.2), so a range without a result counts as not
+  met, as the accounting does (spec §8.1). A program may omit a test case if the modeler explains
+  the omission in the modeler report of Normative Annex A2 (5.1.2.3); the cases of spec §2.3 are
+  explained by the feature they need. Section 7 adds nothing. The same modelling methods apply to
+  every case (5.1.1.4), which the one rule set of the system builder ensures. This goes into
+  `docs/verification/README.md` with step 8.
+- The EPW identity check that spec §11 step 3 moved to step 5 was already done: `PROVENANCE.md`
+  records the hour-by-hour agreement of the file with the normative `725650TY.CSV` since
+  2026-11-02, and what HiSim's weather pipeline makes of the file is register entries F6 and F7
+  (§10.5). Step 5 did nothing for it; the spec row is corrected.
+
+## 14. The first full run (2026-11-04)
+
+The 18 cases of the suite ran at 60, 900 and 3600 s from commit fc209c59. Ranges met: low mass 11
+of 16 attempted, high mass 7 of 12 attempted, the same at all three time steps. With the cases of
+spec §2.3 not modelled, neither group can reach the minimum of Table A3-14. Which ranges are met,
+and by how much the others are missed, stays private (D22, D24).
+
+### 14.1 Causes
+
+Diagnostic runs outside the repository changed the model in their own process only; HiSim is
+unchanged. They point to three causes:
+
+1. **ISO 13790 in part.** HiSim's building has neither the absorbed solar radiation of the opaque
+   elements (ISO 13790, 11.3.4) nor the radiation to the sky (11.3.5); register entry
+   `opaque_solar_absorption_and_sky_radiation`. Without them the zone's temperature swings too
+   little, which lowers heating and cooling alike.
+2. **The 5R1C network.** The coupling conductance H_tr,is (ISO 13790, Eq. 9) lies in series with
+   the transmission conductances, whose printed U-values already include the interior surface
+   resistance. The network therefore loses less in steady state than the U-values give, and more
+   insulation saves less than it should. A property of the model, not a defect of HiSim; not yet in
+   the register.
+3. **The setback step (D18).** The heating set point of 640 and 940 steps instead of ramping,
+   which changes the effect of the setback.
+
+The causes partly offset each other, so correcting one alone can move results away. Some
+differences remain unexplained; candidates are the constant F_w per window and the distribution of
+the solar gains over the nodes (register entries `constant_fw_per_window`,
+`interior_solar_distribution`). The decisions on the three causes are open.
+
+### 14.2 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D24 | The group accounting of the first full run in the gap analysis (D22 kept it in the private report) | – | stated in §14: the counts only; the statuses of the ranges, their positions and every number of the diagnosis stay private; pyBuildingEnergy publishes its own accounting; 2026-11-04 | – |
+
+## 15. Step 6 (2026-11-04): the suite as pytest tests
+
+### 15.1 What was built
+
+- `tests/verification/test_suite_ashrae140.py`: one test per range the suite models and per time
+  step, 28 ranges at three steps, with the ids of spec §9.1. Each case runs once per session and
+  time step, when a range first needs it, into pytest's temporary directory. While the suite's
+  gating is off, a range outside its bounds is reported as a `VerificationStatusWarning` and the test
+  passes; with gating on it fails; a known deviation of the register is an xfail. Without
+  `HISIM_VERIFICATION_DATA` every test skips. The message names the value, its unit, the status and
+  the time step only.
+- `--verification-timesteps` (in `tests/conftest.py`, where pytest reads options) restricts the
+  step lengths, e.g. `--verification-timesteps 3600`.
+- `compare.py`: the bounds, the position and the distance stay out of the representation of the
+  comparison results and of the reference ranges, so that neither a pytest report nor a traceback
+  shows them (test in `test_compare.py`).
+- Register: `series_interior_coupling` (category `model`, cause 2 of §14.1), proposed, not
+  approved.
+- The whole suite ran in pytest at all three time steps in 15 minutes, at 3600 s alone in about one
+  minute; without the data every test of the suite skips.
+
+### 15.2 Deviations from the spec
+
+- Spec §9.1 asked the failure message for the deviation and the path to the plot. With the value,
+  a deviation from the range gives a bound back, so the message has neither; the spec is corrected.
+- Spec §9.3 left open how a test reports its status while gating is off; it is a warning.
+- No option to keep the runs of a pytest session: they go to pytest's temporary directory. A report
+  to keep comes from the command line (FR14).
+- The plots of the range cases are drawn by a script in the private data folder (D25), not by a
+  `plots.py` in the repository.
+
+### 15.3 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D25 | Where the plots of the range cases come from (spec §10) | a `plots.py` in the repository, tested with made-up ranges; the plots themselves private | a script in the private data folder draws them; nothing of it in the repository for now; 2026-11-04 | hisim-x6c7.12 |
+
+## 16. Merge of main (2026-11-05)
+
+`origin/main` (13 commits, up to #1166) was merged into the branches of the verification. Two
+findings:
+
+- main's building declares energy ports, and an energy balance after every run checks that they
+  close. The building computes with the signed `ThermalPowerDelivered` as before and books its
+  heating and its cooling direction on two further inputs, `HeatReceivedInWatt` and
+  `HeatRemovedByCoolingInWatt`. The runner connected only the first, so the balance missed the
+  heater's heat and every run with the heater stopped with an `EnergyBalanceError`. The runner now
+  wires the two inputs to the heater's `HeatingPowerDelivered` and `HeatDrawnForCoolingInWatt`, as
+  main's building tests do (`tests/idealized_heater_rig.py`). The whole suite then ran at all three
+  time steps: every case summary is identical to the first run's (§14), and the energy balance
+  closes in every pass.
+- `tests/test_energy_system_record.py` compares the record of a minimal energy system with a
+  committed golden. The ten override fields of step 2b (§8) were missing from it: the test has
+  failed since step 2b, which ran the building and weather tests only. The golden is rewritten on
+  the step 2b branch; its diff is the ten fields, all null.
+
+The other failures of `pytest -m base` on this Windows machine fail on main alike.
+
+## 17. Merge of main (2026-11-08)
+
+`origin/main` (36 commits, up to #1211) was merged into the branches of the verification. On the
+step 2b branch two import lines of the building package conflicted; both sides are kept. Two
+changes on main stop every run of the suite:
+
+- #1221: every setup declares its kind, and the kind selects the setup rules a run waives. The
+  runner declares `demo`, in the words of `SetupKind` "a demonstration or a test rig", as main's
+  test of the building's heating demand does. `demo` waives AR-09, EP-06 and MT-02. Declared
+  `residential`, case 600 breaks two of them and case 600FF one: the building's `HeatingByDevices`
+  port, which the constant internal gain feeds from a CSV file, has no peer (AR-09), and the
+  heater's electricity has neither a peer nor a meter (AR-09, MT-02). The verification reports
+  neither flow, and `residential` describes a house with residents. The balance rules AR-04 and
+  AR-05 still apply.
+- #1211: `BuildingConfig.technical_room_location` is sized from the cellar code of the TABULA row
+  unless it is set. The system builder takes nothing from the carrier row (D16), so it sets the
+  field to `HEATED_ZONE`. On main no component but the building reads it, and no component of a
+  case is placed by it, so it acts on nothing.
+
+The whole suite then ran at all three time steps: every case summary is identical to the run of
+§16. In every pass the declared components and the links between them close, and the ports the
+energy balance reports as unlinked or unmetered are the ones named above.
+
+### 17.1 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D26 | The setup kind of the verification runs (main #1221) | `demo` | `demo`; 2026-11-08 | hisim-x6c7.9 |
+| D27 | The technical room of a case's building (main #1211) | `HEATED_ZONE`, set in the system builder | `HEATED_ZONE`; 2026-11-08 | hisim-x6c7.8 |
+
+## 18. The U-values the building gets (2026-11-12)
+
+Cause 2 of §14.1, read again against both standards.
+
+**The argument**
+
+1. **ASHRAE's U-values reach from the zone air.** The tables label the total U-values of the
+   constructions air-to-air (Informative Tables 7-3, 7-26, 7-28, 7-32) and those of the glazings as
+   reaching from the interior air to the ambient air (Informative Tables 7-11, 7-18, 7-22); both
+   contain the constant combined interior coefficients of Table 7-9. Note c of Table 7-9 fits this
+   reading: it explains a combined coefficient below the convective one by convective and radiative
+   flows in opposite directions, which holds when both are measured against the difference between
+   zone air and surface. In steady state and with these constant coefficients, the transmission of
+   the zone is therefore Σ U·A times the difference between zone air and outdoor air.
+2. **ISO 13790's conductances reach from the central node.** In the 5R1C network, H_tr,w and
+   H_tr,op act between the outdoor air and the central node θ_s, which blends the air with the mean
+   radiant temperature (7.2.2.1), and H_tr,is couples the air to θ_s (7.2.2.2, Eq. 9). Informative
+   Annex I.3.2 describes the effect this represents: transmission is driven by such a blended
+   temperature, which lies below the air temperature when the air is heated to its set point. HiSim
+   implements this as the standard does.
+3. **Feeding the first into the second counts one step twice.** The air-to-air U-values already
+   contain the step from the zone air to the surfaces. Placed where ISO 13790 expects conductances
+   from θ_s, with H_tr,is in front of them, they add that step a second time, and the network
+   transmits less than Σ U·A in steady state. This is the deficit of §14.1. It comes from the input
+   mapping of D10, not from HiSim's implementation of ISO 13790; this revises the reading of cause 2
+   in §14.1 as a property of the model. For the network fed with ASHRAE's values, the steady-state
+   target is Σ U·A (step 1).
+
+**Normative basis.** 7.2.1.10.3 b.2 requires the combined interior coefficients of Table 7-9 from a
+program that computes neither time-step varying interior convection nor long-wave exchange, which
+is the case for the 5R1C. The 5R1C can take them only through the U-values, and its fixed H_tr,is
+lies in series with them. Under 7.2.1.10.3 b.3, values the standard does not specify are allowed
+when a mathematical, physical or logical reason supports them, when they hold for all cases alike,
+and when the Standard Output Report of Normative Annex A2 records them.
+
+**Options**
+
+- (a) U-values by ISO 6946 from the layers, with the interior treatment of ISO 13790 (h_is as
+  fixed): values the standard does not specify, which b.3 would allow.
+- (b) The mapping of the ISO 13790 model in the Modelica Buildings Library (LBNL,
+  `Buildings.ThermalZones.ISO13790`): U-values without the interior coefficient and with the
+  exterior convective one, h_is replaced by the area-weighted interior convective coefficient of
+  Table 7-9, the radiation to the sky computed separately. It changes h_is, which ISO 13790 fixes.
+- (c) The printed air-to-air U-values, which carry the coefficients b.2 specifies, times one factor
+  per case that removes the second step in steady state.
+
+(c) is the only one of the three that keeps the coefficients b.2 specifies for this kind of program
+and meets the target of step 3 in steady state, while h_is and h_ms stay as ISO 13790 fixes them.
+The factor itself moves the network's conductances away from the printed values and is therefore a
+value the standard does not specify, in the sense of b.3: its reason is the argument above, it
+applies to every case of the suite, and the register records it (`steady_state_u_values`). The
+suite has no Standard Output Report yet (D23); until it has one, the register stands in for it.
+
+**Rule (D28):** option (c), for the ASHRAE suite.
+
+- H = Σ U·A over the opaque elements and the windows, with the case's air-to-air U-values;
+  H_tr,is = h_is · A_tot with HiSim's h_is; f = H_tr,is / (H_tr,is − H).
+- Every U-value the building gets is the case's times f, so that 1/(1/H_tr,is + 1/(f·H)) = H.
+  h_is, h_ms and the case files stay as they are. f is computed from the case file alone and has
+  no free parameter.
+- One factor for windows and opaque elements alike is an assumption: the steady state does not
+  decide how the compensation splits between them. H_tr,is in series still shapes the network's
+  dynamics.
+- D28 covers the ASHRAE suite; the deferred ISO 52016-1 suite (D9) is not covered.
+- The absorbed solar radiation of the opaque elements and the radiation to the sky (ISO 13790,
+  11.3.4 and 11.3.5; cause 1) scale with R_se·U, the share of the heat at the outer surface that
+  reaches the zone. If they are implemented, they take the case's air-to-air U-values, not the
+  U-values times f; the building receives only the latter.
+
+What changed:
+
+- **Code.** `derivation.steady_state_transmission` gives f and `system_builder.derive` applies it.
+  `parameters/<case>.json` records the case's U-values, H, H_tr,is, f and the U-values HiSim gets
+  (key `u_values`).
+- **Tests.** For every case, the network's steady-state transmission conductance equals the U·A
+  sum computed from the case file. The factor is checked on synthetic values, and the configuration
+  tests of cases 600 and 620 expect the case's U-values times f.
+- **Register.** `printed_u_values` becomes `steady_state_u_values`, which also notes the
+  dynamics. `series_interior_coupling`, proposed in §15, is removed: its steady-state
+  effect is what D28 compensates. `opaque_solar_absorption_and_sky_radiation` states which U-values
+  the two terms take.
+- **Spec.** Revision 14: §3.2 rules 1 and 2, Appendix B.
+- The results of the suite with the rule stay private (D22).
+
+### 18.1 Decision
+
+| # | Decision | Recommendation | Decision (human) | Bead |
+|---|---|---|---|---|
+| D28 | The U-values the building gets in the ASHRAE suite (cause 2 of §14.1; replaces the U-value part of D10) | the printed air-to-air U-values times f per case | as recommended; 2026-11-12 | – |

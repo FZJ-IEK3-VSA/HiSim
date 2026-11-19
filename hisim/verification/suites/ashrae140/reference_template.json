@@ -1,0 +1,211 @@
+{
+  "_comment": "Layout of the private reference file $HISIM_VERIFICATION_DATA/ashrae140_annex_a3.json (spec sections 7.2 and 7.3). Each [lower, upper] in MWh/year is read from Normative Annex A3, Tables A3-1 to A3-4 of ANSI/ASHRAE Standard 140-2023; null where the tables state no range. A difference range is keyed minuend-subtrahend as the tables state it (900-910 for Case 910). The filled file never enters a repository.",
+  "source": "ANSI/ASHRAE Standard 140-2023, Normative Annex A3, Tables A3-1 to A3-4",
+  "units": "MWh/year",
+  "ranges": {
+    "600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "610-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "620-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "630-620": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "640-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "650-600": {
+      "heating": null,
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "660-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "670-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "680-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "685-600": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "695-685": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "900-910": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "920-900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "930-920": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "940-900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "950-900": {
+      "heating": null,
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "960-900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "980-900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "985-900": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    },
+    "995-985": {
+      "heating": [
+        null,
+        null
+      ],
+      "cooling": [
+        null,
+        null
+      ]
+    }
+  }
+}

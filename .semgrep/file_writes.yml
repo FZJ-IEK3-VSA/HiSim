@@ -45,6 +45,11 @@ rules:
         # Result writers: everything they write goes below SimulationParameters.result_directory
         # or the directory a CLI command was pointed at.
         - /hisim/postprocessing/
+        # The verification suite's runner and report: parameters, time series, summaries and the
+        # private report below the output directory `python -m hisim.verification` was pointed at
+        # (hisim_verification_agent_spec.md §10).
+        - /hisim/verification/runner.py
+        - /hisim/verification/export.py
         - /hisim/energy_system/executor.py
         - /hisim/energy_system/audit.py
         - /hisim/energy_system/comments.py

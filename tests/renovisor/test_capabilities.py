@@ -494,7 +494,7 @@ class TestTheDocument:
 
     @pytest.mark.renovisor_probes
     def test_hydrogen_heating_states_that_green_hydrogen_is_assumed(self, document: CapabilityDocument) -> None:
-        """renovisorissues #91: the house's hydrogen boiler stays used, and the note says its fuel is counted as green."""
+        """The house's hydrogen boiler stays used, and the note says its fuel is counted as green (renovisorissues #91)."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
         house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
 

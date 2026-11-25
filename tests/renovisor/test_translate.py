@@ -777,7 +777,7 @@ class TestElectricHeating:
 
 @pytest.mark.base
 class TestHydrogenHeating:
-    """renovisorissues #91: hydrogen is counted at 0 kg CO2 per kWh, and its line says green hydrogen is assumed."""
+    """Hydrogen is counted at 0 kg CO2 per kWh, and its line says green hydrogen is assumed (renovisorissues #91)."""
 
     def test_the_house_line_is_used_with_the_green_hydrogen_sentence(self) -> None:
         """The hydrogen-boiler twin runs as asked, so the line stays used and carries the assumption."""

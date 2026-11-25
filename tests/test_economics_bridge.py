@@ -44,6 +44,7 @@ import pytest
 import hisim.simulator as sim
 from hisim import loadtypes, utils
 from hisim.config import SizingContext
+from hisim.contracts.port_energies import MeterEnergy, PeerKind, PortEnergies, PortEnergy
 from hisim.economics import adapter, bridge, serialization
 from hisim.economics.bridge import EconomicContext
 from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind
@@ -388,7 +389,7 @@ class TestFailuresAbortInsteadOfDegrading:
         )
 
         with pytest.raises(CostDataError) as raised:
-            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters, port_energies=PortEnergies())
 
         assert "there_is_no_catalog_here" in str(raised.value)
         assert "priced without subsidies" in str(raised.value)
@@ -405,7 +406,7 @@ class TestFailuresAbortInsteadOfDegrading:
         parameters.economic_context = EconomicContext(scenario_set=_unusable_scenario_set())
 
         with pytest.raises(CostDataError) as raised:
-            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters, port_energies=PortEnergies())
 
         assert "scenario" in str(raised.value).lower()
 
@@ -424,7 +425,7 @@ class TestFailuresAbortInsteadOfDegrading:
         parameters.economic_context = EconomicContext(scenario_set=_unusable_scenario_set())
 
         with pytest.raises(CostDataError):
-            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters)
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), parameters, port_energies=PortEnergies())
 
         left_behind = set(os.listdir(tmp_path))
         assert "economic_inputs.json" in left_behind
@@ -434,7 +435,7 @@ class TestFailuresAbortInsteadOfDegrading:
 
     def test_a_successful_run_keeps_its_exports(self, tmp_path):
         """The cleanup must only ever run on the failure path."""
-        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)), port_energies=PortEnergies())
 
         written = set(os.listdir(tmp_path))
         assert {"economic_inputs.json", "lifecycle_costs.json", "lifecycle_kpis.json"} <= written
@@ -457,7 +458,7 @@ class TestFailuresAbortInsteadOfDegrading:
         )
 
         with pytest.raises(CostDataError) as raised:
-            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+            bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)), port_energies=PortEnergies())
 
         assert "matplotlib" in str(raised.value) and "Nothing was written" in str(raised.value)
         assert not os.listdir(tmp_path)
@@ -479,7 +480,7 @@ class TestChartsThatWereNotDrawn:
         `lifecycle_plots_not_drawn.txt` in every result directory would be one more artifact to
         explain — and every line names the chart, its perspective and the reason.
         """
-        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)), port_energies=PortEnergies())
 
         note = tmp_path / "lifecycle_plots_not_drawn.txt"
         assert note.is_file()
@@ -503,13 +504,50 @@ class TestChartsThatWereNotDrawn:
 
         monkeypatch.setattr(report_plots, "plot_timeline_heatmap", explode)
 
-        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)))
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(tmp_path)), port_energies=PortEnergies())
 
         written = set(os.listdir(tmp_path))
         assert {"lifecycle_costs.json", "cost_audit.csv", "lifecycle_plots_not_drawn.txt"} <= written
         assert "cost_audit_timeline_heatmap.png" not in written
         note = (tmp_path / "lifecycle_plots_not_drawn.txt").read_text(encoding="utf-8")
         assert "no fonts in this environment" in note
+
+
+@pytest.mark.base
+class TestThePortEnergiesReachTheExtract:
+    """The energy balance's port energies are written into `economic_inputs.json` and move no figure."""
+
+    RECORD = PortEnergies(
+        ports=(
+            PortEnergy(
+                "HeatPump", "ElectricalInputPowerSH", loadtypes.EnergyRole.CONSUMPTION, loadtypes.EnergyBalanceCarrier.ELECTRICITY,
+                None, "ElectricityMeter", PeerKind.METER, 2400.0,
+            ),
+        ),
+        meters=(
+            MeterEnergy(
+                "ElectricityMeter", loadtypes.EnergyBalanceCarrier.ELECTRICITY, "ElectricityFromGridInWatt", "ElectricityToGridInWatt",
+                2400.0, 0.0, agrees=True,
+            ),
+        ),
+    )
+
+    def test_the_extract_carries_the_record_and_every_figure_stays_as_it_was(self, tmp_path):
+        """Catches the record missing from the extract, and a figure that reads it before a pull request means it to.
+
+        The same empty fleet is priced twice, once with an empty record and once with a heat pump's port and its
+        meter; the cost files must agree byte for byte, since nothing prices the record yet.
+        """
+        with_nothing, with_ports = tmp_path / "nothing", tmp_path / "ports"
+        with_nothing.mkdir()
+        with_ports.mkdir()
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(with_nothing)), port_energies=PortEnergies())
+        bridge.compute_lifecycle_costs([], [], pd.DataFrame(), _Parameters(str(with_ports)), port_energies=self.RECORD)
+
+        extract = json.loads((with_ports / "economic_inputs.json").read_text(encoding="utf-8"))
+        assert extract["port_energies"] == self.RECORD.to_json()
+        for name in ("lifecycle_costs.json", "lifecycle_kpis.json", "cash_flow_timeline.csv", "cost_audit.csv"):
+            assert (with_ports / name).read_bytes() == (with_nothing / name).read_bytes(), name
 
 
 @pytest.mark.base
@@ -847,7 +885,7 @@ class TestUsefulHeat:
         wrappers = [_Wrapper(Building("Building")), _Wrapper(SimpleDHWStorage("OtherTank"))]
 
         with pytest.raises(CostDataError) as raised:
-            bridge.compute_lifecycle_costs(wrappers, self.OUTPUTS, self.FRAME, parameters)
+            bridge.compute_lifecycle_costs(wrappers, self.OUTPUTS, self.FRAME, parameters, port_energies=PortEnergies())
 
         assert "OtherTank" in str(raised.value)
         assert "ThermalEnergyConsumptionDHW" in str(raised.value)

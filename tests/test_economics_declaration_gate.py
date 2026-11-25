@@ -439,6 +439,7 @@ class TestPostprocessingLetsTheFailurePropagate:
         the same silent omission as an undeclared component, only fleet-wide. The raise happens
         before `economic_inputs.json` is written, so a misconfigured run leaves no half-extract.
         """
+        from hisim.contracts.port_energies import PortEnergies
         from hisim.economics.bridge import compute_lifecycle_costs
         from hisim.economics.catalog_entries import CostDataError
         from hisim.economics.parameters import EconomicParameters
@@ -448,4 +449,4 @@ class TestPostprocessingLetsTheFailurePropagate:
             country="DE", cost_database_path="/nonexistent/cost_database"
         )
         with pytest.raises(CostDataError):
-            compute_lifecycle_costs([], [], pd.DataFrame(), simulation_parameters)
+            compute_lifecycle_costs([], [], pd.DataFrame(), simulation_parameters, port_energies=PortEnergies())

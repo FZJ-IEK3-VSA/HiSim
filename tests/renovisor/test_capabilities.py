@@ -481,7 +481,7 @@ class TestTheDocument:
 
     @pytest.mark.renovisor_probes
     def test_electric_heating_is_announced_as_a_direct_acting_heater(self, document: CapabilityDocument) -> None:
-        """renovisorissues #100: the house's electric heating is approximated, and the note names the tariff it is priced at."""
+        """The house's electric heating is approximated, and the note names the tariff it is priced at (renovisorissues #100)."""
         fields = {entry["path"]: entry for entry in document.body["fields"]}
         house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
 

@@ -763,7 +763,7 @@ class TestSolidFuel:
 
 @pytest.mark.base
 class TestElectricHeating:
-    """renovisorissues #100: electric heating is a direct-acting heater at the all-day rate, and its line says so."""
+    """Electric heating is a direct-acting heater at the all-day rate, and its line says so (renovisorissues #100)."""
 
     def test_the_house_line_is_approximated_with_the_tariff_sentence(self) -> None:
         """The electric-heating twin runs, and the generator's line names what it does not model."""

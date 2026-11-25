@@ -395,7 +395,10 @@
               "description": "Year 1's cash divided by twelve, replacements included: the first year's cost, not a running cost.",
               "$ref": "#/$defs/investmentDependentBand"
             },
-            "investment_year0_in_euro": {"$ref": "#/$defs/investmentDependentBand"},
+            "investment_year0_in_euro": {
+              "description": "The investment, planning and removal booked in year 0. On the plan it equals, in each of min, best and max, the sum of the investment_by_stage entries of every by_subject row whose stage starts in year 0 (stages[].from_year 0); it is null exactly when a by_subject row with unpriced true is a subject unpriced_investment names. StagedDocument.validate refuses a document that breaks either rule (renovisorissues #78).",
+              "$ref": "#/$defs/investmentDependentBand"
+            },
             "sunk_cost_written_off_in_euro": {"$ref": "#/$defs/band"},
             "levelized_cost_of_heat_in_euro_per_kwh": {"$ref": "#/$defs/investmentDependentBand"}
           }

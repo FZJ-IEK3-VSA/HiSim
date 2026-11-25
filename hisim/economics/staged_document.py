@@ -75,6 +75,15 @@ class MeasureWithoutRowError(ValueError):
     """
 
 
+class InvestmentTotalError(ValueError):
+    """Raised when the plan's `investment_year0_in_euro` is not the sum of its year-0 stages' `investment_by_stage`.
+
+    The frontend shows both the headline investment and its split by stage and subject, so the two must agree. They
+    are built from the same timeline entries; a disagreement is a bug in this module or a document changed after it was
+    built.
+    """
+
+
 class CostGroup(str, enum.Enum):
     """The eight cost groups every stacked chart draws, in drawing order.
 
@@ -634,6 +643,7 @@ class StagedDocument:
         Raises:
             SchemaValidationUnavailableError: If `jsonschema` cannot be imported.
             jsonschema.ValidationError: If the document does not match the schema (a bug in this module).
+            InvestmentTotalError: If the plan's year-0 investment is not the sum of its year-0 stages' split.
             BandOrderError: If a band is not `min <= best <= max`.
             SubsidyReconciliationError: If an evaluation books support its `subsidies[]` rows do not award.
             MeasureWithoutRowError: If a measure a stage carries out has no `by_subject` row.
@@ -663,7 +673,7 @@ class StagedDocument:
 
     @classmethod
     def validate(cls, document: Mapping[str, Any]) -> None:
-        """Check one document against the shipped schema.
+        """Check one document against the shipped schema and the investment identity the schema cannot state.
 
         Args:
             document: The document to check.
@@ -671,6 +681,7 @@ class StagedDocument:
         Raises:
             SchemaValidationUnavailableError: If `jsonschema` is not installed.
             jsonschema.ValidationError: Naming the first place the document departs from the schema.
+            InvestmentTotalError: If the plan's year-0 investment is not the sum of its year-0 stages' split.
         """
         try:
             import jsonschema  # pylint: disable=import-outside-toplevel  # optional at import time
@@ -680,6 +691,60 @@ class StagedDocument:
                 "against economics_result.schema.json and is not written."
             ) from error
         jsonschema.validate(instance=document, schema=cls.schema())
+        cls.assert_investment_total_matches_stages(document)
+
+    @classmethod
+    def assert_investment_total_matches_stages(cls, document: Mapping[str, Any]) -> None:
+        """Raise unless the plan's year-0 investment is the sum of its year-0 stages' investment, slot by slot.
+
+        The parts are the `investment_by_stage` entries of every plan `by_subject` row whose stage starts in year 0
+        (`stages[k].from_year == 0`). Their sum must equal `plan.totals.investment_year0_in_euro` in each of `min`,
+        `best` and `max` within `RECONCILIATION_TOLERANCE_IN_EURO`. For example stage 1 buying a heat pump at 18,000
+        EUR and windows at 4,000 EUR in year 0 gives a total of 22,000 EUR.
+
+        A total of `null` is the investment withheld over an unpriced subject (:class:`UnpricedInvestment`): the parts
+        then hold the unpriced rows' placeholder zeros, so the total is null exactly when a plan row with `unpriced:
+        true` is one the document's `unpriced_investment` names, and a stated total beside such a row, or a null total
+        without one, is refused too.
+
+        Args:
+            document: The document, as built or as read back.
+
+        Raises:
+            InvestmentTotalError: Naming the slot, the stated total and the sum of the parts, or the null that has no
+                unpriced purchase behind it (or the number that has one).
+        """
+        plan = document["plan"]
+        total = plan["totals"]["investment_year0_in_euro"]
+        # The unpriced purchases are the ones the document itself names, read on the plan's rows.
+        named = set((document["unpriced_investment"] or {}).get("unpriced_subjects", []))
+        unpriced = sorted({row["subject"] for row in plan["by_subject"] if row["unpriced"] and row["subject"] in named})
+        if total is None:
+            if not unpriced:
+                raise InvestmentTotalError(
+                    "plan.totals.investment_year0_in_euro is null, but no by_subject row of the plan is an unpriced "
+                    "purchase; only an unknown price withholds the investment."
+                )
+            return
+        if unpriced:
+            raise InvestmentTotalError(
+                f"plan.totals.investment_year0_in_euro states a number although the plan buys {unpriced}, whose price "
+                "is unknown; the investment must be null."
+            )
+        year_zero_stages = {stage["index"] for stage in document["stages"] if stage["from_year"] == 0}
+        parts = dict.fromkeys(cls.BAND_KEYS, 0.0)
+        for row in plan["by_subject"]:
+            for split in row["investment_by_stage"]:
+                if split["stage"] in year_zero_stages:
+                    for key in cls.BAND_KEYS:
+                        parts[key] += split["investment_in_euro"][key]
+        for key in cls.BAND_KEYS:
+            if abs(total[key] - parts[key]) > cls.RECONCILIATION_TOLERANCE_IN_EURO:
+                raise InvestmentTotalError(
+                    f"plan.totals.investment_year0_in_euro is {total[key]} in slot {key!r}, but the investment_by_stage "
+                    f"entries of the stages starting in year 0 ({sorted(year_zero_stages)}) sum to {parts[key]}; the "
+                    "headline investment and its split by stage must be the same money."
+                )
 
     #: The three keys that make a mapping in the document a band, and their order.
     BAND_KEYS: ClassVar[Tuple[str, str, str]] = ("min", "best", "max")

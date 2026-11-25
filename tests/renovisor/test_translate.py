@@ -775,6 +775,28 @@ class TestElectricHeating:
         assert line.note == "direct-acting electric heating at the all-day rate; night-storage heaters are not modelled"
 
 
+@pytest.mark.base
+class TestHydrogenHeating:
+    """Hydrogen is counted at 0 kg CO2 per kWh, and its line says green hydrogen is assumed (renovisorissues #91)."""
+
+    def test_the_house_line_is_used_with_the_green_hydrogen_sentence(self) -> None:
+        """The hydrogen-boiler twin runs as asked, so the line stays used and carries the assumption."""
+        system = translate(baseline(heating__type_of_system="hydrogen_heating"))
+
+        assert system.base_file_name == BaseFiles.select(HeatGenerator.HYDROGEN_HEATING, with_solar_thermal=False)
+        line = system.report.line("house.heating.type_of_system")
+        assert line is not None and line.status is ReportStatus.USED
+        assert line.note == "green hydrogen assumed: 0 kg CO2 per kWh"
+
+    def test_a_gas_boiler_line_carries_no_assumption(self) -> None:
+        """The sentence is hydrogen's alone: the mockup's gas boiler keeps a used line with no note."""
+        system = translate(baseline())
+
+        line = system.report.line("house.heating.type_of_system")
+        assert line is not None and line.status is ReportStatus.USED
+        assert line.note is None
+
+
 #: The five elements, by their request names.
 ELEMENTS = tuple(element.value for element in ThermalElement)
 

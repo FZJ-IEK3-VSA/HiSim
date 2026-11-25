@@ -493,6 +493,19 @@ class TestTheDocument:
         }
 
     @pytest.mark.renovisor_probes
+    def test_hydrogen_heating_states_that_green_hydrogen_is_assumed(self, document: CapabilityDocument) -> None:
+        """The house's hydrogen boiler stays used, and the note says its fuel is counted as green (renovisorissues #91)."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
+
+        assert house["hydrogen_heating"] == {
+            "value": "hydrogen_heating",
+            "status": ReportStatus.USED.value,
+            "substitution": False,
+            "note": "green hydrogen assumed: 0 kg CO2 per kWh",
+        }
+
+    @pytest.mark.renovisor_probes
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument
     ) -> None:

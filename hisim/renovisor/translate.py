@@ -1633,6 +1633,14 @@ def _heating(state: _TranslationState) -> None:
 def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optional[str]:
     """Return why a generator is an approximation of its twin, or ``None`` when it is exact.
 
+    Two generators are approximations. ``biomass_heating`` runs the pellet twin, so its logs are
+    priced and counted as pellets. ``electric_heating`` runs the electric-heating twin, whose
+    ``ElectricHeating`` delivers the heat the moment the building asks for it and buys the
+    electricity at the house's one all-day price; a night-storage heater, which charges on a cheap
+    night tariff and releases the heat in the day, is not modelled (owner decision of 2026-11-13,
+    renovisorissues #100). The note is the line's sentence in the mapping report, and the capability
+    document announces the value ``approximated`` with it.
+
     HVO is not here: it runs the oil twin as heating oil, which ``not_implemented_yet.yaml`` says,
     as it says for LPG running the gas twin (hisim-renovisor-translator-epc.19).
     """
@@ -1642,6 +1650,8 @@ def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optio
             "simulated on the pellet twin, which is the nearest recorded solid-fuel boiler; the logs are "
             "priced and their CO2 counted as wood pellets"
         )
+    if generator is HeatGenerator.ELECTRIC_HEATING:
+        return "direct-acting electric heating at the all-day rate; night-storage heaters are not modelled"
     return None
 
 

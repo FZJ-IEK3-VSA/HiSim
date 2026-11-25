@@ -1609,7 +1609,8 @@ def _heating(state: _TranslationState) -> None:
             )
         else:
             state.report.used(
-                "house.heating.type_of_system", state.base_file_name, value=generator.value
+                "house.heating.type_of_system", state.base_file_name, value=generator.value,
+                note=_generator_assumption(generator),
             )
     boiler_type = BaseFiles.BOILER_TYPE.get(generator)
     if boiler_type is not None:
@@ -1652,6 +1653,29 @@ def _generator_note(state: _TranslationState, generator: HeatGenerator) -> Optio
         )
     if generator is HeatGenerator.ELECTRIC_HEATING:
         return "direct-acting electric heating at the all-day rate; night-storage heaters are not modelled"
+    return None
+
+
+def _generator_assumption(generator: HeatGenerator) -> Optional[str]:
+    """Return the assumption an exactly simulated generator's result rests on, or ``None`` when there is none.
+
+    The generator's twin runs as the request states it, so its line stays ``used``; the sentence
+    says what the result takes for granted beyond the request. ``hydrogen_heating`` is the one
+    case: the cost database counts hydrogen at 0 kg CO2 per kWh, which is true of hydrogen made
+    with renewable electricity only, and the boiler burns ``GREEN_HYDROGEN``. By owner decision of
+    2026-11-13 (renovisorissues #91) the factor stays 0 and the report says green hydrogen is
+    assumed. The sentence is the line's note in the mapping report, and the capability document
+    carries it on the value.
+
+    Args:
+        generator: The generator the renovated house carries, one :func:`_generator_note` does not
+            call an approximation.
+
+    Returns:
+        The sentence for the ``used`` line, or ``None`` when the line needs none.
+    """
+    if generator is HeatGenerator.HYDROGEN_HEATING:
+        return "green hydrogen assumed: 0 kg CO2 per kWh"
     return None
 
 

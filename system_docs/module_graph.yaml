@@ -40,7 +40,7 @@ groups:
     modules: [hisim.config]
     may_import: [leaves, physics_constants]
   contracts:
-    description: the types that cross the seams (run record, KPI types, cost facts); empty until created
+    description: the types that cross the seams (port energies; later the run record, KPI types, cost facts)
     modules: [hisim.contracts]
     may_import: [leaves, physics_constants, config, parameters]
   shared_code:

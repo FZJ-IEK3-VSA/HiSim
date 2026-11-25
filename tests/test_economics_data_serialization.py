@@ -721,6 +721,38 @@ class TestSerializationRoundtrip:
         restored = inputs_from_json({"simulation_year": 2024, "simulated_period_fraction": 1.0})
         assert restored.energy_attribution_by_subject_in_kwh == {}
 
+    def test_the_port_energies_round_trip_and_an_older_file_reads_them_as_none(self, tmp_path):
+        """Catches `economic_inputs.json` losing the port energies, or an archive written before them failing to load.
+
+        A re-priced archive must read the same per-port kWh the run's energy balance computed; the steps stay in
+        memory, so the record read back equals the original apart from them. An older file has no such key and reads
+        as None, which says "not recorded", not "nothing declared".
+        """
+        from hisim.contracts.port_energies import LoopTag, MeterEnergy, PeerKind, PortEnergies, PortEnergy
+        from hisim.economics.serialization import inputs_from_json, read_inputs, write_inputs
+        from hisim.loadtypes import EnergyBalanceCarrier, EnergyRole
+
+        inputs = self._inputs()
+        inputs.port_energies = PortEnergies(
+            ports=(
+                PortEnergy(
+                    "HeatPump", "ElectricalInputPowerSH", EnergyRole.CONSUMPTION, EnergyBalanceCarrier.ELECTRICITY, None,
+                    "ElectricityMeter", PeerKind.METER, 2400.0,
+                ),
+            ),
+            loop_tags=(LoopTag("HeatPump", "space_heating", EnergyBalanceCarrier.SPACE_HEATING_HEAT, supplies=True),),
+            meters=(
+                MeterEnergy(
+                    "ElectricityMeter", EnergyBalanceCarrier.ELECTRICITY, "ElectricityFromGridInWatt", "ElectricityToGridInWatt",
+                    2500.0, 100.0, agrees=True,
+                ),
+            ),
+        )
+        write_inputs(inputs, str(tmp_path))
+
+        assert read_inputs(str(tmp_path)).port_energies == inputs.port_energies
+        assert inputs_from_json({"simulation_year": 2024, "simulated_period_fraction": 1.0}).port_energies is None
+
     def test_result_roundtrip_preserves_the_additive_result_fields(self, tmp_path):
         """The result fields the report reads survive `lifecycle_costs.json` unchanged.
 

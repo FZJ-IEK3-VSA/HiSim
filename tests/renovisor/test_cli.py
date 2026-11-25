@@ -63,6 +63,7 @@ class FailingCostEngineRunner:
         """Hand the calculation's own parameters to ``PostProcessor.compute_lifecycle_costs``."""
         from unittest import mock
 
+        from hisim.contracts.port_energies import PortEnergies
         from hisim.postprocessing.postprocessing_main import PostProcessor
 
         ppdt = SimpleNamespace(
@@ -75,7 +76,9 @@ class FailingCostEngineRunner:
         with mock.patch(
             "hisim.economics.bridge.compute_lifecycle_costs", side_effect=ValueError(self.ENGINE_ERROR)
         ):
-            PostProcessor().compute_lifecycle_costs(ppdt)  # type: ignore[arg-type]
+            # the balance of a run in which nothing declares a port
+            energy_balance = SimpleNamespace(port_energies=PortEnergies)
+            PostProcessor().compute_lifecycle_costs(ppdt, energy_balance)  # type: ignore[arg-type]
 
 
 class CrashingRunner:
@@ -404,6 +407,7 @@ class TestAPlainSimulationKeepsItsLeniency:
         """Same postprocessing step, parameters that did not require the costs: no exception."""
         from unittest import mock
 
+        from hisim.contracts.port_energies import PortEnergies
         from hisim.postprocessing.postprocessing_main import PostProcessor
 
         parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=900)
@@ -413,7 +417,9 @@ class TestAPlainSimulationKeepsItsLeniency:
             post_processing_options=[],
         )
         with mock.patch("hisim.economics.bridge.compute_lifecycle_costs", side_effect=ValueError("boom")):
-            PostProcessor().compute_lifecycle_costs(ppdt)  # type: ignore[arg-type]
+            # the balance of a run in which nothing declares a port
+            energy_balance = SimpleNamespace(port_energies=PortEnergies)
+            PostProcessor().compute_lifecycle_costs(ppdt, energy_balance)  # type: ignore[arg-type]
 
 
 @pytest.mark.base

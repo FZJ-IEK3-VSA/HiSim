@@ -2,8 +2,8 @@
 # scripts/module_graph.py; explained in system_docs/module_graph.md. Today's violations are listed, each with its
 # bead, in tests/module_graph_baseline.yaml.
 #
-# Status: a first draft of the seams design (drawing v5, 2026-11-10), not yet approved by the owner. Changing an
-# allowed edge is a change of one `may_import` line.
+# Status: the seams design, approved by the owner on 2026-11-25 (seams spec, roadmap/hisim_seams_spec.html). Changing
+# an allowed edge is a change of one `may_import` line.
 #
 # Rules:
 # - A module belongs to the group of the longest prefix in `modules` that is the module or a package above it, so a

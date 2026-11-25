@@ -1201,10 +1201,13 @@ class TestFinancingOverridesThePerspective:
         # measure's year-0 investment (stage 1) and the heat pump's in year 4 (stage 2). The
         # baseline stage buys nothing in a brownfield frame, so it borrows nothing.
         assert {loan["stage"] for loan in loans} == {1, 2}
+        # The fixture's mapping report declares the envelope unpriced, so every loan's money is withheld with the
+        # rest of the investment's figures (UnpricedInvestment); the loans and their terms are still there.
+        assert document["unpriced_investment"]["unpriced_subjects"] == [SyntheticPlan.ENVELOPE_SUBJECT]
         for loan in loans:
             assert loan["rate"] == 0.02
             assert loan["term_years"] == 10
-            assert loan["principal_in_euro"]["best"] > 0
+            assert loan["principal_in_euro"] is None
         assert document["parameters"]["financing"]["term_in_years"] == 10
 
 

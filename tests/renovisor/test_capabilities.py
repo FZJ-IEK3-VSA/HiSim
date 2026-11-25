@@ -480,6 +480,19 @@ class TestTheDocument:
         assert "HVO" in house["hvo_heating"]["note"]
 
     @pytest.mark.renovisor_probes
+    def test_electric_heating_is_announced_as_a_direct_acting_heater(self, document: CapabilityDocument) -> None:
+        """renovisorissues #100: the house's electric heating is approximated, and the note names the tariff it is priced at."""
+        fields = {entry["path"]: entry for entry in document.body["fields"]}
+        house = {value["value"]: value for value in fields["house.heating.type_of_system"]["values"]}
+
+        assert house["electric_heating"] == {
+            "value": "electric_heating",
+            "status": ReportStatus.APPROXIMATED.value,
+            "substitution": False,
+            "note": "direct-acting electric heating at the all-day rate; night-storage heaters are not modelled",
+        }
+
+    @pytest.mark.renovisor_probes
     def test_a_value_that_is_not_implemented_does_not_change_its_measures_status(
         self, document: CapabilityDocument
     ) -> None:

@@ -761,6 +761,20 @@ class TestSolidFuel:
         assert line.note is not None and "priced and their CO2 counted as wood pellets" in line.note
 
 
+@pytest.mark.base
+class TestElectricHeating:
+    """renovisorissues #100: electric heating is a direct-acting heater at the all-day rate, and its line says so."""
+
+    def test_the_house_line_is_approximated_with_the_tariff_sentence(self) -> None:
+        """The electric-heating twin runs, and the generator's line names what it does not model."""
+        system = translate(baseline(heating__type_of_system="electric_heating"))
+
+        assert system.base_file_name == BaseFiles.select(HeatGenerator.ELECTRIC_HEATING, with_solar_thermal=False)
+        line = system.report.line("house.heating.type_of_system")
+        assert line is not None and line.status is ReportStatus.APPROXIMATED
+        assert line.note == "direct-acting electric heating at the all-day rate; night-storage heaters are not modelled"
+
+
 #: The five elements, by their request names.
 ELEMENTS = tuple(element.value for element in ThermalElement)
 

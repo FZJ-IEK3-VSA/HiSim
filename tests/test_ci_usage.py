@@ -8,7 +8,9 @@ regressed.
 The probe is tested for real rather than against a fake, because a fake would only prove that the
 arithmetic is right and the arithmetic was never the risk: the risk is that a counter is unreadable
 or misread on some machine. So one test allocates a known amount of memory between a start and a
-report call and asks that the measured peak reflect it. The remaining tests cover the decisions,
+report call, frees it again before the report, and asks that the reported peak still cover what the cgroup held
+while the memory was in use. Two tests against a fake cgroup only show that this check fails for a peak that never
+moves and passes for one that does. The remaining tests cover the decisions,
 where the failure modes are quieter -- a regression rule that fires on noise makes the report
 useless, and one that never fires makes it pointless.
 
@@ -17,6 +19,7 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import contextlib
 import email.message
 import importlib.util
 import io
@@ -27,7 +30,7 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, ContextManager, Dict, Iterator, List, Optional, Tuple
 
 import pytest
 
@@ -63,30 +66,151 @@ class TestProbeMeasures:
     # Large enough that neither the interpreter's own footprint nor a sampler's timing can
     # explain it away, small enough to allocate anywhere the tests run.
     ALLOCATION_BYTES = 256 * 1024 ** 2
-    # How much of the allocation the peak must reflect; a cgroup that cannot be reset reports a
-    # peak including the baseline, so the assertion is on the rise above the baseline.
-    MINIMUM_OBSERVED_FRACTION = 0.6
+    # How far the reported peak may sit below a memory.current reading taken earlier. The kernel
+    # raises the high-water mark on every charge but without a lock, so two CPUs charging at once
+    # can leave it a few charges (at most 2 MiB each, one huge page) below the usage they reached.
+    WATERMARK_RACE_ALLOWANCE_BYTES = 16 * 1024 ** 2
+    # What a fake cgroup's memory.current reads before its fake allocation.
+    FAKE_BASELINE_BYTES = 1024 ** 3
+
+    @classmethod
+    def assert_peak_covers_held_memory(cls, record: Dict[str, Any], held_bytes: Optional[int]) -> None:
+        """Assert that the probe's reported peak is at least what the cgroup held during the allocation.
+
+        ``held_bytes`` is the cgroup's ``memory.current`` read while the test's allocation was in use,
+        so it contains the allocation plus whatever every other process of the cgroup held at that
+        moment. ``memory.peak`` is the kernel's high-water mark of ``memory.current``; it never falls
+        below any earlier reading, whatever the other processes do afterwards. So a correct probe
+        passes this check deterministically, also beside pytest-xdist workers that share the cgroup.
+        A probe whose peak did not move for the allocation, or that reports the memory in use at the
+        end instead of a peak, reports less than ``held_bytes`` and fails.
+
+        Args:
+            record: The probe's report, in which ``peak_memory_bytes`` is in bytes.
+            held_bytes: The cgroup's ``memory.current`` in bytes while the allocation was held, or
+                None if it could not be read.
+
+        Raises:
+            AssertionError: If the peak did not come from the cgroup's ``memory.peak``, or lies more
+                than :attr:`WATERMARK_RACE_ALLOWANCE_BYTES` below ``held_bytes``.
+        """
+        assert record["peak_memory_method"] == probe.MeasurementMethod.CGROUP_PEAK.value, (
+            f"the peak came from {record['peak_memory_method']}, not from the cgroup's memory.peak; "
+            f"warnings: {record['warnings']}"
+        )
+        assert held_bytes is not None, "memory.current was unreadable while the allocation was held"
+        shortfall = held_bytes - record["peak_memory_bytes"]
+        assert shortfall <= cls.WATERMARK_RACE_ALLOWANCE_BYTES, (
+            f"the reported peak of {record['peak_memory_bytes']} bytes is {shortfall} bytes below the "
+            f"{held_bytes} bytes the cgroup held while {cls.ALLOCATION_BYTES} bytes were allocated"
+        )
+
+    @staticmethod
+    def measure_across(state_dir: Path, hold: Callable[[], ContextManager[None]]) -> Tuple[Optional[int], Dict[str, Any]]:
+        """Run the probe's start and report around one allocation and read the cgroup while it is held.
+
+        The order is start, allocate, read ``memory.current``, free, report. The memory is freed
+        before the report, so the report sees it only if the probe reads a high-water mark rather
+        than the memory in use at the end.
+
+        Args:
+            state_dir: The probe's state directory.
+            hold: A context manager factory that allocates on entry and frees on exit.
+
+        Returns:
+            ``(held_bytes, record)``: the cgroup's ``memory.current`` in bytes read while the memory
+            was held (None if unreadable), and the probe's report.
+        """
+        instrument = probe.ResourceProbe(state_dir)
+        instrument.start()
+        with hold():
+            held_bytes = probe.CgroupV2Reader().current_memory_bytes()
+        return held_bytes, instrument.report(scope="unit-test")
+
+    @contextlib.contextmanager
+    def real_allocation(self) -> Iterator[None]:
+        """Hold :attr:`ALLOCATION_BYTES` of touched memory of this process until the block exits.
+
+        Every page is written once, so the kernel charges it to the cgroup; an allocation that is
+        never touched is not charged.
+        """
+        ballast = bytearray(self.ALLOCATION_BYTES)
+        ballast[::4096] = b"\x01" * len(ballast[::4096])
+        yield
+        del ballast
+
+    @staticmethod
+    def fake_cgroup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, current_bytes: int) -> Path:
+        """Point the probe at a cgroup directory of plain files and return that directory.
+
+        The directory holds ``memory.current`` and ``memory.peak`` (both ``current_bytes``) and a
+        ``cpu.stat``; ``/proc/self/cgroup`` is replaced by a file naming the root, as in a container.
+        ``reset_peak`` is replaced by one that refuses, because writing to a plain file would empty it
+        instead of resetting it.
+        """
+        cgroup_dir = tmp_path / "cgroup"
+        cgroup_dir.mkdir()
+        (cgroup_dir / "memory.current").write_text(str(current_bytes), encoding="utf-8")
+        (cgroup_dir / "memory.peak").write_text(str(current_bytes), encoding="utf-8")
+        (cgroup_dir / "cpu.stat").write_text("usage_usec 0\n", encoding="utf-8")
+        membership = tmp_path / "self-cgroup"
+        membership.write_text("0::/\n", encoding="utf-8")
+        monkeypatch.setattr(probe.CgroupV2Reader, "SYSFS_ROOT", cgroup_dir)
+        monkeypatch.setattr(probe.CgroupV2Reader, "PROC_SELF_CGROUP", membership)
+        monkeypatch.setattr(probe.CgroupV2Reader, "reset_peak", lambda reader: False)
+        return cgroup_dir
+
+    def fake_allocation(self, cgroup_dir: Path, *, peak_moves: bool) -> Callable[[], ContextManager[None]]:
+        """Return a context manager factory that allocates :attr:`ALLOCATION_BYTES` in a fake cgroup.
+
+        On entry ``memory.current`` rises by the allocation and, if ``peak_moves``, so does
+        ``memory.peak``; on exit ``memory.current`` falls back. With ``peak_moves`` False the fake
+        kernel is a counter whose peak does not move for a real allocation.
+        """
+        @contextlib.contextmanager
+        def hold() -> Iterator[None]:
+            held = str(self.FAKE_BASELINE_BYTES + self.ALLOCATION_BYTES)
+            (cgroup_dir / "memory.current").write_text(held, encoding="utf-8")
+            if peak_moves:
+                (cgroup_dir / "memory.peak").write_text(held, encoding="utf-8")
+            yield
+            (cgroup_dir / "memory.current").write_text(str(self.FAKE_BASELINE_BYTES), encoding="utf-8")
+
+        return hold
 
     def test_peak_memory_follows_a_real_allocation(self, tmp_path: Path) -> None:
         """Catches a probe that reports a peak unrelated to the memory the job used.
 
         The whole point of the monitoring is that a job growing from 8 GB to 14 GB shows up. A
         probe whose peak does not move when 256 MB is allocated would report a flat line
-        forever and nobody would notice until a job was killed.
+        forever and nobody would notice until a job was killed. The check compares the peak with
+        what the cgroup held during the allocation, not with the memory in use at the start: the
+        cgroup is shared by every pytest-xdist worker, and a neighbour that frees memory during the
+        allocation lowers the rise above the start without lowering the peak below what was held.
         """
-        instrument = probe.ResourceProbe(tmp_path)
-        state = instrument.start()
-        ballast = bytearray(self.ALLOCATION_BYTES)
-        ballast[::4096] = b"\x01" * len(ballast[::4096])  # touch pages so they are really charged
-        record = instrument.report(scope="unit-test")
-        del ballast
+        held_bytes, record = self.measure_across(tmp_path, self.real_allocation)
+        self.assert_peak_covers_held_memory(record, held_bytes)
 
-        assert record["peak_memory_bytes"] is not None, "no memory counter was readable at all"
-        baseline = state["baseline_memory_bytes"] or 0
-        observed_rise = record["peak_memory_bytes"] - baseline
-        assert observed_rise >= self.ALLOCATION_BYTES * self.MINIMUM_OBSERVED_FRACTION, (
-            f"peak rose by {observed_rise} bytes for a {self.ALLOCATION_BYTES}-byte allocation"
-        )
+    def test_a_peak_that_never_moves_fails_the_check(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Catches a check that no longer notices a probe whose peak stays where it was.
+
+        The fake cgroup's ``memory.current`` rises by 256 MB during the allocation and its
+        ``memory.peak`` stays at the baseline, so the probe reports a peak below what was held.
+        """
+        cgroup_dir = self.fake_cgroup(tmp_path, monkeypatch, self.FAKE_BASELINE_BYTES)
+        held_bytes, record = self.measure_across(tmp_path / "state", self.fake_allocation(cgroup_dir, peak_moves=False))
+        with pytest.raises(AssertionError, match="below the"):
+            self.assert_peak_covers_held_memory(record, held_bytes)
+
+    def test_a_peak_that_moves_passes_the_check(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Catches a check that fails every probe, so that the test above would prove nothing.
+
+        The same fake cgroup, but its ``memory.peak`` rises with the allocation, as the kernel's does.
+        """
+        cgroup_dir = self.fake_cgroup(tmp_path, monkeypatch, self.FAKE_BASELINE_BYTES)
+        held_bytes, record = self.measure_across(tmp_path / "state", self.fake_allocation(cgroup_dir, peak_moves=True))
+        self.assert_peak_covers_held_memory(record, held_bytes)
+        assert record["peak_memory_bytes"] == self.FAKE_BASELINE_BYTES + self.ALLOCATION_BYTES
 
     def test_report_records_cpu_time_and_its_source(self, tmp_path: Path) -> None:
         """Catches a probe that silently reports a sampled number as an exact one.

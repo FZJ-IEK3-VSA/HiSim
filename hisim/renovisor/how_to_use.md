@@ -357,6 +357,12 @@ for the measure prices it, and every figure is stated again. A kept envelope ele
 withholds nothing. Without such a subject `unpriced_investment` is `null`, and a `null` end of the
 payback year means that world does not stay repaid within the horizon.
 
+`plan.totals.investment_year0_in_euro` is the same money as its split: in each of `min`, `best` and
+`max` it equals the sum of the `investment_by_stage` entries of the stages that start in year 0, over
+every `by_subject` row of the plan, and it is `null` exactly when the plan buys a subject
+`unpriced_investment` names. The document is checked for both before it is written (renovisorissues
+#78); a document that breaks them is not written.
+
 `comparison.energy_bill_year1_delta_in_euro` (schema version 12, renovisorissues #95) is the plan's
 year-1 energy bill minus the reference's, over every carrier of `energy_year1`, charges minus feed-in
 revenue, as a band: each end pairs the same price world of the plan and the reference, and the three

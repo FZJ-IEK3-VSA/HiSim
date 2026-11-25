@@ -1,10 +1,12 @@
-# Spec: the hot-water cylinder is a stack of N mixed layers with real flows, explicit and start-of-step, at fine steps
+# Spec: the stratified hot-water cylinder is a second component, interchangeable with the mixed one: N explicit start-of-step layers with real flows, valid where one step moves at most one layer
 
-Status: draft (owner decisions D1 to D4 of 2026-11-25 recorded; the open questions of §8 are put to the owner with
-this document), nothing built. Owner: Noah Pflugradt. Epic: hisim-hydronics-fxix (bead hisim-hydronics-fxix.1; the
-coarse model is hisim-stratified-storage-coarse-0392). Builds on: `roadmap/hydronic_coupling_spec.md` (§4.5, §5.3,
+Status: draft, decided (owner decisions D1 to D11 of 2026-11-25 recorded; §8 lists what is still open), nothing
+built. Owner: Noah Pflugradt. Epic: hisim-hydronics-fxix (bead hisim-hydronics-fxix.1; the coarse model is
+hisim-stratified-storage-coarse-0392; the rename is hisim-dhw-return-outputs-rename-653d; the sourcing of the
+defaults is hisim-stratified-cylinder-defaults-1eff). Builds on: `roadmap/hydronic_coupling_spec.md` (§4.5, §5.3,
 §9.5, D4, D5), `roadmap/hydronic_part_load_spec.md` (decisions 3, 7, 9, 16, 23), `roadmap/two_mode_buffer_spec.md`,
-`roadmap/fluid_loops_spec.md` (#1122), the start-of-step node of #1009, and renovisorissues #94.
+`roadmap/fluid_loops_spec.md` (#1122), the start-of-step node of #1009, the seams spec (`roadmap/hisim_seams_spec.html`,
+`system_docs/module_graph.yaml`), and renovisorissues #94.
 
 Code is cited against `origin/economics-ports-record` at 26f691ff1.
 
@@ -36,11 +38,13 @@ the buffer's exchanger removed, 10 January 2021 at 60 s, has a residual of 34.3 
 (46.4 %), and the energy-balance check fails the run on 1,439 of 1,440 steps. No recorded energy system uses the
 path; only `tests/test_simple_hot_water_storage.py:71` builds it. D5 kept it until a stratified storage replaces it.
 
-**What the replacement must respect.** The owner decided on 2026-11-25 (D1 to D4 below): no iteration and no time
+**What the replacement must respect.** The owner decided on 2026-11-25 (D1 to D11 below): no iteration and no time
 sub-stepping inside a component; the fine model is the explicit start-of-step layer model recorded in bead
-hisim-hydronics-fxix.1 on 2026-10-17, valid where the water a circuit moves in one step is small against one layer;
-a coarse model for the steps above `SimulationParameters.part_load_above_seconds` is a separate design
-(hisim-stratified-storage-coarse-0392). This spec is the fine model.
+hisim-hydronics-fxix.1 on 2026-10-17, valid where the water a circuit moves in one step is at most one layer; the
+stratified cylinder is a second component beside the mixed one, interchangeable with it, as TRNSYS offers a fully
+mixed tank type and a stratified tank type; the mixed cylinder stays as it is; a coarse model for the steps where the
+fine one is not valid is a separate design (hisim-stratified-storage-coarse-0392). This spec is the fine model and
+the new component.
 
 ## 2. Decisions
 
@@ -53,8 +57,8 @@ A step length where that does not hold needs the second model of D2.
 **D2 — A storage may have a second, optional model for coarse steps, as the part-load pattern does** (owner,
 2026-11-25). One model at or below `SimulationParameters.part_load_above_seconds` (600 s by default), an
 approximation above it that delivers about the same totals. Consequence: this spec covers only the fine model; the
-coarse model is designed under hisim-stratified-storage-coarse-0392, blocked by this one. What a stratified storage
-does above the threshold until then is Q1 of §8.
+coarse model is designed under hisim-stratified-storage-coarse-0392, blocked by this one. Until it exists, a run the
+fine model cannot serve uses the mixed cylinder (D6).
 
 **D3 — Priority between the collector and the backup is control strategy and stays in the controllers** (owner,
 2026-10-10, confirmed 2026-11-25). The sensor heights belong to the controllers' reading of the tank. Consequence:
@@ -64,10 +68,52 @@ reads is its wiring; the priority logic itself stays with bead hisim-bq3h.
 **D4 — Energy closes per step for the tank as a black box** (owner, 2026-11-25). Consequence: every heat the tank
 publishes comes from the same layer step; `Σ coils − tap − loss = ΔU` to float precision on every step
 (`tests/test_energy_balance_storages.py` and the fluid-loop checks of #1122 keep checking it), and the buoyancy
-merge of §4.5 conserves energy exactly.
+merge of §4.3 conserves energy exactly.
+
+**D5 — Two separate components, interchangeable, as TRNSYS's mixed and stratified tank types** (owner, 2026-11-25).
+`SimpleDHWStorage` stays exactly as it is: one mixed node, no `number_of_layers`, its results and goldens unchanged.
+A new component class `StratifiedDHWStorage` is the stratified cylinder. Both expose the same interface: the same
+input and output names, load types, units, energy ports and loop tags, the same default connections in both
+directions, so a system file or an assembly switches by changing the class name, and everything wired to the cylinder
+works with either (§4.1). Consequence: one generic test pins the shared interface (T12); the two classes share no
+model code, only the pure pieces both need (§4.8); every partner that names `SimpleDHWStorage` in a default
+connection names `StratifiedDHWStorage` too (§4.8). The old Q4 (N = 1 keeps the mixed node) is moot: the stratified
+class requires N ≥ 2 (§4.7).
+
+**D6 — The fine model's validity is checked at run time, not at build** (owner, 2026-11-25). The stratified cylinder
+checks every step's flows against the layer mass and fails the run at the first step in which a flow moves more than
+one layer (§4.4). The error names the port, the flow, the layer mass, the step length, the largest N that would hold
+and bead hisim-stratified-storage-coarse-0392. There is no check against the step length at build. Consequence: a
+user picks the mixed cylinder for a run the stratified one cannot serve; RenoVisor at 900 s keeps the mixed one until
+the coarse model exists; the recorded twins keep the mixed one (§5).
+
+**D7 — The cylinder now; the buffer's dead path goes** (owner, 2026-11-25; the old Q3). The space-heating buffer's
+`heat_exchanger_is_present=False` path, its mixing factor and its mass-mixing law are deleted in the first PR. A
+stratified buffer, if ever wanted, is its own component later, on the pattern of D5; no bead for it now (§8).
+
+**D8 — The defaults are accepted as presets marked as estimates** (owner, 2026-11-25; the old Q5). Five layers,
+the backup coil from 1.0 to 0.5 of the height, the solar coil from 0.25 to 0.0, the pockets at 0.7 and 0.1,
+`λ_eff = 1.0 W/(m K)`. Consequence: the preset's docstring and the field comments say they are estimates; bead
+hisim-stratified-cylinder-defaults-1eff sources them (manufacturer data sheets, VDI 6002, EN 12977 or similar)
+before RenoVisor uses the stratified cylinder.
+
+**D9 — The return outputs are renamed in their own PR with a heads-up** (owner, 2026-11-25; the old Q6).
+`StepMeanWaterTemperatureToHeatGeneratorInCelsius` and `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius`
+become `WaterTemperatureToHeatGeneratorInCelsius` and `WaterTemperatureToSecondaryHeatGeneratorInCelsius` on both
+cylinder classes, with the recorded twins re-recorded, the goldens re-blessed and the heads-up of
+`system_docs/results_and_interfaces.md` §5 on renovisorissues. Until that PR the stratified class carries the old
+names, whose descriptions say the value is the start-of-step outlet temperature. Bead
+hisim-dhw-return-outputs-rename-653d, PR 6 of §9.
+
+**D10 — hisim-bq3h (solar priority) is P2, scheduled after the stratified cylinder** (owner, 2026-11-25; the old
+Q8). Its effect is measured on the stratified cylinder with the sensors in their pockets. Recorded on the bead.
+
+**D11 — Two fixed sensor pockets, an upper and a lower one** (owner, 2026-11-25; the old Q7). Each has a height
+field and a pair of outputs; the existing sensor outputs carry the upper pocket, so the backups' default connections
+stay (§4.6). A third pocket is added when a third reader exists.
 
 Earlier decisions this spec rests on: D4 of the hydronic coupling spec (controllers decide on start-of-step
-values), its D5 (the buffer's stratification path kept until replaced; replaced here by deletion, Q3), decision 7 of
+values), its D5 (the buffer's stratification path kept until replaced; replaced here by deletion, D7), decision 7 of
 the part-load spec (the store is a black box that publishes port and sensor quantities only; "any tank model, a
 stratified one included, can publish" the controlled temperature at the end of the step), decision 9 of the
 part-load spec (collector and backup each set their own ratio; no priority in the mechanism), and the modelling
@@ -76,6 +122,12 @@ guide's rule that a new store publishes its start-of-step temperature and both e
 
 ## 3. Terms
 
+- **The mixed cylinder**: `SimpleDHWStorage`, today's component, one fully mixed node with the tap valve solved on
+  the step mean. Unchanged by this spec.
+- **The stratified cylinder**: `StratifiedDHWStorage`, the new component of this spec, N layers.
+- **The shared interface**: everything another component or a file can read from or send to a cylinder: its input
+  and output names with their load types, units, energy ports, loop tags and postprocessing flags, its default
+  connections in both directions, and the configuration fields both classes have (§4.1).
 - **Layer**: one of N equal volumes the tank is cut into along its height, fully mixed within itself, with its own
   temperature. Layer 1 is at the bottom, layer N at the top. Mass `M_k = M/N` (kg), heat capacity `C_k = M_k c`
   (J/K) with `c = hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K` (4180 J/(kg K)).
@@ -91,8 +143,8 @@ guide's rule that a new store publishes its start-of-step temperature and both e
 - **Port height** `h`: where a coil's inlet or outlet, or a sensor pocket, sits, as a fraction of the tank's height
   from the bottom (0 = bottom, 1 = top), dimensionless. Its layer is `k = min(floor(h N) + 1, N)`.
 - **Tap draw**: the household's warm-water demand, served through the thermostatic mixing valve of stage C
-  (`SimpleDHWStorage.mixing_valve_draw`): `m_hot` of tank water leaves the top layer and the same mass of mains water
-  at `T_cold` (10 °C) enters the bottom layer.
+  (`SimpleDHWStorage.mixing_valve_draw`, moved to `hydronics` by §4.8): `m_hot` of tank water leaves the top layer
+  and the same mass of mains water at `T_cold` (10 °C) enters the bottom layer.
 - **Through-flow** across a boundary: the net mass flow (kg/s) crossing the boundary between two neighbouring layers,
   from mass conservation of every layer; positive upward.
 - **Upwind inflow term**: the heat a stream brings into a layer, `m c (T_from − T0_k) dt`, with `T_from` the
@@ -106,23 +158,61 @@ guide's rule that a new store publishes its start-of-step temperature and both e
   §8.4. Not a time sub-step: at most N − 1 merges, each a finite arithmetic mean.
 - **Sensor pocket**: a configured height at which the tank publishes its temperature for a controller: its start-of-step
   value (what the controller decides on) and its end value (what its part-load control reads).
-- **Threshold**: `SimulationParameters.part_load_above_seconds`, 600 s by default (part-load spec §3).
+- **Threshold**: `SimulationParameters.part_load_above_seconds`, 600 s by default (part-load spec §3). Not where
+  the fine model stops being valid (§4.4); the Courant number is.
 
 ## 4. Design
 
-### 4.1 Which storages
+### 4.1 Two components, one interface
 
-The hot-water cylinder `SimpleDHWStorage` gets the layer model. It is the storage #94 needs, the one with two coils
-at different heights and a draw that displaces the column, and the one whose circuits can run at a Courant number
-below 1 at 60 s (§4.4). The space-heating buffer `SimpleHotWaterStorage` does not get it in this spec: its
-part-load mode above 600 s rests on the end temperature being exactly linear in each circuit's ratio (part-load
-spec, decision 21), which a buoyancy merge breaks; its non-conserving stratification path and the field
-`heat_exchanger_is_present` are deleted (Q3), since no recorded setup uses them and D5 only kept them until a
-replacement existed. A buffer of layers is a bead of its own if the owner ever wants it.
+`SimpleDHWStorage` keeps its code and its behaviour. `StratifiedDHWStorage` is a second `PhysicsComponent`, built
+from its own configuration class `StratifiedDHWStorageConfig`, in its own folder (§4.8). A file states which it wants
+by the class path; nothing else in the file changes:
 
-A cylinder with `number_of_layers = 1` keeps today's model unchanged: the step-mean `MixedNode` with the tap valve
-solved on the step mean (Q4). The layer model runs from N = 2 upward. So every recorded energy system, every golden
-and every RenoVisor run stays as it is until a file says `number_of_layers: 5`.
+```yaml
+components:
+  DHWStorage:
+    class: hisim.components.stratified_dhw_storage.storage.StratifiedDHWStorage   # was hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: standard
+```
+
+**What is identical, and pinned by T12.** For both classes, read from an instance built from `preset_standard`:
+
+- every input: its name, load type, unit, whether it is mandatory, whether it may stay unconnected
+  (`allow_unconnected_mandatory`, the primary coil's two inputs), and its loop tag (`fluid_loop`: which loop, which
+  channel);
+- every output of the mixed class: its name, load type, unit, energy port (role and carrier), loop tag,
+  postprocessing flags and display setting; the stratified class publishes every one of them with the same tags;
+- the two fluid loops: name, carrier, fluid, `supplies=False`, `pumps=False`, `may_cool=False`;
+- the default connections the cylinder declares from its partners (`get_default_connections_from_*`: the heat pump,
+  the occupancy, the boiler, the collector, the substation, the electric heater): the same partner classes, the same
+  input and output names;
+- the default connections every partner declares from the cylinder: a partner that declares connections from
+  `SimpleDHWStorage` declares the same list, output for output, from `StratifiedDHWStorage` (§4.8);
+- `cost_relevance` (`PRICED`), the cost facts the economics adapter reads by class name (§4.8), the useful-heat
+  source (`ThermalEnergyConsumptionDHW`);
+- the configuration fields both have: `volume_heating_water_storage_in_liter` with the same sizing law
+  (`VOLUME_LAW`, `SIZING_CONTRIBUTIONS` unchanged), `installation_location` with the same rule,
+  `heat_transfer_coefficient_in_watt_per_m2_per_kelvin`, the cost fields; both offer `preset_standard(name)`, so a
+  file keeps `preset: standard` when it switches.
+
+**What the stratified class adds.** Only outputs that no default connection of any component names: the N layer
+temperatures `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius` (for plots and tests). T12 allows an output on the
+stratified class that the mixed one lacks only if it matches that pattern; everything else must agree.
+
+**The lower pocket is on both classes.** The two lower-pocket outputs (`LowerSensorWaterTemperatureAtStartOfStepInCelsius`,
+`LowerSensorWaterTemperatureAtEndOfStepInCelsius`, §4.6) are part of the shared interface: the mixed class publishes
+them too, equal to its single `T0` and `T_end`. Decided here, since the owner left it to the spec: the alternative,
+publishing them on the stratified class only, would make the solar controller's default connection and the
+`cylinder_temperature` need of the solar assembly differ by class, and a file could no longer switch by the class name
+alone. The cost is two new result columns on every run with a mixed cylinder, whose values repeat two existing
+columns; no KPI moves, and the PR says so (`results_and_interfaces.md` §1).
+
+**Why two classes and not one with a switch.** One class with `number_of_layers` would carry two models, two state
+shapes and a mode choice in every method, and a reader of a file could not tell from the class which model runs. Two
+classes say it in the class name, as TRNSYS's Type 4 (stratified) and Type 38 (mixed) do; the interface test keeps
+them interchangeable. A configuration field that selects a model is the pattern the two-mode buffer uses for the
+part-load threshold (`two_mode_buffer_spec.md` §4.2), where the choice is the step length's, not the author's.
 
 ### 4.2 Geometry
 
@@ -133,10 +223,10 @@ preset tank has `R = 0.271 m`, `H = 1.084 m`, `A = 0.231 m²`, a surface of 2.30
 
 Layer k has the height `H/N`, the mass `M/N`, the side area `2π R H / N`, and the top and bottom layers add one cap
 each. Its loss coefficient `UA_k = U · (its surface)`, with `U = heat_transfer_coefficient_in_watt_per_m2_per_kelvin`
-(0.36 W/(m² K)); `Σ UA_k` is today's `UA` (0.831 W/K for the preset tank), so the standby loss of a uniform tank is
-unchanged. The conduction between layers k and k+1 is `UA_cond = λ_eff A / (H/N)`, with `λ_eff` the effective
-vertical conductivity of water plus wall (§4.7, a configured field with a default of 1.0 W/(m K)): 1.06 W/K for
-N = 5 and 2.13 W/K for N = 10 on the preset tank.
+(0.36 W/(m² K)); `Σ UA_k` is the mixed cylinder's `UA` (0.831 W/K for the preset tank), so the standby loss of a
+uniform tank is the same in both classes (T6). The conduction between layers k and k+1 is `UA_cond = λ_eff A / (H/N)`,
+with `λ_eff` the effective vertical conductivity of water plus wall (§4.7, a configured field with a default of
+1.0 W/(m K)): 1.06 W/K for N = 5 and 2.13 W/K for N = 10 on the preset tank.
 
 ### 4.3 The step: upwind transport, conduction, loss, then buoyancy
 
@@ -144,12 +234,12 @@ Every quantity of the step is computed from the start-of-step temperatures `T0_1
 flows (inputs), the demand (input) and the surrounding temperature (input).
 
 **The tap valve on the top layer.** The tap draws from layer N, whose supply temperature is `T0_N`, a committed
-value, so the valve of stage C has a closed form and the local Illinois iteration of `solve_tank_step` is not
-needed for N ≥ 2:
+value, so the valve of stage C has a closed form and no local iteration (the mixed class's `solve_tank_step` solves
+the valve on the step mean, which the stratified class does not have):
 
 - `T0_N > T_warm` (40 °C): `m_hot = m_d (T_warm − T_cold) / (T0_N − T_cold)`, the heat drawn equals the demand;
 - `T_cold < T0_N ≤ T_warm`: `m_hot = m_d`, all of the demand passes unmixed, the shortfall is
-  `ThermalEnergyUnmetDHWInWattHour` as today;
+  `ThermalEnergyUnmetDHWInWattHour` as in the mixed class;
 - `T0_N ≤ T_cold`: nothing is drawn.
 
 `m_hot` leaves layer N and the same `m_hot` of mains water at `T_cold` enters layer 1: the column moves up by
@@ -201,14 +291,34 @@ step, `Co = 0.45`); layer 5 gains `0.369 · 4180 · (63 − 58) · 60 = 462.7 kJ
 462.7 kJ` and ends at 52.23 °C; layers 1 and 2 stay at 20 °C; the heat pump books `0.369 · 4180 · (63 − 50) · 60 =
 1203.0 kJ`, the sum of the three. The profile is monotone, so nothing merges.
 
-### 4.4 Validity: the Courant number, measured against the flows of the twins
+### 4.4 Validity: the Courant number, checked at run time
 
 The explicit upwind scheme carries, in one step, at most one layer's mass across a boundary: with `Co_k = 1` layer
 k ends exactly at its upstream neighbour's start temperature (a plug shift of one layer); with `Co_k > 1` it ends
 beyond it, which no mixing can produce. Conduction and loss are explicit too, with the condition
-`2 UA_cond dt / C_k ≤ 1`, which is 0.01 at N = 20 and 60 s on the preset tank and never binds in practice.
+`2 UA_cond dt / C_k ≤ 1`, which is 0.01 at N = 20 and 60 s on the preset tank and never binds in practice; it is
+refused at build, since it depends on the configuration and the step length only.
 
-The flows a cylinder sees, measured on 2026-11-25 on `household_heatpump_solar_thermal_building_sizer`
+**The refusal (D6).** In every pass of every step, after the flows are read and before anything is published, the
+layer step computes each layer's outflow and fails the run at the first layer whose outflow exceeds its mass. There
+is no check at build against the step length: the flows are the generators' and the tap's, known only in the run.
+The error, `LayerFlowExceedsLayerMassError` (a `hydronics.HydronicsError`), names
+
+- the port whose flow did it (the primary coil, the secondary coil or the tap) and its flow in kg/s;
+- the water that flow moves in one step, in kg, against the layer's mass in kg (and N and the tank's mass);
+- the step length in seconds and the step's index;
+- the largest N that would hold that flow at this step length, `floor(M / (m dt))`, or "none" below 2;
+- the remedies: fewer layers, a shorter step, or the mixed cylinder `SimpleDHWStorage` for this step length; and the
+  bead hisim-stratified-storage-coarse-0392, where the coarse model that lifts the limit is designed.
+
+Example: `StratifiedDHWStorage 'DHWStorage': the primary coil moves 0.369 kg/s, 332.1 kg in a 900 s step, through
+layers of 49.6 kg (N = 5, 248 kg). The explicit layer model holds only where one step moves at most one layer; no
+N >= 2 holds this flow at 900 s. Use fewer layers, a shorter step, or SimpleDHWStorage at this step length; the
+coarse model for long steps is bead hisim-stratified-storage-coarse-0392.`
+
+The check is one pass over N layers in the hot path, no allocation; a flow that moves exactly one layer passes.
+
+**The flows the twins move**, measured on 2026-11-25 on `household_heatpump_solar_thermal_building_sizer`
 (15 June 2021 at 60 s, 7.78 kW heat pump, 4 m² collector, 250 l cylinder, Aachen test reference year, predefined
 occupancy) and computed from the generators' laws for the others:
 
@@ -251,28 +361,28 @@ The largest N whose layers hold a step's charge of the twin's heat pump (0.369 k
 For a larger heat pump the flow grows with the rated power: about 0.57 kg/s at 12 kW (34 kg per 60 s step, largest
 N = 7), 0.72 kg/s at 15 kW (43 kg, N = 5), 0.95 kg/s at 20 kW (57 kg, N = 4), on the same 250 l cylinder.
 
-So: the fine model as decided holds at 60 s with N up to about 10 for the twins' machines and up to 5 for a heat
-pump of 15 kW; at 120 s with N = 5; and not at 300 s or 600 s for any cylinder a heat pump or a boiler charges. The
-threshold of D2 (600 s) is not where the fine model stops being valid; the Courant number is. Between 120 s and the
-threshold a charged cylinder with N ≥ 2 runs into the condition in its first charge. §8 Q1 and Q2 decide what
-happens then; the recommendation is to fail loudly in both cases.
+So: the stratified cylinder as decided holds at 60 s with N up to about 10 for the twins' machines and up to 5 for a
+heat pump of 15 kW; at 120 s with N = 5; and not at 300 s or above for any cylinder a heat pump or a boiler charges.
+A file that states the stratified class at 900 s fails in the first charge, with the message above. The coarse
+bead inherits this: its switch should consider the Courant number rather than `dt`.
 
 ### 4.5 Ports, energy ports and the fluid loops
 
-The tank keeps its channels and their loop tags of hydronic stage E and #1122. Per coil, a `FluidLoop` with
+Both classes declare the channels and loop tags of hydronic stage E and #1122. Per coil, a `FluidLoop` with
 `supplies=False`, `pumps=False`, `may_cool=False`: `temperature_in` (the generator's supply), `flow_in` (its flow),
-`temperature_out` (the return) and `flow_out` (the flow passed through unchanged). What changes is what the return
+`temperature_out` (the return) and `flow_out` (the flow passed through unchanged). What differs is what the value
 carries:
 
-| Output | N = 1 (today) | N ≥ 2 | Reader |
+| Output | The mixed cylinder | The stratified cylinder | Reader |
 |---|---|---|---|
-| `StepMeanWaterTemperatureToHeatGeneratorInCelsius` | the step mean `T̄` | `T0` of the primary coil's outlet layer, a start-of-step value (the name then lies; Q6) | the backup, as its return; it books `m c (T_sup − T_ret)` |
-| `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius` | `T̄` | `T0` of the secondary coil's outlet layer | the collector, as its return |
+| `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (renamed by D9) | the step mean `T̄` | `T0` of the primary coil's outlet layer, a start-of-step value | the backup, as its return; it books `m c (T_sup − T_ret)` |
+| `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius` (renamed by D9) | `T̄` | `T0` of the secondary coil's outlet layer | the collector, as its return |
 | `WaterMassFlowRateToHeatGenerator`, `…ToSecondaryHeatGenerator` | the flow in, unchanged | the same | the loop's mass check (#1122) |
-| `WaterTemperatureAtStartOfStepInCelsius` | `T0` | the upper sensor pocket's `T0` (§4.6) | the backups' controllers (on/off, hysteresis), the solar controller's full-tank stop today (rewired, §4.6) |
+| `WaterTemperatureFromHeatGenerator`, `…FromSecondaryHeatGenerator` (outputs) | the supply, echoed | the same | plots |
+| `WaterTemperatureAtStartOfStepInCelsius` | `T0` | the upper sensor pocket's `T0` (§4.6) | the backups' controllers (on/off, hysteresis) |
 | `WaterTemperatureAtEndOfStepInCelsius` | `T_end` | the upper pocket's `T_end` | the backups' part-load controls |
-| `LowerSensorWaterTemperatureAtStartOfStepInCelsius`, `…AtEndOfStepInCelsius` | `T0`, `T_end` (one layer) | the lower pocket's `T0` and `T_end` | the solar controller: the differential switch-on against the collector sensor, the full-tank stop, the pump's part-load target |
-| `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius`, k = 1 … N | one output, `T0` | N outputs | plots, tests; no controller |
+| `LowerSensorWaterTemperatureAtStartOfStepInCelsius`, `…AtEndOfStepInCelsius` (new, both classes) | `T0`, `T_end` | the lower pocket's `T0` and `T_end` | the solar controller: the differential switch-on against the collector sensor, the full-tank stop, the pump's part-load target; the collector's inlet sensor |
+| `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius`, k = 1 … N (stratified only) | – | N outputs | plots, tests; no controller |
 | `ThermalPowerFromHeatGenerator`, `…FromSecondaryHeatGenerator`, W | `m c (T_sup − T̄)` | `m c (T_sup − T0_k_out)` | the energy balance (the tank's side of each loop), KPIs |
 | `ThermalPowerConsumptionDHW`, W, `PRODUCTION` to `HOT_WATER_USE` | `m_hot c (T̄ − T_cold)` | `m_hot c (T0_N − T_cold)` | the balance, the cost engine's useful heat, KPIs |
 | `ThermalEnergyUnmetDHWInWattHour` | on `T̄` | on `T0_N` | the KPI "Unmet DHW heat demand" |
@@ -280,12 +390,14 @@ carries:
 | `ThermalEnergyInStorage`, Wh | `C T_end` | `Σ_k C_k T_end,k` | KPIs |
 | `HeatLossInWatt`, `HeatToHeatedZoneInWatt`, `LOSS` | `UA (T̄ − T_amb)` | `Σ_k UA_k (T0_k − T_amb)` | the balance, the building |
 | `StandbyTemperatureLoss`, K | `loss / C` | `loss / C`, on the whole tank | the assembly bounds |
+| `WaterMassFlowRateOfDHW`, `HotWaterMassFlowRateFromStorageInKgPerSecond` | the demand, `m_hot` | the same | plots, KPIs |
 
-The generator's return is a committed start-of-step value, so the hot-water chain no longer iterates between the
-generator and the cylinder (today the step mean takes a few passes, coupling spec §6); the generators' supply caps at
-their set temperatures (coupling spec §5) stay as they are and now act on a return that does not move within the
-step. The collector reads the lower pocket's `T0` as `TemperatureCollectorInletAtStartOfStepInCelsius` and the
-secondary coil's outlet `T0` as its return; with the default heights both are the bottom layer.
+In the stratified cylinder the generator's return is a committed start-of-step value, so the hot-water chain no
+longer iterates between the generator and the cylinder (with the mixed one the step mean takes a few passes, coupling
+spec §6); the generators' supply caps at their set temperatures (coupling spec §5) stay as they are and act on a
+return that does not move within the step. The collector reads the lower pocket's `T0` as
+`TemperatureCollectorInletAtStartOfStepInCelsius` and the secondary coil's outlet `T0` as its return; with the
+default heights both are the bottom layer.
 
 **The energy balance and the fluid-loop checks.** The post-run balance (`hisim/postprocessing/energy_balance/check.py`)
 books each coil's loop once from the loop's flow, supply and return, by the supplier's sign (fluid loops spec §3.4):
@@ -294,36 +406,38 @@ from the same three published values. The tank's own balance `Σ coils − tap �
 check at every member (`flow_out = flow_in`) holds because the tank passes every flow through unchanged; the
 heating-only check holds because a coil's supply is never below the return it is capped against; the energy check at
 the member (stage 4 of #1122) holds because the booked `ThermalPowerFrom*` is computed from the member's own
-published quantities. The Sankey sees the same nodes as today; layers are not nodes.
+published quantities. The Sankey sees the same nodes as with the mixed cylinder; layers are not nodes.
 
 ### 4.6 Sensors: two pockets, wired by the controllers
 
-The tank has two sensor pockets at configured heights, an upper and a lower one (Q7), and publishes each pocket's
-start-of-step and end temperature (§4.5). A real bivalent cylinder has its pockets at the heights of its coils, and
-the installer puts the backup's sensor in the upper one and the solar controller's sensor in the lower one. Here that
-is the wiring: the backups' controllers (`GenericBoilerController`, `MoreAdvancedHeatPumpHPLibControllerDHW`,
-`ElectricHeatingController`, the substation's controller) keep their default connections to
-`WaterTemperatureAtStartOfStepInCelsius` and `WaterTemperatureAtEndOfStepInCelsius`, which carry the upper pocket;
-the solar controller's default connections (`solar_thermal_system.py:1511` and `:1518`) and the collector's inlet
-sensor (`:925`) move to the lower pocket's outputs. A file may wire any controller to either pocket.
+The stratified cylinder has two sensor pockets at configured heights, an upper and a lower one (D11), and publishes
+each pocket's start-of-step and end temperature (§4.5). A real bivalent cylinder has its pockets at the heights of
+its coils, and the installer puts the backup's sensor in the upper one and the solar controller's sensor in the lower
+one. Here that is the wiring: the backups' controllers (`GenericBoilerController`,
+`MoreAdvancedHeatPumpHPLibControllerDHW`, `ElectricHeatingController`, the substation's controller) keep their
+default connections to `WaterTemperatureAtStartOfStepInCelsius` and `WaterTemperatureAtEndOfStepInCelsius`, which
+carry the upper pocket; the solar controller's default connections (`solar_thermal_system.py:1511` and `:1518`) and
+the collector's inlet sensor (`:925`) move to the lower pocket's outputs, on both classes. On the mixed cylinder the
+lower pocket repeats the single temperature, so the solar twins' runs with the mixed class do not change. A file may
+wire any controller to either pocket.
 
 With the defaults of §4.7 and N = 5, the upper pocket (0.7) is layer 4, the lower pocket (0.1) layer 1. The backup
 charges when layer 4 falls below its aim less its hysteresis; the collector's pump switches on when the collector's
-sensor reads 7 K above layer 1 and stops when layer 1 starts a step above 80 °C. With N = 1 both pockets are the one
-layer, and nothing changes against today. The temperature check (`check_converged_mean_water_temperature`, 0 to
-90 °C) applies to the hottest and the coldest layer.
+sensor reads 7 K above layer 1 and stops when layer 1 starts a step above 80 °C. The temperature check
+(`check_converged_mean_water_temperature`, 0 to 90 °C) applies to the hottest and the coldest layer.
 
 The tank does not know which controller reads which pocket, so D3 holds: a priority rule (bead hisim-bq3h) is a
 change to the controllers' set points or an L2 signal, never to the tank.
 
 ### 4.7 Configuration, presets, sizing
 
-New fields of `SimpleDHWStorageConfig`, all plain fields (nothing in the surrounding system decides them; Q5 on a
-future sizing law for N):
+`StratifiedDHWStorageConfig` (`MAIN_CLASS = "hisim.components.stratified_dhw_storage.storage.StratifiedDHWStorage"`)
+has the fields of `SimpleDHWStorageConfig` (§4.1, with the same sizing laws) and these plain fields, which nothing in
+the surrounding system decides:
 
 | Field | Default | Meaning and source |
 |---|---|---|
-| `number_of_layers` | 1 | N; 1 keeps today's model. 5 is the recommended value for a stratified cylinder (§4.4: `Co ≤ 0.5` at 60 s for the twins' machines, 0.87 for a 15 kW heat pump). |
+| `number_of_layers` | 5 | N, at least 2. 5 is the recommended value (§4.4: `Co ≤ 0.5` at 60 s for the twins' machines, 0.87 for a 15 kW heat pump). |
 | `primary_coil_inlet_height_as_fraction_of_height` | 1.0 | the backup coil's top |
 | `primary_coil_outlet_height_as_fraction_of_height` | 0.5 | the backup coil's bottom: the backup heats the upper half, the ready volume of a bivalent cylinder |
 | `secondary_coil_inlet_height_as_fraction_of_height` | 0.25 | the solar coil's top |
@@ -333,77 +447,116 @@ future sizing law for N):
 | `effective_vertical_conductivity_in_watt_per_meter_kelvin` | 1.0 | water's 0.6 W/(m K) (VDI Heat Atlas) plus the steel wall's share; store tests after EN 12977-3 give 0.6 to 2 W/(m K) for cylinders with internal coils |
 
 The heights and the conductivity are estimates from the layout of bivalent solar cylinders (the backup coil in the
-upper half, the solar coil in the lower third) and from the literature named; the modelling guide §5 asks that an
-estimate says so, and Q5 asks the owner to confirm or replace them. The tap's draw at the top and refill at the
-bottom are not configurable: every cylinder does that.
+upper half, the solar coil in the lower third) and from the literature named; the preset's docstring and the field
+comments say so (modelling guide §5), and bead hisim-stratified-cylinder-defaults-1eff replaces them by sourced
+values (D8). The tap's draw at the top and refill at the bottom are not configurable: every cylinder does that.
 
-Presets: `preset_standard` stays as it is (N = 1). A new `preset_stratified(name)` sets `number_of_layers = 5` and
-the defaults above. The refusals at build (`SimpleDHWStorage.build`): N not a positive integer; a height outside
-[0, 1]; a coil whose outlet lies above its inlet (a charging coil is fed at its top; a file would state the reverse
-only by mistake); the conduction condition of §4.4;
-and, until the coarse model lands, N ≥ 2 with a step length above the threshold (Q1).
+Presets: `preset_standard(name)` on the stratified class is the bivalent cylinder above, with the volume and the
+location left `AUTO` as the mixed class's `preset_standard` leaves them, so a file switches classes and keeps
+`preset: standard`. `SimpleDHWStorageConfig.preset_standard` is untouched.
 
-Twins and assemblies: `energy_systems/assemblies/dhw/indirect_cylinder.assembly.yaml` gets a parameter
-`number_of_layers` (default 1, range 1 to 20) with bounds for the new outputs; the need `cylinder_temperature` of
-`energy_systems/assemblies/heating/solar_thermal.assembly.yaml` binds the solar controller to the lower pocket's two
-outputs; the recorded twins keep N = 1 until the coarse model lands (§5), and a test runs the two solar twins with
-N = 5 at 60 s (§6, T10).
+The refusals at build (`StratifiedDHWStorage.build`): N below 2 or not an integer (a cylinder of one layer is the
+mixed class's job, and a layered tank of one layer would be a third model, the mixed node with a start-of-step
+valve, that nobody asked for); a height outside [0, 1]; a coil whose outlet lies above its inlet (a charging coil is
+fed at its top; a file would state the reverse only by mistake); the conduction condition of §4.4. Nothing about the
+step length (D6).
+
+Twins and assemblies: the recorded twins and the assemblies keep the mixed class (§5). The `partner:` lists of the
+needs that name `SimpleDHWStorage` (`dhw_temperature` of the five heating assemblies, `cylinder_temperature` of
+`heating/solar_thermal`, `cylinder_heat` and the circuit ends of `test_partners.yaml`) list both classes, so a system
+that states the stratified class binds; the `cylinder_temperature` need binds the solar controller to the lower
+pocket's two outputs. A stratified assembly (`dhw/stratified_cylinder`) is not written until the coarse model exists,
+since the assembly tests run at 900 s (§8, Q1).
 
 ### 4.8 Where the code goes
 
-The layer step is a pure function of the start temperatures, the streams, the demand, the surrounding temperature
-and the tank's constants: a subcomponent (`system_docs/component_design_principles.md` §C) `StratifiedLayers`, a
-frozen dataclass built once from the configuration (N, `M_k`, `C_k`, `UA_k`, `UA_cond`, the port layers, the tap
-temperatures, `dt`) with `step(t0_per_layer, coil_streams, demand, t_amb) -> LayerStep` (the end temperatures, the
-heat per coil, the tap's draw and unmet share, the loss, `ΔU`), and the pure helpers `through_flows`,
-`explicit_layer_balance`, `buoyancy_merge`, `layer_of_height`, each with its own tests. It has one caller, so it
-lives beside `StartOfStepNodeStep` in `hisim/components/simple_water_storage.py`, or, since that module is 3,400
-lines, in `hisim/components/dhw_cylinder_layers.py`, imported only by the cylinder (`coding_style.md` §1: small
-units; a module with one caller is that caller's). `hydronics.py` gains nothing: the upwind term is
+**The component.** A folder, one per component (seams spec, `module_graph.yaml` group `components`):
+`hisim/components/stratified_dhw_storage/` with `__init__.py`, `storage.py` (`StratifiedDHWStorageConfig`,
+`StratifiedDHWStorage`, `LayerFlowExceedsLayerMassError`) and `layers.py`. The class inherits `SimpleWaterStorage`
+from `hisim.components.simple_water_storage`, as the mixed cylinder does: the surroundings inputs, the loss outputs
+and the geometry are every water storage's and already have two callers there. The graph allows the import (a module
+may import its own group); it is an inheritance import, not a wiring one, so hisim-default-connection-names-497c does
+not remove it. No other code is shared with the mixed class: the coil channels, the loops, the tap outputs and the
+default connections are declared again in `storage.py`, and T12 keeps them equal. A common base class for those
+declarations was considered and rejected: it would need a home in `simple_water_storage.py` (shared code under
+`hisim.components.shared` may not import the component model), it would make the mixed class a dependency of the
+stratified one for its port list, and it would not stop an override from drifting, which T12 does anyway.
+
+**The layer step.** `layers.py` holds the pure layer step, a subcomponent in the sense of
+`component_design_principles.md` §C with one caller, so it lives in its caller's folder and not in
+`hisim/subcomponents`: a frozen dataclass `StratifiedLayers` built once from the configuration (N, `M_k`, `C_k`,
+`UA_k`, `UA_cond`, the port layers, the tap temperatures, `dt`) with
+`step(t0_per_layer, coil_streams, demand, t_amb) -> LayerStep` (the end temperatures, the heat per coil, the tap's
+draw and unmet share, the loss, `ΔU`), and the pure helpers `through_flows`, `explicit_layer_balance`,
+`buoyancy_merge`, `layer_of_height`, each with its own tests (T1 to T5, T7). The Courant check of D6 runs in
+`step`, before the balance. The state is `StratifiedTankState` with a tuple of N start temperatures; `i_save_state`
+and `i_restore_state` copy it whole.
+
+**The tap valve.** `ValveDraw`, `mixing_valve_draw`, `ValveTemperatureOrderError` and `NegativeDemandError` move
+from `SimpleDHWStorage` to `hisim/hydronics.py` (a leaf; the valve's errors already subclass
+`hydronics.HydronicsError`), where both classes call them. This is the one code change to the mixed class besides the
+two lower-pocket outputs; its behaviour does not change. `hydronics.py` gains nothing else: the upwind term is
 `circuit_power_w` and the constants are `Water`.
 
-`SimpleDHWStorage.i_simulate` chooses once, when built, between `solve_tank_step` (N = 1) and the layer step
-(N ≥ 2), as the buffer chooses its mode (`two_mode_buffer_spec.md` §4.2); `publish_tank_step` takes the per-coil
-heats, the tap's draw and the loss from either and publishes the same outputs. The state is `DhwTankState` with a
-tuple of N start temperatures; `i_save_state` and `i_restore_state` copy it whole. The Courant check of Q2 runs in
-the layer step, one pass over N layers, and the step raises `LayerOutflowExceedsLayerMassError` naming the layer,
-the step, the mass that left and the layer's mass, N and `dt`.
+**Default connections.** The simulator keys a target's default connections by the source's class name
+(`Component.default_connections[source_classname]`). Ten methods on six partners name `SimpleDHWStorage` today:
+`GenericBoiler` and its DHW controller (`generic_boiler.py:1854`, `:3147`), `MoreAdvancedHeatPumpHPLib` and its DHW
+controller (`heat_pump.py:1301`, `controller_dhw.py:319`), `SolarThermalSystem` and its controller
+(`solar_thermal_system.py:913`, `:1506`), `DistrictHeating` and its controller (`generic_district_heating.py:528`,
+`:1166`), `ElectricHeating` and its controller (`generic_electric_heating.py:441`, `:1018`). Until
+hisim-default-connection-names-497c names partners by string, each of them gets the entry for the new class: the
+existing method takes the storage class name as a parameter and is registered twice, once per class, with the same
+output names; the import of the stratified module that this needs is one more wiring import for 497c to remove. The
+stratified class declares its own `get_default_connections_from_*` for the same six partners, with the same lists as
+the mixed class. T12 checks both directions.
+
+**The rest of the system.** `hisim energy-system describe hisim.components.stratified_dhw_storage.storage.StratifiedDHWStorage`
+works from the dotted path, as for every class; `hisim energy-system schema` finds the class by walking the package
+(`schema_classes.py`); the energy-system loader imports the class path a file states (`classes.py`); the recorder
+writes the class of the instance a Python setup built, so a setup that builds `StratifiedDHWStorage` records it.
+The economics adapter's cost facts (`adapter.py:163`, by class name) and useful-heat source (`:607`) get the entry
+`"StratifiedDHWStorage"` with the same facts, until hisim-economics-ports-25a0 removes those tables. RenoVisor's
+equipment register (`renovisor/economics.py:393`) keeps the mixed class until RenoVisor switches (bead
+hisim-stratified-cylinder-defaults-1eff names it).
 
 Cost in the hot path: O(N) arithmetic per pass with N ≤ 20, no iteration with the generators; a measurement of the
-passes per step on the solar twins at 60 s comes with PR 3 (§5).
+passes per step on the solar twins at 60 s with each class comes with PR 5 (§9).
 
 ### 4.9 Interaction with the part load
 
-At and below the threshold every ratio is exactly 1 (part-load spec, decision 16), so the fine model never sees a
-fraction. The controllers' `PartLoadControl` reads the end temperature of the pocket it is wired to; the backups'
-controllers read the upper pocket's, the solar controller the lower pocket's. Above the threshold the layer model
-does not run (Q1), and the coarse model of hisim-stratified-storage-coarse-0392 decides how a fraction and a pocket's
-end temperature relate there. Decision 7 of the part-load spec, "any tank model, a stratified one included, can
-publish" the controlled end temperature, is met by the pockets.
+At and below the threshold every ratio is exactly 1 (part-load spec, decision 16), so a stratified cylinder at 60 s
+or 120 s never sees a fraction. The controllers' `PartLoadControl` reads the end temperature of the pocket it is
+wired to; the backups' controllers read the upper pocket's, the solar controller the lower pocket's. Above the
+threshold the stratified cylinder fails in its first charge (§4.4), so the part-load rules and the layer model never
+meet until the coarse model of hisim-stratified-storage-coarse-0392 decides how a fraction and a pocket's end
+temperature relate. Decision 7 of the part-load spec, "any tank model, a stratified one included, can publish" the
+controlled end temperature, is met by the pockets.
 
 ## 5. What changes and what does not
 
-- **Results.** PRs 1 to 4 change no simulation result: every recorded energy system keeps N = 1, which runs today's
-  code. A cylinder with N ≥ 2 at 60 s is expected to raise the collector's heat (its coil meets the bottom layer,
-  near the mains temperature after a draw, instead of the 55 to 70 °C mean), lower the backup's hot-water heat by
-  about the same amount, change the standby loss little (a hotter top and a colder bottom), keep the tap's delivered
-  heat, and may raise the unmet hot water slightly (the top layer alone serves a draw, and the backup charges the
-  upper half only). The direction is stated here; the numbers are measured by T10 and written into §7.
-- **Public interfaces.** New outputs on the cylinder (the lower pocket, the layer temperatures), new configuration
-  fields, a new preset, a new assembly parameter; the buffer's field `heat_exchanger_is_present` goes (Q3), which
-  touches `hisim/energy_system_v3.schema.json` and two tests, no recorded file. The rename of
-  `StepMeanWaterTemperatureTo{Heat,SecondaryHeat}GeneratorInCelsius` (Q6) is a column rename in every DHW twin's
-  results and gets its own PR with the heads-up of `system_docs/results_and_interfaces.md` §5 on renovisorissues.
-- **Goldens and twins.** None re-blessed by PRs 1 to 4, unless the golden gate counts the cylinder's new columns as
-  a change, which PR 3 checks. The twins and the RenoVisor requests switch to N = 5 only together with the coarse
-  model (RenoVisor runs at 900 s), with re-blessed goldens and a heads-up; until then #94's remaining gap stays, and
-  the coarse model is on #94's critical path.
+- **Results.** No recorded energy system, golden or RenoVisor run changes: every one of them keeps
+  `SimpleDHWStorage`, whose model is untouched. The two lower-pocket columns appear on every run with a mixed
+  cylinder, each repeating an existing column; no KPI moves (PR 3 says so in its description). A run that states the
+  stratified class at 60 s is expected to raise the collector's heat (its coil meets the bottom layer, near the mains
+  temperature after a draw, instead of the 55 to 70 °C mean), lower the backup's hot-water heat by about the same
+  amount, change the standby loss little (a hotter top and a colder bottom), keep the tap's delivered heat, and may
+  raise the unmet hot water slightly (the top layer alone serves a draw, and the backup charges the upper half only).
+  The direction is stated here; the numbers are measured by T10 and written into §7.
+- **Public interfaces.** A new component class with its configuration and preset; the two lower-pocket outputs on
+  both classes; the layer outputs on the stratified one; the `partner:` lists of the assemblies; the buffer's field
+  `heat_exchanger_is_present` goes (D7), which touches `hisim/energy_system_v3.schema.json` and two tests, no recorded
+  file. The rename of the return outputs (D9) is a column rename in every DHW twin's results and gets its own PR with
+  the heads-up of `results_and_interfaces.md` §5.
+- **Goldens and twins.** None re-blessed by PRs 1 to 5. PR 6 (the rename) re-records the twins and re-blesses the
+  goldens for the renamed columns, no value changes. The twins and the RenoVisor requests switch to the stratified
+  class only together with the coarse model (RenoVisor runs at 900 s, the goldens at 60 s and 900 s), with re-blessed
+  goldens and a heads-up; until then #94's remaining gap stays, and the coarse model is on #94's critical path.
 
 ## 6. Verification
 
-Unit tests of the pure functions, `base`, in `tests/test_dhw_cylinder_layers.py`:
+Unit tests of the pure functions, `base`, in `tests/test_stratified_dhw_layers.py`:
 
-- **T1 energy closure per step.** Random profiles, flows, supplies and draws, N in {1, 2, 5, 10, 20}:
+- **T1 energy closure per step.** Random profiles, flows, supplies and draws, N in {2, 5, 10, 20}:
   `Σ C_k (T_end,k − T0_k)` equals `Σ coils − tap − loss` within 1e-9 J; also with inverted profiles, so the merge is
   covered.
 - **T2 pure transport.** No conduction, no loss: a charge at `Co = 1` shifts the profile by exactly one layer per
@@ -418,30 +571,47 @@ Unit tests of the pure functions, `base`, in `tests/test_dhw_cylinder_layers.py`
   below 40 °C the unmet share is `(T_warm − T0_N)/(T_warm − T_cold)` of the demand; below 10 °C nothing is drawn.
 - **T5 buoyancy.** A bottom layer warmed above the one above it merges to their mean; a fully inverted profile ends
   uniform at the mass-weighted mean; the sum `Σ C_k T_k` is unchanged by the merge; a monotone profile is untouched.
-- **T6 the layer model at N = 1 against the mixed node.** The preset tank at 60 s over 1,440 steps, charged with
-  0.369 kg/s at the return plus 5 K and drawn on by the June day's demand profile: the end temperatures agree within
-  0.05 K and every heat within 0.1 % with `solve_tank_step`; the difference is the valve on `T0` instead of `T̄` and
-  the loss on `T0`, both of order `a` (0.09 for the charge).
-- **T7 the Courant refusal.** A flow that empties a layer in one step raises `LayerOutflowExceedsLayerMassError`
-  in that step, naming the layer, the masses, N and `dt`.
-- **T8 refusals at build.** N not a positive integer, a height outside [0, 1], a coil layout the defaults never
-  produce, N ≥ 2 above the threshold (Q1), the conduction condition.
+- **T6 the same standby loss.** A uniform tank with no flows and no draw loses, per step, the same heat in
+  `StratifiedLayers.step` as `MixedNode.step` within the order of `a` (the mixed node's loss is on the step mean,
+  the layers' on `T0`), and exactly the same `Σ UA_k` is built from the same volume and U.
+- **T7 the Courant refusal at run time.** A flow that moves more than one layer in one step raises
+  `LayerFlowExceedsLayerMassError` in that step, naming the port, the flow, the layer mass, the step length, the
+  largest N that would hold, and the bead; a flow of exactly one layer passes; the check runs in the pure step, so
+  the test needs no simulator.
+- **T8 refusals at build.** N below 2 or not an integer, a height outside [0, 1], a coil whose outlet lies above its
+  inlet, the conduction condition; and no refusal for a step length of 900 s at build (D6).
 
-Component tests, `base`, in `tests/test_dhw_storage_node.py` and `tests/test_energy_balance_storages.py`:
+Component tests, `base`, in `tests/test_stratified_dhw_storage.py` and `tests/test_energy_balance_storages.py`:
 
-- **T9 the balance report.** The cylinder with N = 5 in a day's run: the energy-balance check reports it closed on
-  every step, and the loop checks of #1122 pass (mass at every member, heating only, the energy check at the member).
+- **T9 the balance report.** The stratified cylinder with N = 5 in a day's run at 60 s: the energy-balance check
+  reports it closed on every step, and the loop checks of #1122 pass (mass at every member, heating only, the energy
+  check at the member).
 - **T11 the sensor wiring.** The default connections wire the backups' controllers to the upper pocket and the solar
-  controller and the collector's inlet sensor to the lower one; a file may wire either; the temperature check covers
-  the hottest and the coldest layer.
+  controller and the collector's inlet sensor to the lower one, on both classes; a file may wire either; the
+  temperature check covers the hottest and the coldest layer.
+- **T12 the shared interface** (generic, `tests/test_dhw_cylinder_interface.py`). Builds `SimpleDHWStorage` and
+  `StratifiedDHWStorage` from `preset_standard` through `tests/component_sweep.py` and checks §4.1 item by item: the
+  inputs (name, load type, unit, mandatory, `allow_unconnected_mandatory`, loop tag); the outputs of the mixed class
+  all present on the stratified one with the same load type, unit, energy port, loop tag, postprocessing flags and
+  display; every extra output of the stratified class matches `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius`;
+  the two loops' declarations; the cylinder's own default-connection lists per partner class; for every component
+  class the sweep builds, its default connections keyed by `SimpleDHWStorage` and by `StratifiedDHWStorage` are the
+  same list, output for output; `cost_relevance`; the adapter's cost facts and useful-heat row for both class names;
+  the shared configuration fields (name, type, default, sizing rule) and that both classes offer `standard`. One
+  test, no allowlist: the two classes cannot drift without failing it.
+- **T13 the run-time refusal in a run.** The stratified cylinder in the heat pump + solar twin at 900 s fails in
+  the first charge with `LayerFlowExceedsLayerMassError`, and the message names the mixed class as a remedy
+  (`system_setups`, one hour of simulated time, so the test is cheap).
 
 Twin tests, `system_setups`, in `tests/test_stratified_cylinder_solar_twins.py`:
 
-- **T10 the solar twins' yield before and after.** `household_gas_solar_thermal_building_sizer` and
-  `household_heatpump_solar_thermal_building_sizer`, the first week of June 2021 at 60 s, N = 1 against N = 5: the
-  collector's heat rises, the backup's hot-water heat falls, the tap's delivered heat agrees within 1 %, the unmet
-  hot water does not rise by more than a stated bound, every step closes, and the passes per step are reported.
-  The year's figures are measured by hand and written into §7.
+- **T10 interchangeability and the solar twins' yield.** `household_gas_solar_thermal_building_sizer` and
+  `household_heatpump_solar_thermal_building_sizer`, the first week of June 2021 at 60 s, run from their recorded
+  energy-system files once as recorded and once with the cylinder's class path replaced by the stratified class and
+  nothing else changed. Both runs finish; with the stratified class the collector's heat rises, the backup's hot-water
+  heat falls, the tap's delivered heat agrees within 1 %, the unmet hot water does not rise by more than a stated
+  bound, every step closes, the loop checks pass, and the passes per step are reported for both classes. The year's
+  figures are measured by hand and written into §7.
 
 Deliberately not tested here: the agreement of coarse steps with 60 s (`modelling_guide.md` §3), which is the coarse
 model's test under hisim-stratified-storage-coarse-0392; the solar priority (hisim-bq3h).
@@ -449,68 +619,44 @@ model's test under hisim-stratified-storage-coarse-0392; the solar priority (his
 ## 7. Measured results
 
 2026-11-25, the flows of §4.4 (one June day of the heat pump + solar twin at 60 s). The yields of T10 and the
-passes per step are filled in by PR 4.
+passes per step are filled in by PR 5.
 
-## 8. Open questions
+## 8. Decisions of 2026-11-25, and what is still open
 
-- **Q1. What does a cylinder with N ≥ 2 do above the threshold until the coarse model lands?** Context: RenoVisor
-  runs at 900 s, the goldens run every twin at 60 s and 900 s, and §4.4 shows the fine model cannot run a charge at
-  900 s with any N. Options: (a) *refuse at build* when `number_of_layers ≥ 2` and `seconds_per_timestep >
-  part_load_above_seconds`, with a message naming the bead hisim-stratified-storage-coarse-0392; a stratified
-  cylinder is then a 60 s (and 120 s) model until the coarse model exists, and the recorded twins keep N = 1. (b)
-  *Fall back to N = 1* above the threshold: the same file runs stratified at 60 s and mixed at 900 s; results differ
-  between the two step lengths by design (the whole point of the layers), which breaks the rule that a coarse run
-  agrees with 60 s within 1 % and gives RenoVisor nothing for #94. (c) *Run the fine model wherever every layer's
-  Courant number stays below 1*, failing when it does not: at 900 s that is every charge, so it is (a) with a later
-  error. Recommendation: (a). Note for the coarse bead: the fine model's validity is a Courant condition, not the
-  600 s threshold (§4.4); the coarse design should consider switching on the Courant number rather than on `dt`.
-- **Q2. What happens at a fine step when a flow exceeds a layer's mass?** Context: at 60 s the twins' machines stay
-  at `Co ≤ 0.5` with N = 5, but a 20 kW heat pump reaches 1.15, and a file may state N = 20. Options: (a) *fail
-  loudly* in that step (`LayerOutflowExceedsLayerMassError`, T7), with the remedy in the message: fewer layers, a
-  larger cylinder or a shorter step. (b) *Clamp*: cap the water moved across a boundary at one layer per step and
-  let the rest pass as a plug through several layers; that is the plug-flow model the owner left to the coarse bead,
-  and inside the explicit scheme it books heat the layers did not receive. (c) *Size N from the generators' flows*:
-  the generators contribute their largest hot-water flow as a sizing fact and a law chooses the largest N with a
-  margin; a later refinement, since the tap's peak is not a fact and the law would read the step length. Recommendation:
-  (a) now, (c) as a bead if the assemblies' sweeps hit (a).
-- **Q3. Which storages, and the buffer's dead path.** Options: (a) the cylinder only, and delete the buffer's
-  stratification path with its field `heat_exchanger_is_present`, its mixing factor and the mass-mixing law (the
-  schema, two tests and the buffer's docstrings change; no recorded file states the field); (b) both storages now;
-  the buffer's part-load mode above 600 s rests on linear end temperatures, and at 60 s the gas twin's 172 l buffer
-  (0.41 kg/s from the boiler's pump, 24.6 kg per step, 34 kg per layer at N = 5) is close to the limit; (c) keep the
-  buffer's path once more. Recommendation: (a); a layered buffer is a bead of its own if ever wanted.
-- **Q4. Does N = 1 keep today's mixed node?** Options: (a) yes: `solve_tank_step` and the step-mean return stay for
-  N = 1, nothing in results or goldens moves, and T6 pins the layer model's agreement with it; (b) the layer model at
-  N = 1 replaces the mixed node, one model and a start-of-step return everywhere, at the price of moving every DHW
-  golden by the order of `a` (0.1 K in the end temperature, tenths of a percent in the heats, with the heads-up).
-  Recommendation: (a) now; (b) may follow when Q6's rename moves the goldens anyway.
-- **Q5. The defaults.** N = 5 (recommended: `Co ≤ 0.5` for the twins at 60 s; a 10-layer cylinder fails for heat
-  pumps above about 8 kW at 60 s and resolves little more for the backup-versus-solar question) or N = 10; the port
-  heights 1.0/0.5 (backup coil), 0.25/0.0 (solar coil), 0.7 and 0.1 (pockets); `λ_eff` = 1.0 W/(m K). These are
-  estimates from the layout of bivalent cylinders and the literature named in §4.7; the owner confirms them or names
-  a datasheet to take them from.
-- **Q6. The return outputs' names.** `StepMeanWaterTemperatureToHeatGeneratorInCelsius` and its secondary twin
-  carry a start-of-step value for N ≥ 2. Options: (a) rename both to `WaterTemperatureToHeatGeneratorInCelsius` and
-  `WaterTemperatureToSecondaryHeatGeneratorInCelsius` for every N (the buffer's spelling), a column rename in every
-  DHW twin's goldens with the heads-up, in PR 5; (b) keep the names and state in the descriptions that the value is
-  the step mean for N = 1 and the start-of-step outlet temperature above. Recommendation: (a), since the name would
-  state a false thing about the value.
-- **Q7. Two fixed pockets or a list.** Options: (a) an upper and a lower pocket, each with its height field and its
-  pair of outputs, the existing sensor outputs carrying the upper one so that the backups' default connections stay;
-  (b) a configurable list of pockets with indexed outputs, which fits a cylinder with three controllers but gives the
-  default connections nothing fixed to read. Recommendation: (a); a third pocket is added when a third reader exists.
-- **Q8. The priority of hisim-bq3h.** The triage of #94 recommends raising it to P2 and running it after this spec's
-  PR 4, so its effect is measured on a stratified cylinder with the sensors in their pockets. Recommendation: do so.
+The eight open questions of the draft of 2026-11-25 were decided by the owner the same day and are D5 to D11 of
+§2: Q1 (above the threshold) and Q2 (a flow exceeding a layer) are D6, one run-time refusal; Q3 (which storages, the
+buffer's dead path) is D7; Q4 (N = 1 keeps the mixed node) is moot under D5, the stratified class requires N ≥ 2;
+Q5 (the defaults) is D8; Q6 (the rename) is D9; Q7 (two pockets) is D11; Q8 (hisim-bq3h to P2) is D10. Decided by
+this spec under D5: the lower pocket is on both classes (§4.1); the two classes share the valve and the
+`SimpleWaterStorage` base and nothing else (§4.8); `preset_standard` on both (§4.7).
 
-## 9. Beads
+Still open, each with a recommendation:
+
+- **Q1. Does the stratified cylinder get a recorded energy-system file of its own before the coarse model exists?**
+  Context: every recorded twin is a golden pair at 60 s and 900 s (`results_and_interfaces.md` §1), and the
+  stratified class fails at 900 s by design (D6), so a recorded stratified twin cannot join the gate. Options: (a) no
+  recorded file; T10 runs the two solar twins with the class swapped, and a user who wants the stratified cylinder
+  copies a twin and changes the class path; (b) a recorded file `household_heatpump_solar_thermal_stratified`
+  without a golden pair, as the example to copy, whose 900 s run fails with the message of §4.4. Recommendation: (a)
+  now, since a file in `energy_systems/` that fails at the step length RenoVisor uses invites the wrong copy; (b)
+  with the coarse model, when the file runs at both step lengths.
+- **Q2. A stratified buffer: a bead now or none?** The owner asked. Recommendation: none now. D7 records that a
+  stratified buffer would be its own component on the pattern of D5; nobody asks for one (the buffer's dead path has
+  no user), and the part-load mode of the buffer above 600 s rests on linear end temperatures (part-load spec,
+  decision 21), which a buoyancy merge breaks, so a stratified buffer needs the coarse model first. A bead is filed
+  when a use exists, under hisim-hydronics-fxix.
+
+## 9. Beads and pull requests
 
 Epic hisim-hydronics-fxix.
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-hydronics-fxix.1 (P3) | this spec: the fine layer model of the cylinder, the deletion of the buffer's path, the pockets, the presets and the tests; closes with PR 4 | PR 1 to 4 below |
-| hisim-stratified-storage-coarse-0392 (P3, blocked by hisim-hydronics-fxix.1) | the coarse model above the threshold: about the same totals as the fine model; the twins and RenoVisor switch to N = 5 with it | – |
-| hisim-bq3h (P3; Q8 asks for P2) | solar priority in the controllers, measured on the stratified cylinder | – |
+| hisim-hydronics-fxix.1 (P3) | this spec: the buffer's path deleted, the layer step, `StratifiedDHWStorage` with the interface test and the default connections, the controllers' pocket wiring and the twins' measurement; closes with PR 5 | PR 1 to 5 |
+| hisim-dhw-return-outputs-rename-653d (P3, new, D9) | the rename of the two return outputs on both classes, the twins re-recorded, the goldens re-blessed, the heads-up on renovisorissues | PR 6 |
+| hisim-stratified-cylinder-defaults-1eff (P3, new, D8) | sources the layer count, the coil and pocket heights and `λ_eff` from manufacturer data sheets, VDI 6002, EN 12977 or similar, before RenoVisor uses the stratified cylinder; names RenoVisor's equipment register | – |
+| hisim-stratified-storage-coarse-0392 (P3, blocked by hisim-hydronics-fxix.1) | the coarse model: about the same totals as the fine model where the fine one is not valid; the twins and RenoVisor switch to the stratified class with it | – |
+| hisim-bq3h (P2 since D10, after the stratified cylinder) | solar priority in the controllers, measured on the stratified cylinder | – |
 | hisim-report-states-defaults-41e9 (P3) | the mapping report names the cylinder's volume; unchanged by this spec | – |
 
 The open questions of §8 get `owner-decision` beads only for what stays open after the review of this document
@@ -518,13 +664,20 @@ The open questions of §8 get `owner-decision` beads only for what stays open af
 
 The pull requests, each small and stacked on the one before (AGENTS.md, "Pull requests and merging"):
 
-1. **The buffer's stratification path goes** (Q3): `heat_exchanger_is_present`, the mixing factor and the
+1. **The buffer's stratification path goes** (D7): `heat_exchanger_is_present`, the mixing factor and the
    mass-mixing law, their tests and the schema entry; no result changes.
-2. **The layer step** as a subcomponent with T1 to T8, not yet wired to the cylinder; no result changes.
-3. **The cylinder runs the layer step for N ≥ 2**: the configuration fields, the pockets and the new outputs, the
-   refusals at build and the Courant refusal, the state of N temperatures, T6, T9 and T11; N = 1 unchanged; the
-   passes per step measured.
-4. **The wiring and the twins' measurement**: the solar controller's and the collector's default connections to the
-   lower pocket, `preset_stratified`, the assembly parameter and bounds, T10, and the year's figures in §7. Closes
-   hisim-hydronics-fxix.1.
-5. **The rename of the return outputs** (Q6, if decided), with re-blessed goldens and the heads-up.
+2. **The layer step** as a pure subcomponent in `hisim/components/stratified_dhw_storage/layers.py`, with T1 to T8,
+   not yet a component; the tap valve moves to `hydronics.py` and the mixed class calls it there; no result changes.
+3. **`StratifiedDHWStorage`**: the configuration and `preset_standard`, the component in `storage.py` with the
+   state of N temperatures, the two pockets, the layer outputs, the refusals at build, the lower-pocket outputs on
+   both classes, the default connections in both directions (the ten partner methods registered for both classes),
+   the economics adapter's entries, the `partner:` lists of the assemblies, T9, T12 and T13. The two new columns on
+   the mixed class are named in the description; no KPI moves.
+4. **The controllers' pocket wiring**: the solar controller's and the collector's default connections to the lower
+   pocket on both classes, the `cylinder_temperature` need of the solar assembly, T11; no result changes (on the
+   mixed class the lower pocket repeats the single temperature).
+5. **The twins' measurement at 60 s with both classes**: T10, the passes per step with each class, the year's
+   figures in §7. Closes hisim-hydronics-fxix.1.
+6. **The rename of the return outputs** (D9, hisim-dhw-return-outputs-rename-653d): both classes, every reader
+   inside HiSim, the assemblies' bounds, the twins re-recorded, the goldens re-blessed, the heads-up on
+   renovisorissues per `results_and_interfaces.md` §5.

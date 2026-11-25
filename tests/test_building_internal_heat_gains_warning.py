@@ -31,7 +31,7 @@ SIMULATED_TIMESTEPS: int = 3
 @pytest.fixture(name="recorded_warnings")
 def fixture_recorded_warnings(monkeypatch, tmp_path) -> List[str]:
     """Record every ``log.warning`` message and keep the solar-gain cache out of the working tree."""
-    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path))
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path))
     messages: List[str] = []
 
     def record(message: str, logging_message_path=None) -> None:

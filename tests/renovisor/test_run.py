@@ -23,11 +23,12 @@ from typing import Any, Dict
 
 import pytest
 
+from hisim.caching import CacheSettings
 from hisim.postprocessing.kpi_computation.kpi_address import KpiFinder
 from hisim.renovisor.costs import CostField
 from hisim.renovisor.contract import ContractFiles
 from hisim.renovisor.run import Calculation, ExitCode, Outputs
-from hisim.renovisor.simulation import Period, SimulationSetup
+from hisim.renovisor.simulation import Period
 from hisim.renovisor.translate import EmitterSubstitution
 from hisim.renovisor.vocabulary import HeatDistributionType
 from hisim.renovisor.whitelist import Whitelist
@@ -309,9 +310,7 @@ class TestTheCacheDirectories:
         (its entries are read when the writable one lacks them).
         """
         writable, seed = tmp_path / "writable", tmp_path / "seed"
-        monkeypatch.setenv(
-            SimulationSetup.CACHE_DIRECTORIES_VARIABLE, os.pathsep.join([str(writable), str(seed)])
-        )
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, os.pathsep.join([str(writable), str(seed)]))
 
         assert run(baseline_document(), tmp_path, "cached_first") == ExitCode.FINISHED
         after_first = self._cache_state(writable)

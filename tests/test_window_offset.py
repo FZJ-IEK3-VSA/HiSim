@@ -27,6 +27,7 @@ import pandas as pd
 import pytest
 
 from hisim import sim_repository
+from hisim.caching import CacheSettings
 from hisim.component import SingleTimeStepValues
 from hisim.components import weather
 from hisim.components.weather import calculation
@@ -407,8 +408,7 @@ def test_a_july_window_from_a_warm_cache_is_the_window_from_a_cold_one(
     Catches: a window lost on the way through the cache -- labels not written or not read back, which
     would resolve a warm run to another row or refuse it -- and the window not moving at all.
     """
-    for variable in ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR"):
-        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
     cold = prepared_july_weather(tmp_path)
     warm = prepared_july_weather(tmp_path)
 
@@ -436,8 +436,7 @@ def test_a_july_window_feeds_july_into_the_weather_outputs_at_every_timestep(
     other components are wired to. Catches: ``i_simulate`` dropping the window offset, which would hand
     every wired consumer January's temperature and irradiance while the published series say July.
     """
-    for variable in ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR"):
-        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
     july = prepared_july_weather(tmp_path)
     outputs = july.get_outputs()
     for global_index, output in enumerate(outputs):

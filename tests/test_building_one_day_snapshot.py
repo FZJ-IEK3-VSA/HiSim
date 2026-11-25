@@ -44,7 +44,7 @@ How the run is driven:
   with a cooling demand, and an open-window indoor-air override.
 
 The solar-gain cache is redirected into a temporary directory for this module
-(``HISIM_CACHE_DIR``), so that neither run writes into the working tree. It is a redirect
+(``HISIM_CACHE_DIRECTORIES``, one entry), so that neither run writes into the working tree. It is a redirect
 rather than a neutralization: under the producer key scheme a hit is the same series as a
 miss by construction, because the key covers the producer's code, its libraries and every one
 of its inputs -- so a second run in the same working tree reading the entry the first one
@@ -593,8 +593,8 @@ def fixture_redirected_solar_gain_cache(tmp_path_factory):
     """Send the component's solar-gain cache into a temporary directory for this module.
 
     ``Building`` produces its gains series through the cache client, which files the entry in
-    ``SimulationParameters.cache_dir_path`` -- inside the working tree -- unless the environment
-    redirects it. Redirecting keeps the tree clean without making the cache inert: under the
+    ``SimulationParameters.cache_dir_path`` -- inside the working tree -- unless
+    ``HISIM_CACHE_DIRECTORIES`` redirects it. Redirecting keeps the tree clean without making the cache inert: under the
     producer key scheme (``roadmap/cache_service_spec.md`` §3) an entry is named after the
     producer's code, its libraries and every one of its inputs, so reading one back is the same
     series as computing it, and no other test can write an entry this one would read.
@@ -602,7 +602,7 @@ def fixture_redirected_solar_gain_cache(tmp_path_factory):
     cache_directory = tmp_path_factory.mktemp("building_one_day_solar_cache")
 
     patcher = pytest.MonkeyPatch()
-    patcher.setenv(CacheSettings.Variables.DIRECTORY, str(cache_directory))
+    patcher.setenv(CacheSettings.Variables.DIRECTORIES, str(cache_directory))
     yield
     patcher.undo()
 

@@ -134,7 +134,8 @@ runs many times a day.
   `tests/idealized_heater_rig.py`. Search them before writing a new helper (`coding_style.md` §1, DRY).
 - **Files go to `tmp_path` or the result directory.** The autouse fixture `guard_against_stray_files` in
   `tests/conftest.py` fails a module that leaves a file git would track anywhere else. The `HISIM_CACHE_*`
-  variables are cleared for every test by `_isolate_cache_environment`; a test that needs one sets it itself.
+  variables (the retired `HISIM_CACHE_DIR` and `HISIM_CACHE_SHARED_DIR` included) are cleared for every test by
+  `_isolate_cache_environment`; a test that needs one sets it itself.
 - **A stale input cache fakes failures.** `hisim/inputs/cache` may hold entries written by another branch. When a
   test fails for a reason the change does not explain, rerun it in a clean worktree before calling the failure
   pre-existing.

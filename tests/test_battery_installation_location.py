@@ -151,7 +151,7 @@ def test_the_recorder_sees_the_building_read_the_battery_s_heat_into_the_heated_
     Catches a transfer the recorder would only see in the heated zone, which would make a file recorded on one house
     wrong for another (D-h).
     """
-    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path))
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path))
     building = Building(
         config=OneDaySnapshot.config_for(OneDaySnapshot.DEFAULT_VARIANT_NAME),
         my_simulation_parameters=OneDaySnapshot.simulation_parameters(),

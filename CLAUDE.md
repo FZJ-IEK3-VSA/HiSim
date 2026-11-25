@@ -140,8 +140,11 @@ the same second get two; a second simulator claiming its own directory in one ca
 and a `sys.addaudithook` write guard that fails the run on any write outside the directories of the
 calculation's registry, `CalculationDirectories`. The scope creates the registry; the result path
 provider registers the result directory as it creates or adopts it, the simulator and
-`CacheLocations` register the cache directories (`SimulationParameters.cache_locations()`, the
-`HISIM_CACHE_DIRECTORIES` a container sets, `HISIM_CACHE_DIR`, `HISIM_CACHE_SHARED_DIR`); outside a
+`CacheLocations` register the cache directories, exactly those `SimulationParameters.cache_locations()`
+resolves: the parameters' own `cache_directories`, else the ordered list in `HISIM_CACHE_DIRECTORIES`
+(`os.pathsep`-separated absolute paths, read in order, written to the first writable; one entry is one
+directory; the one variable naming cache directories, read by every run), else `cache_dir_path`. The retired
+`HISIM_CACHE_DIR` and `HISIM_CACHE_SHARED_DIR` fail the run when set. Outside a
 calculation registering does nothing. The guard computes what it allows from the registry, and the
 library redirects follow it (`tempfile.tempdir` -> result directory, `MPLCONFIGDIR` -> first writable
 cache directory, else the result directory). The result directory holds nothing a later run needs and may be

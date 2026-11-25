@@ -2,7 +2,7 @@
 
 Two directories, a seed and a volume: a file present only in the second is read from there, a
 new entry is written to the first writable one, a read-only seed is read but never written, and
-the environment variable a container sets fills the parameter list. Unset, everything behaves
+the environment variable a container sets fills the run's list. Unset, everything behaves
 exactly as it did before the list existed.
 """
 
@@ -14,7 +14,7 @@ from typing import Iterator, Tuple
 
 import pytest
 
-from hisim.caching import CacheClient, CacheKey, CacheSettings
+from hisim.caching import CacheClient, CacheKey, CacheSettings, CacheSettingsError
 from hisim.caching.local import CacheEntryMetadata
 from hisim.caching.locations import CacheLocations, CacheLocationsError
 from hisim.renovisor.simulation import SimulationSetup
@@ -140,7 +140,7 @@ def test_get_cache_file_reads_a_later_directory_and_writes_the_first(
     from hisim.utils import get_cache_file
 
     seed, volume = tmp_path / "seed", tmp_path / "volume"
-    monkeypatch.delenv("HISIM_CACHE_DIR", raising=False)
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
 
     class ParameterClass:
         """A minimal stand-in for a config: its JSON is the key material's first half."""
@@ -267,26 +267,27 @@ class TestAReadOnlySeed:
 
 
 class TestTheEnvironmentVariable:
-    """The container-facing half: HISIM_CACHE_DIRECTORIES fills the parameter list."""
+    """The container-facing half: HISIM_CACHE_DIRECTORIES fills the list of a RenoVisor run.
+
+    RenoVisor no longer reads the variable itself: ``SimulationParameters.cache_locations()`` does, for
+    every run. These tests pin that the backend container's behaviour is unchanged by that move.
+    """
 
     def test_unset_is_todays_behaviour(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without the variable, the parameters use the single cache path, as always."""
-        monkeypatch.delenv(SimulationSetup.CACHE_DIRECTORIES_VARIABLE, raising=False)
+        monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
         parameters = self._parameters(tmp_path)
 
-        assert parameters.cache_directories == []
+        assert not parameters.cache_directories
         assert parameters.cache_locations().directories == (parameters.cache_dir_path,)
 
     def test_it_fills_the_directory_list_in_order(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A container passes both directories on the variable; the run reads in order."""
+        """A container passes both directories on the variable; the run reads in order and writes the first."""
         seed, volume = tmp_path / "seed", tmp_path / "volume"
-        monkeypatch.setenv(
-            SimulationSetup.CACHE_DIRECTORIES_VARIABLE, os.pathsep.join([str(seed), str(volume)])
-        )
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, os.pathsep.join([str(seed), str(volume)]))
         parameters = self._parameters(tmp_path)
 
-        assert parameters.cache_directories == [str(seed), str(volume)]
-        assert parameters.cache_dir_path == str(seed), "the recorded single path stays consistent"
+        assert parameters.cache_locations().directories == (str(seed), str(volume))
         assert parameters.cache_locations().write_directory() == str(seed)
 
     def test_an_explicit_directory_outranks_the_variable(
@@ -294,31 +295,30 @@ class TestTheEnvironmentVariable:
     ) -> None:
         """A caller that names a cache directory gets that one; the variable is not consulted."""
         explicit, seed = tmp_path / "explicit", tmp_path / "seed"
-        monkeypatch.setenv(SimulationSetup.CACHE_DIRECTORIES_VARIABLE, str(seed))
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(seed))
         parameters = self._parameters(tmp_path, cache_directory=explicit)
 
-        assert parameters.cache_directories == []
-        assert parameters.cache_dir_path == str(explicit)
+        assert parameters.cache_directories == [str(explicit)]
         assert parameters.cache_locations().directories == (str(explicit),)
 
     def test_a_relative_entry_is_refused(self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A relative path would depend on the worker's working directory; it is refused."""
-        monkeypatch.setenv(
-            SimulationSetup.CACHE_DIRECTORIES_VARIABLE, f"/abs/first{os.pathsep}relative/second"
-        )
+        """A relative path would depend on the worker's working directory; it is refused by name."""
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, f"/abs/first{os.pathsep}relative/second")
+        parameters = self._parameters(tmp_path)
 
-        with pytest.raises(ValueError, match="absolute"):
-            self._parameters(tmp_path)
+        with pytest.raises(CacheSettingsError, match=f"{CacheSettings.Variables.DIRECTORIES}.*absolute"):
+            parameters.cache_locations()
 
     @pytest.mark.parametrize("value", [os.pathsep, os.pathsep * 2])
     def test_a_value_naming_no_directory_is_refused_by_name(
         self, value: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Separators only filter to an empty list; the variable is named instead of an IndexError."""
-        monkeypatch.setenv(SimulationSetup.CACHE_DIRECTORIES_VARIABLE, value)
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, value)
+        parameters = self._parameters(tmp_path)
 
-        with pytest.raises(ValueError, match=SimulationSetup.CACHE_DIRECTORIES_VARIABLE):
-            self._parameters(tmp_path)
+        with pytest.raises(CacheSettingsError, match=CacheSettings.Variables.DIRECTORIES):
+            parameters.cache_locations()
 
     def test_a_relative_explicit_directory_is_refused(self, tmp_path: pathlib.Path) -> None:
         """The explicit argument obeys the same rule as the variable: a relative path is refused."""
@@ -333,7 +333,7 @@ class TestTheEnvironmentVariable:
         where its cache entries came from.
         """
         seed = tmp_path / "seed"
-        monkeypatch.setenv(SimulationSetup.CACHE_DIRECTORIES_VARIABLE, str(seed))
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(seed))
         parameters = self._parameters(tmp_path)
 
         assert list(parameters.cache_locations().directories) == [str(seed)]

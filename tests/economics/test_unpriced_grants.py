@@ -342,10 +342,16 @@ class TestTheRow:
         assert row["open_questions"] == [UnpricedMeasures.PRICE_QUESTION]
 
     def test_nothing_is_booked_for_it(self, tmp_path) -> None:
-        """The Subsidies stack of every year is zero: an undecided grant carries no money."""
+        """The envelope's row books no support: an undecided grant carries no money.
+
+        The plan buys the unpriced envelope, so its Subsidies stacks are withheld with every other figure the
+        investment enters (``UnpricedInvestment``); the per-subject row still states the support it booked.
+        """
         document = _document(tmp_path, [_scheme("LUMP", BenefitKind.LUMP_SUM, LumpSumBenefit(amount=AMOUNT))])
+        rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
+        assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["subsidy_in_euro"] == {"min": 0.0, "best": 0.0, "max": 0.0}
         for year in document["plan"]["annual"]:
-            assert year["by_group"]["Subsidies"] == {"min": 0.0, "best": 0.0, "max": 0.0}
+            assert year["by_group"]["Subsidies"] is None
 
 
 class TestWarmerHomesOnAnUnpricedMeasure:

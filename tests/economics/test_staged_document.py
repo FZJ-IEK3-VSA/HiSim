@@ -78,7 +78,6 @@ def fixture_document(tmp_path, parameters, database) -> Dict[str, Any]:
             SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
             SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system",
         },
-        unpriced_subjects={SyntheticPlan.ENVELOPE_SUBJECT},
     ).write(path)
     document: Dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return document
@@ -330,8 +329,22 @@ class TestTheDocumentShape:
         assert reference[SyntheticPlan.BOILER_SUBJECT]["measure_id"] is None
         assert plan[SyntheticPlan.BOILER_SUBJECT]["measure_id"] == "heating_system"
 
-    def test_an_unpriced_subject_says_so_rather_than_disappearing(self, document):
+    def test_an_unpriced_subject_says_so_rather_than_disappearing(self, tmp_path, parameters, database):
         """A measure with no price behind it is in the document, flagged (step 10 §1)."""
+        perspective = brownfield_perspective()
+        result = StagedEvaluator(database).evaluate(
+            [baseline_stage(), envelope_stage(0), heat_pump_stage(4)], parameters, perspective
+        )
+        document = StagedDocument(
+            result,
+            parameters,
+            perspective,
+            measure_ids={
+                SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
+                SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system",
+            },
+            unpriced_subjects={SyntheticPlan.ENVELOPE_SUBJECT},
+        ).write(tmp_path / StagedDocument.FILE_NAME)
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}
         assert rows[SyntheticPlan.ENVELOPE_SUBJECT]["unpriced"] is True
         assert rows[SyntheticPlan.BOILER_SUBJECT]["unpriced"] is False
@@ -521,7 +534,7 @@ class TestTheDocumentShape:
         """
         import jsonschema
 
-        assert document["schema_version"] == 10
+        assert document["schema_version"] == 11
         StagedDocument.validate(document)
         for older in (1, 2, 3, 4, 5, 6, 7):
             with pytest.raises(jsonschema.ValidationError):
@@ -837,12 +850,18 @@ class TestEveryMeasureHasARow:
         assert row["service_life_origin"] is None and row["installation_year_origin"] is None
 
     def test_the_rows_change_no_sum(self, database, parameters, tmp_path):
-        """Zero rows keep ``by_subject`` summing to the NPV; the reference gets none of them."""
+        """Zero rows keep ``by_subject`` summing to the engine's NPV; the reference gets none of them.
+
+        The plan buys the unpriced lagging, so the document withholds its NPV (``UnpricedInvestment``); the rows are
+        held to the engine's total instead.
+        """
         document = self._write(database, parameters, tmp_path / "measures.json")
-        for variant in ("reference", "plan"):
-            evaluation = document[variant]
-            total = sum(row["npv_in_euro"]["best"] for row in evaluation["by_subject"])
-            assert total == pytest.approx(evaluation["totals"]["npv_in_euro"]["best"], abs=0.01)
+        envelope = replace(envelope_stage(0), measures=("external_insulation", self.UNPRICED, self.COSTLESS))
+        result = StagedEvaluator(database).evaluate([baseline_stage(), envelope], parameters, brownfield_perspective())
+        for variant, engine in (("reference", result.reference), ("plan", result.plan)):
+            total = sum(row["npv_in_euro"]["best"] for row in document[variant]["by_subject"])
+            assert total == pytest.approx(engine.total_npv_in_euro.best_estimate, abs=0.01)
+        assert document["plan"]["totals"]["npv_in_euro"] is None
         reference = {row["subject"] for row in document["reference"]["by_subject"]}
         assert not reference & {self.COSTLESS, self.UNPRICED}
 
@@ -1496,12 +1515,7 @@ class TestTheEnergyEcho:
         second = self._document(database, parsed.parameters, tmp_path, "second")
         for variant in ("reference", "plan"):
             assert second[variant]["totals"] == document[variant]["totals"]
-        # The fixture declares the facade unpriced, so it states no payback year; the second document is built
-        # without the mapping report and states one. Every figure besides is the same.
-        payback_keys = ("discounted_payback_year", "discounted_payback_year_null_reason")
-        assert {key: value for key, value in second["comparison"].items() if key not in payback_keys} == {
-            key: value for key, value in document["comparison"].items() if key not in payback_keys
-        }
+        assert second["comparison"] == document["comparison"]
         without_origins = {key: value for key, value in second["parameters"].items() if key != "origins"}
         assert without_origins == {key: value for key, value in document["parameters"].items() if key != "origins"}
         assert second["parameters"]["origins"]["escalation"]["energy"] == {"ELECTRICITY": "stated"}
@@ -1585,7 +1599,6 @@ class TestACostlessPartKeepsItsRow:
                 SyntheticPlan.ENVELOPE_SUBJECT: "external_insulation",
                 SyntheticPlan.HEAT_PUMP_SUBJECT: "heating_system",
             },
-            unpriced_subjects={SyntheticPlan.ENVELOPE_SUBJECT},
             costless_subjects={self.CONTROLLER},
             subject_notes={self.CONTROLLER: self.NOTE},
         ).write(tmp_path / StagedDocument.FILE_NAME)

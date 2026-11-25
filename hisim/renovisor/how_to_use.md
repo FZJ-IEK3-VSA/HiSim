@@ -338,16 +338,23 @@ renovisorissues #102): a difference that rises above zero again moves the year t
 one that ends above zero gives `null`, so a world with a positive `npv_delta_in_euro` never states a
 year, and year 0 is a valid value for a plan no dearer than the reference from the start.
 
-A plan that buys a subject with no price -- a `by_subject` row of the plan with `unpriced: true` and a
-`measure_id`, such as an envelope measure without a cost block or the hot-water lagging -- states
-`null` in every end of `comparison.discounted_payback_year`, and
-`comparison.discounted_payback_year_null_reason` says why (schema version 10, renovisorissues #87):
-`{"code": "unpriced_subjects", "unpriced_subjects": [...], "measure_ids": [...], "note": "..."}`. The
-plan's investment is unknown, not the sum of its priced rows, so no year is stated and there is no
-lower bound. A reader's quote for the measure prices it, and the payback is stated again. A kept
-envelope element (`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and
-the plan and withholds nothing. Without such a subject the reason is `null`, and a `null` end means
-that world does not stay repaid within the horizon.
+A plan that buys a subject with no price -- a `by_subject` row with `unpriced: true` and a
+`measure_id`, such as an envelope measure without a cost block or the hot-water lagging -- has an
+unknown investment, not the sum of its priced rows, so the document states `null` in every figure
+that investment enters (schema version 11, renovisorissues #87, owner decisions of 2026-11-13 and
+2026-11-25): in `plan.totals` the investment, NPV, equivalent annual and monthly cost, year-1 monthly
+cost and levelized cost of heat (`sunk_cost_written_off_in_euro` stays); in `by_group` and every
+`annual[].by_group` each group but `Energy` and `CO2`; in `by_category` each category of the other
+groups; every `by_payer` entry; `annual[].total_*`; the money of `cumulative[]`; the loans' principal
+and debt service; and in `comparison` every difference but `lifecycle_co2_delta_in_kg`, with every end
+of `discounted_payback_year` null. The top-level `unpriced_investment` says why, once for all of them:
+`{"code": "unpriced_subjects", "unpriced_subjects": [...], "measure_ids": [...], "note": "..."}`
+(version 10 had it as `comparison.discounted_payback_year_null_reason`, for the payback alone). There
+is no lower bound. The `by_subject` rows, `energy_year1`, `co2` and `subsidies` stay. A reader's quote
+for the measure prices it, and every figure is stated again. A kept envelope element
+(`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and the plan and
+withholds nothing. Without such a subject `unpriced_investment` is `null`, and a `null` end of the
+payback year means that world does not stay repaid within the horizon.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

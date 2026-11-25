@@ -42,6 +42,16 @@ STAGED_PARAMETERS = {
     "subsidy_mode": "full",
 }
 
+#: The same block with a reader's quote for the hot-water lagging, the one measure of the mockup's package HiSim holds
+#: no price for. Without it the plan's investment is unknown and the document withholds every figure it enters
+#: (``UnpricedInvestment``), so the tests of those figures price the plan with it.
+PRICED_PARAMETERS = {
+    **STAGED_PARAMETERS,
+    "investment_overrides": [
+        {"stage": 1, "measure_id": "hot_water_tank_and_pipe_insulation", "amount_in_euro": 450.0, "source": "plumber"}
+    ],
+}
+
 
 def _document(with_measures: bool) -> Dict[str, Any]:
     """The vendored mockup, with its package or with an empty one."""
@@ -133,6 +143,17 @@ def fixture_document(runs, parameters_file) -> Dict[str, Any]:
     )
 
 
+@pytest.fixture(name="priced_document", scope="module")
+def fixture_priced_document(runs) -> Dict[str, Any]:
+    """Price the two-stage plan with the lagging quoted, so every figure of the document is stated."""
+    directory, baseline, package = runs
+    path = directory / "economics_priced.json"
+    path.write_text(json.dumps(PRICED_PARAMETERS), encoding="utf-8")
+    return _price(
+        [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "priced" / StagedDocument.FILE_NAME
+    )
+
+
 @pytest.fixture(name="backend_document", scope="module")
 def fixture_backend_document(runs, parameters_file) -> Dict[str, Any]:
     """Price the same plan out of the stage directories a backend's worker assembles.
@@ -174,7 +195,7 @@ class TestThePlanStartYear:
         """The same two-stage plan, priced with ``plan_start_year`` 2026 in its block."""
         directory, baseline, package = runs
         path = directory / "economics_dated.json"
-        path.write_text(json.dumps({**STAGED_PARAMETERS, "plan_start_year": self.START}), encoding="utf-8")
+        path.write_text(json.dumps({**PRICED_PARAMETERS, "plan_start_year": self.START}), encoding="utf-8")
         return _price(
             [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "dated" / StagedDocument.FILE_NAME
         )
@@ -242,32 +263,32 @@ class TestThePlanStartYear:
         package_heat_pump = {row["subject"]: row for row in later["plan"]["by_subject"]}["MoreAdvancedHeatPumpHPLib"]
         assert package_heat_pump["installation_year"] == start
 
-    def test_it_dates_the_money_and_does_not_change_it(self, dated_document, document) -> None:
+    def test_it_dates_the_money_and_does_not_change_it(self, dated_document, priced_document) -> None:
         """The stages state their price basis year, so the start year cannot re-base them."""
-        assert dated_document["parameters"]["price_basis_year"] == document["parameters"]["price_basis_year"]
-        assert dated_document["plan"]["totals"] == document["plan"]["totals"]
-        assert dated_document["comparison"] == document["comparison"]
+        assert dated_document["parameters"]["price_basis_year"] == priced_document["parameters"]["price_basis_year"]
+        assert dated_document["plan"]["totals"] == priced_document["plan"]["totals"]
+        assert dated_document["comparison"] == priced_document["comparison"]
         assert "price_level" not in dated_document["parameters"]["origins"]
 
-    def test_a_start_one_year_later_is_in_that_years_money_and_says_so(self, runs, document) -> None:
+    def test_a_start_one_year_later_is_in_that_years_money_and_says_so(self, runs, priced_document) -> None:
         """Start year = basis + 1 (renovisorissues #62): the echo states both years, the money moves.
 
         Prices are still read at the basis year, so the echoed year-1 prices are the basis year's;
         every amount is escalated one year, so the plan and the reference cost more.
         """
         directory, baseline, package = runs
-        basis = document["parameters"]["price_basis_year"]
+        basis = priced_document["parameters"]["price_basis_year"]
         path = directory / "economics_next_year.json"
-        path.write_text(json.dumps({**STAGED_PARAMETERS, "plan_start_year": basis + 1}), encoding="utf-8")
+        path.write_text(json.dumps({**PRICED_PARAMETERS, "plan_start_year": basis + 1}), encoding="utf-8")
         later = _price(
             [f"{baseline}:0:baseline", f"{package}:0:package"], path, directory / "next" / StagedDocument.FILE_NAME
         )
         StagedDocument.validate(later)
         assert later["parameters"]["price_basis_year"] == basis
         assert later["parameters"]["origins"]["price_level"] == {"from_year": basis, "to_year": basis + 1}
-        assert later["parameters"]["energy_prices"] == document["parameters"]["energy_prices"]
+        assert later["parameters"]["energy_prices"] == priced_document["parameters"]["energy_prices"]
         for variant in ("reference", "plan"):
-            assert later[variant]["totals"] != document[variant]["totals"], variant
+            assert later[variant]["totals"] != priced_document[variant]["totals"], variant
 
 
 class TestTheEndToEndDocument:
@@ -318,9 +339,9 @@ class TestTheEndToEndDocument:
             key=order.index,
         )
 
-    def test_the_comparison_is_present_and_has_a_payback_verdict(self, document) -> None:
+    def test_the_comparison_is_present_and_has_a_payback_verdict(self, priced_document) -> None:
         """A plan is a difference question, so the comparison is not an optional extra."""
-        comparison = document["comparison"]
+        comparison = priced_document["comparison"]
         assert set(comparison["npv_delta_in_euro"]) == {"min", "best", "max"}
         assert set(comparison["discounted_payback_year"]) == {"min", "best", "max"}
 
@@ -440,27 +461,27 @@ class TestTheEndToEndDocument:
                 else:
                     assert revenue == {"min": 0.0, "best": 0.0, "max": 0.0}, (variant, row)
 
-    def test_the_stacks_add_up_on_the_written_file(self, document) -> None:
+    def test_the_stacks_add_up_on_the_written_file(self, priced_document) -> None:
         """The document's own promise, on a real run rather than on a synthetic plan."""
         for variant in ("reference", "plan"):
-            evaluation = document[variant]
+            evaluation = priced_document[variant]
             for slot in ("min", "best", "max"):
                 stack = sum(band[slot] for band in evaluation["by_group"].values())
                 assert stack == pytest.approx(evaluation["totals"]["npv_in_euro"][slot], abs=0.01)
 
-    def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, document) -> None:
+    def test_the_headline_monthly_figure_is_the_annuity_over_twelve(self, priced_document) -> None:
         """hisim-economics-engine-cyc.6 on a real run: both evaluations carry EAC / 12, and so does the comparison."""
         for variant in ("reference", "plan"):
-            totals = document[variant]["totals"]
+            totals = priced_document[variant]["totals"]
             assert totals["monthly_equivalent_cost_in_euro"]["best"] == pytest.approx(
                 totals["equivalent_annual_cost_in_euro"]["best"] / 12.0
             )
-        comparison = document["comparison"]
+        comparison = priced_document["comparison"]
         assert comparison["monthly_equivalent_cost_delta_in_euro"]["best"] == pytest.approx(
             comparison["equivalent_annual_cost_delta_in_euro"]["best"] / 12.0
         )
 
-    def test_both_evaluations_publish_a_cost_per_kwh_of_heat(self, document, runs) -> None:
+    def test_both_evaluations_publish_a_cost_per_kwh_of_heat(self, priced_document, runs) -> None:
         """hisim-4p86: the denominator is the useful heat each stage's run measured.
 
         Both job directories record the rooms' heat plus the hot water, and the package's
@@ -481,7 +502,7 @@ class TestTheEndToEndDocument:
             annual_heat[variant] = measured / inputs["simulated_period_fraction"]
         assert 0 < annual_heat["plan"] < annual_heat["reference"]
         for variant, heat in annual_heat.items():
-            totals = document[variant]["totals"]
+            totals = priced_document[variant]["totals"]
             heat_cost = totals["levelized_cost_of_heat_in_euro_per_kwh"]
             assert heat_cost is not None and heat_cost["best"] > 0, variant
             for slot in ("min", "best", "max"):
@@ -489,17 +510,17 @@ class TestTheEndToEndDocument:
                     totals["equivalent_annual_cost_in_euro"][slot] / heat, rel=1e-9
                 ), (variant, slot)
 
-    def test_the_subsidy_stack_is_the_awarded_rows(self, document) -> None:
+    def test_the_subsidy_stack_is_the_awarded_rows(self, priced_document) -> None:
         """hisim-economics-engine-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""
-        StagedDocument.assert_subsidies_reconciled(document)
-        awarded = [row for row in document["plan"]["subsidies"] if row["status"] == "awarded"]
-        booked = sum(year["by_group"]["Subsidies"]["best"] for year in document["plan"]["annual"])
+        StagedDocument.assert_subsidies_reconciled(priced_document)
+        awarded = [row for row in priced_document["plan"]["subsidies"] if row["status"] == "awarded"]
+        booked = sum(year["by_group"]["Subsidies"]["best"] for year in priced_document["plan"]["annual"])
         assert booked < 0, "the mockup's heat pump grant must reach the stack"
         assert booked == pytest.approx(sum(row["amount_in_euro"]["best"] for row in awarded), abs=0.01)
 
-    def test_the_run_still_leaves_no_costs_block_in_the_payload(self, document) -> None:
+    def test_the_run_still_leaves_no_costs_block_in_the_payload(self, priced_document) -> None:
         """The other half of the split: one implementation of the money, and this is it."""
-        assert document["plan"]["totals"]["npv_in_euro"]["best"] != 0.0
+        assert priced_document["plan"]["totals"]["npv_in_euro"]["best"] != 0.0
 
 
 class TestTheEquipmentTheHouseAlreadyHas:
@@ -647,15 +668,18 @@ class TestTheEquipmentTheHouseAlreadyHas:
         reference = {row["subject"] for row in document["reference"]["by_subject"]}
         assert "hot_water_tank_and_pipe_insulation" not in reference
 
-    def test_the_unpriced_lagging_withholds_the_payback(self, document) -> None:
-        """A plan that buys an unpriced measure states no payback year and names it (renovisorissues #87).
+    def test_the_unpriced_lagging_withholds_the_investment_figures(self, document) -> None:
+        """A plan that buys an unpriced measure states no investment, NPV or payback year and names it (#87).
 
         The lagging has no price anywhere (hisim-5j3h), so the package's investment is unknown, not the sum of its
-        priced rows; the comparison says so instead of stating a year over part of it.
+        priced rows; the document says so instead of stating figures over part of it.
         """
         comparison = document["comparison"]
         assert comparison["discounted_payback_year"] == {"min": None, "best": None, "max": None}
-        reason = comparison["discounted_payback_year_null_reason"]
+        assert comparison["npv_delta_in_euro"] is None
+        assert document["plan"]["totals"]["investment_year0_in_euro"] is None
+        assert document["plan"]["totals"]["npv_in_euro"] is None
+        reason = document["unpriced_investment"]
         assert reason["code"] == "unpriced_subjects"
         assert "hot_water_tank_and_pipe_insulation" in reason["unpriced_subjects"]
         rows = {row["subject"]: row for row in document["plan"]["by_subject"]}

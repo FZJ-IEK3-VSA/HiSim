@@ -202,65 +202,88 @@ class SubjectKindNames:
         return str(getattr(subject_kind, "value", subject_kind)).lower()
 
 
-class UnpricedPayback:
-    """Why a plan that buys something with no price states no payback year (renovisorissues #87, point 1).
+class UnpricedInvestment:
+    """The rule that withholds every figure containing the investment of a subject whose price is unknown.
 
     An unpriced subject -- an envelope measure without a cost block, a measure HiSim holds no price for -- is booked at
-    a placeholder zero, so a payback year over the plan's investment would be a year over part of it. By owner decision
-    of 2026-11-13 such a plan states no payback year at all (every end of `comparison.discounted_payback_year` is
-    `null`), and `comparison.discounted_payback_year_null_reason` says which subjects are unpriced. There is no lower
-    bound ("at least N years"). The subjects are read off the plan's `by_subject` rows, so the reason names exactly the
-    rows that say `unpriced: true`; a row a reader's quote priced is not one of them.
+    a placeholder zero. A sum over it would state part of the investment as the whole, so by owner decision (2026-11-13
+    for the payback year, 2026-11-25 for every other figure; renovisorissues #87) an evaluation that buys such a
+    subject states `null` in every figure its investment enters: the headline totals but the written-off sunk cost, the
+    NPV's split by group, category and payer (but the energy and CO2 groups), the annual and cumulative series, the
+    loans, and every difference to the reference but the CO2 difference. There is no lower bound. The `by_subject`
+    rows, the year-1 energy bill, the CO2 masses and the subsidy rows stay: they do not depend on the unknown price. The
+    document's top-level `unpriced_investment` names the subjects, once for every figure withheld.
 
-    Only subjects the plan buys count: rows that carry a `measure_id`. A kept envelope element (`envelope_<element>`)
-    is unpriced as well, but it belongs to the house as it was and is renewed alike in the reference and in every stage
-    that keeps it; it carries no measure and does not withhold the payback. A document built without a measure map
-    cannot tell the two apart, so there every unpriced row withholds it.
+    The subjects are read off an evaluation's `by_subject` rows, so the reason names exactly the rows that say
+    `unpriced: true`; a row a reader's quote priced is not one of them. Only subjects the evaluation buys count: rows
+    that carry a `measure_id`. A kept envelope element (`envelope_<element>`) is unpriced as well, but it belongs to the
+    house as it was and is renewed alike in the reference and in every stage that keeps it; it carries no measure and
+    withholds nothing. A document built without a measure map cannot tell the two apart, so there every unpriced row
+    withholds.
 
     Example::
 
         rows = [{"subject": "window_replacement", "measure_id": "window_replacement", "unpriced": True}]
-        UnpricedPayback.subjects(rows, has_measure_map=True)  # ["window_replacement"]
+        UnpricedInvestment.subjects(rows, has_measure_map=True)  # ["window_replacement"]
     """
 
-    #: The `code` of the reason: the plan buys subjects whose price is unknown.
+    #: The `code` of the reason: the evaluation buys subjects whose price is unknown.
     CODE: ClassVar[str] = "unpriced_subjects"
 
     #: The sentence the reason carries.
     NOTE: ClassVar[str] = (
-        "no payback year is stated: the plan buys {subjects}, whose price is unknown, not zero, so the plan's investment "
-        "is unknown and any payback year would be one over part of it"
+        "the plan buys {subjects}, whose price is unknown, not zero, so its investment is unknown: every figure the "
+        "investment enters (the totals, the NPV and its split, the annual and cumulative series, the loans, the "
+        "differences to the reference and the payback year) is null, with no lower bound"
     )
 
     #: The payback band of a plan that states none.
     NO_PAYBACK_YEAR: ClassVar[Dict[str, None]] = {"min": None, "best": None, "max": None}
 
+    #: The cost groups no investment enters: the energy bill and the carbon price are priced from the simulated energy
+    #: and its carriers, whatever the equipment cost.
+    PRICE_FREE_GROUPS: ClassVar[FrozenSet[CostGroup]] = frozenset({CostGroup.ENERGY, CostGroup.CO2})
+
+    #: The `totals` an unknown investment leaves stated: the book value of the reference's equipment written off.
+    PRICE_FREE_TOTALS: ClassVar[FrozenSet[str]] = frozenset({"sunk_cost_written_off_in_euro"})
+
+    #: The `comparison` figures an unknown investment leaves stated: differences of quantities priced without it.
+    PRICE_FREE_DIFFERENCES: ClassVar[FrozenSet[str]] = frozenset({"lifecycle_co2_delta_in_kg"})
+
+    #: The `comparison` figure that is a series of difference rows, each withheld in its money.
+    CUMULATIVE_DIFFERENCE: ClassVar[str] = "cumulative_delta"
+
+    #: The `comparison` figure that is a year band, withheld as `NO_PAYBACK_YEAR`.
+    PAYBACK_YEAR: ClassVar[str] = "discounted_payback_year"
+
     @staticmethod
     def subjects(by_subject: Sequence[Mapping[str, Any]], has_measure_map: bool) -> List[str]:
-        """Return the unpriced subjects the plan buys, sorted, from its `by_subject` rows.
+        """Return the unpriced subjects an evaluation buys, sorted, from its `by_subject` rows.
 
         Args:
-            by_subject: The plan's `by_subject` rows, as the document writes them.
+            by_subject: The evaluation's `by_subject` rows, as the document writes them.
             has_measure_map: Whether the document was built with the mapping report's measure map; without one every
                 unpriced row counts, because a measure's row cannot be told from a kept element's.
 
         Returns:
             The subjects of the rows with `unpriced: true` and a `measure_id` (any unpriced row without a measure map),
-                sorted; empty when the plan buys nothing unpriced.
+                sorted and distinct; empty when the evaluation buys nothing unpriced.
         """
         return sorted(
-            str(row["subject"])
-            for row in by_subject
-            if row["unpriced"] and (row["measure_id"] is not None or not has_measure_map)
+            {
+                str(row["subject"])
+                for row in by_subject
+                if row["unpriced"] and (row["measure_id"] is not None or not has_measure_map)
+            }
         )
 
     @classmethod
     def reason(cls, by_subject: Sequence[Mapping[str, Any]], subjects: Sequence[str]) -> Optional[Dict[str, Any]]:
-        """Return `comparison.discounted_payback_year_null_reason` for the given unpriced subjects, or None.
+        """Return the document's `unpriced_investment` for the given unpriced subjects, or None.
 
         Args:
-            by_subject: The plan's `by_subject` rows, for the measures of the subjects.
-            subjects: The unpriced subjects the plan buys, from :meth:`subjects`.
+            by_subject: The `by_subject` rows of the reference and the plan, for the measures of the subjects.
+            subjects: The unpriced subjects bought, from :meth:`subjects`.
 
         Returns:
             None when there are none; otherwise `{"code", "unpriced_subjects", "measure_ids", "note"}`, with the
@@ -278,6 +301,102 @@ class UnpricedPayback:
             "measure_ids": measure_ids,
             "note": cls.NOTE.format(subjects=", ".join(subjects)),
         }
+
+    @classmethod
+    def withheld_groups(cls, by_group: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return a group stack with every group an investment enters set to None.
+
+        Example: `{"Energy": band, "Replacements": band}` becomes `{"Energy": band, "Replacements": None}`.
+
+        Args:
+            by_group: Group name -> band, as `by_group` and each `annual[].by_group` write it.
+
+        Returns:
+            The stack in the same key order, the `PRICE_FREE_GROUPS` kept.
+
+        Raises:
+            ValueError: If a key is not a `CostGroup` name.
+        """
+        return {
+            group: band if CostGroup(group) in cls.PRICE_FREE_GROUPS else None for group, band in by_group.items()
+        }
+
+    @classmethod
+    def withheld_evaluation(cls, evaluation: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return an evaluation block with every figure its investment enters set to None.
+
+        Withheld: the `totals` but `PRICE_FREE_TOTALS`; the `by_group` stack and each year's stack but
+        `PRICE_FREE_GROUPS`; the `by_category` entries of the other groups; every `by_payer` entry; each year's
+        `total_nominal_in_euro` and `total_discounted_in_euro`; every `cumulative` row's money; each loan's principal
+        and debt service. Kept: `by_subject`, `energy_year1`, `co2`, `subsidies`, the events and the years.
+
+        Args:
+            evaluation: The `reference` or `plan` block as `StagedDocument` builds it.
+
+        Returns:
+            A new block; the one given is not changed.
+        """
+        withheld = dict(evaluation)
+        withheld["totals"] = {
+            key: value if key in cls.PRICE_FREE_TOTALS else None for key, value in evaluation["totals"].items()
+        }
+        withheld["by_group"] = cls.withheld_groups(evaluation["by_group"])
+        withheld["by_category"] = {
+            category: band if CostGroups.of(CostCategory(category)) in cls.PRICE_FREE_GROUPS else None
+            for category, band in evaluation["by_category"].items()
+        }
+        withheld["by_payer"] = dict.fromkeys(evaluation["by_payer"])
+        withheld["annual"] = [
+            {
+                **row,
+                "total_nominal_in_euro": None,
+                "total_discounted_in_euro": None,
+                "by_group": cls.withheld_groups(row["by_group"]),
+            }
+            for row in evaluation["annual"]
+        ]
+        withheld["cumulative"] = [
+            {**row, "nominal_in_euro": None, "discounted_in_euro": None} for row in evaluation["cumulative"]
+        ]
+        financing = evaluation["financing"]
+        if financing is not None:
+            withheld["financing"] = {
+                "loans": [
+                    {
+                        **loan,
+                        "principal_in_euro": None,
+                        "debt_service_by_year_in_euro": [None] * len(loan["debt_service_by_year_in_euro"]),
+                    }
+                    for loan in financing["loans"]
+                ]
+            }
+        return withheld
+
+    @classmethod
+    def withheld_comparison(cls, comparison: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return a comparison block with every difference an investment enters set to None.
+
+        Kept: `PRICE_FREE_DIFFERENCES`. The payback year becomes `NO_PAYBACK_YEAR`, each `cumulative_delta` row keeps
+        its year and loses its money, and every other figure is None, so a difference added later is withheld unless it
+        is declared price-free.
+
+        Args:
+            comparison: The `comparison` block as `StagedDocument` builds it.
+
+        Returns:
+            A new block in the same key order; the one given is not changed.
+        """
+        withheld: Dict[str, Any] = {}
+        for key, value in comparison.items():
+            if key in cls.PRICE_FREE_DIFFERENCES:
+                withheld[key] = value
+            elif key == cls.PAYBACK_YEAR:
+                withheld[key] = dict(cls.NO_PAYBACK_YEAR)
+            elif key == cls.CUMULATIVE_DIFFERENCE:
+                withheld[key] = [{**row, "nominal_in_euro": None, "discounted_in_euro": None} for row in value]
+            else:
+                withheld[key] = None
+        return withheld
 
 
 class StagedDocument:
@@ -308,7 +427,7 @@ class StagedDocument:
     """
 
     #: Version of this document format, bumped whenever a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 10
+    SCHEMA_VERSION: ClassVar[int] = 11
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -457,11 +576,27 @@ class StagedDocument:
     def to_json(self) -> Dict[str, Any]:
         """Return the whole document as JSON-ready data.
 
+        An evaluation that buys a subject whose price is unknown states null in every figure its investment enters,
+        and so does the comparison when either evaluation does; `unpriced_investment` names the subjects
+        (:class:`UnpricedInvestment`).
+
         Returns:
-            The document with `schema_version`, `engine`, `parameters`, `currency`, `groups`, `stages`, `reference`,
-                `plan`, `comparison` and `provenance`, in that order, so two runs of one plan produce the same bytes.
+            The document with `schema_version`, `engine`, `parameters`, `currency`, `groups`, `stages`,
+                `unpriced_investment`, `reference`, `plan`, `comparison` and `provenance`, in that order, so two runs of
+                one plan produce the same bytes.
         """
+        reference = self._evaluation(self._result.reference, staged=False)
         plan = self._evaluation(self._result.plan, staged=True)
+        comparison = self._comparison(self._result.comparison)
+        reference_unpriced = UnpricedInvestment.subjects(reference["by_subject"], self._has_measure_map)
+        plan_unpriced = UnpricedInvestment.subjects(plan["by_subject"], self._has_measure_map)
+        if reference_unpriced:
+            reference = UnpricedInvestment.withheld_evaluation(reference)
+        if plan_unpriced:
+            plan = UnpricedInvestment.withheld_evaluation(plan)
+        unpriced = sorted(set(reference_unpriced) | set(plan_unpriced))
+        if unpriced:
+            comparison = UnpricedInvestment.withheld_comparison(comparison)
         return {
             "schema_version": self.SCHEMA_VERSION,
             "engine": self._engine(),
@@ -469,9 +604,10 @@ class StagedDocument:
             "currency": self.CURRENCY,
             "groups": [group.value for group in CostGroup],
             "stages": self._stages(),
-            "reference": self._evaluation(self._result.reference, staged=False),
+            "unpriced_investment": UnpricedInvestment.reason([*plan["by_subject"], *reference["by_subject"]], unpriced),
+            "reference": reference,
             "plan": plan,
-            "comparison": self._comparison(self._result.comparison, plan["by_subject"]),
+            "comparison": comparison,
             "provenance": {
                 "cost_provenance": self._cost_provenance,
                 "explain_command": (
@@ -602,7 +738,8 @@ class StagedDocument:
         Checked for the reference and the plan: every `subsidy` event names a scheme awarded in `subsidies[]`; every
         awarded row's `amount_by_year_in_euro` sums to its `amount_in_euro`; and every year's `Subsidies` group equals
         the awarded amounts booked in that year, slot by slot. An evaluation with no awarded row therefore books no
-        support in any year.
+        support in any year. An evaluation whose `Subsidies` group is withheld over an unknown investment
+        (:class:`UnpricedInvestment`) has no stack to compare, so only its events and row sums are checked.
 
         Args:
             document: The finished document.
@@ -641,9 +778,11 @@ class StagedDocument:
                             f"{event['scheme']!r}, which {variant}.subsidies does not award "
                             f"(awarded: {sorted(map(str, awarded_schemes)) or 'none'})."
                         )
-                booked[year["year"]] = {
-                    key: year["by_group"][CostGroup.SUBSIDIES.value][key] for key in cls.BAND_KEYS
-                }
+                in_stack = year["by_group"][CostGroup.SUBSIDIES.value]
+                if in_stack is not None:
+                    booked[year["year"]] = {key: in_stack[key] for key in cls.BAND_KEYS}
+            if evaluation["annual"] and not booked:
+                continue  # every stack withheld over an unknown investment: there is nothing to match the rows to
             zero = dict.fromkeys(cls.BAND_KEYS, 0.0)
             for year_index in sorted(set(booked) | set(stated)):
                 for key in cls.BAND_KEYS:
@@ -1656,19 +1795,18 @@ class StagedDocument:
 
     # ------------------------------------------------------------------ comparison
 
-    def _comparison(self, comparison: VariantComparison, plan_by_subject: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    def _comparison(self, comparison: VariantComparison) -> Dict[str, Any]:
         """Plan minus reference: the deltas, the payback and the cumulative difference.
 
-        A plan that buys an unpriced subject states no payback year, and says why (:class:`UnpricedPayback`).
+        Built as if every subject were priced; `to_json` withholds what an unknown investment enters
+        (:class:`UnpricedInvestment`).
 
         Args:
             comparison: The engine's comparison of plan and reference.
-            plan_by_subject: The plan's `by_subject` rows, whose `unpriced` flags decide whether a payback is stated.
 
         Returns:
             The `comparison` block.
         """
-        unpriced = UnpricedPayback.subjects(plan_by_subject, self._has_measure_map)
         horizon = self._parameters.observation_period_in_years
         reference = self._result.reference
         plan = self._result.plan
@@ -1709,10 +1847,7 @@ class StagedDocument:
             "monthly_cost_year1_delta_in_euro": monthly_delta,
             # The range by value, not by slot: which world pays back first depends on which
             # uncertainty dominates the savings.
-            "discounted_payback_year": (
-                dict(UnpricedPayback.NO_PAYBACK_YEAR) if unpriced else comparison.discounted_payback_envelope.to_band()
-            ),
-            "discounted_payback_year_null_reason": UnpricedPayback.reason(plan_by_subject, unpriced),
+            "discounted_payback_year": comparison.discounted_payback_envelope.to_band(),
             "cumulative_delta": cumulative,
             "lifecycle_co2_delta_in_kg": self._scalar_band(
                 plan.lifecycle_co2_result.total_co2_in_kg

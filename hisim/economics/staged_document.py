@@ -210,7 +210,7 @@ class UnpricedInvestment:
     for the payback year, 2026-11-25 for every other figure; renovisorissues #87) an evaluation that buys such a
     subject states `null` in every figure its investment enters: the headline totals but the written-off sunk cost, the
     NPV's split by group, category and payer (but the energy and CO2 groups), the annual and cumulative series, the
-    loans, and every difference to the reference but the CO2 difference. There is no lower bound. The `by_subject`
+    loans, and every difference to the reference but the CO2 and year-1 energy-bill differences. There is no lower bound. The `by_subject`
     rows, the year-1 energy bill, the CO2 masses and the subsidy rows stay: they do not depend on the unknown price. The
     document's top-level `unpriced_investment` names the subjects, once for every figure withheld.
 
@@ -248,7 +248,9 @@ class UnpricedInvestment:
     PRICE_FREE_TOTALS: ClassVar[FrozenSet[str]] = frozenset({"sunk_cost_written_off_in_euro"})
 
     #: The `comparison` figures an unknown investment leaves stated: differences of quantities priced without it.
-    PRICE_FREE_DIFFERENCES: ClassVar[FrozenSet[str]] = frozenset({"lifecycle_co2_delta_in_kg"})
+    PRICE_FREE_DIFFERENCES: ClassVar[FrozenSet[str]] = frozenset(
+        {"lifecycle_co2_delta_in_kg", "energy_bill_year1_delta_in_euro"}
+    )
 
     #: The `comparison` figure that is a series of difference rows, each withheld in its money.
     CUMULATIVE_DIFFERENCE: ClassVar[str] = "cumulative_delta"
@@ -427,7 +429,7 @@ class StagedDocument:
     """
 
     #: Version of this document format, bumped whenever a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 11
+    SCHEMA_VERSION: ClassVar[int] = 12
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -1393,22 +1395,61 @@ class StagedDocument:
             )
         return rows
 
+    @staticmethod
+    def carrier_bill_year1(entries: Iterable[CashFlowEntry], carrier: str) -> Tuple[UncertainValue, UncertainValue]:
+        """Return one carrier's year-1 charges and feed-in revenue, in euro, from a perspective's timeline entries.
+
+        The charges are the `CategoryRules.BILL_CATEGORIES` entries (positive), the revenue the `FEED_IN_REVENUE`
+        entries (negative), both of year 1 and booked under the carrier's bill subjects (`carriers.bill_subjects`, so
+        electricity's feed-in counts under it). For example 1,200 EUR of working and standing charges and 300 EUR of
+        feed-in give `(1200, -300)`.
+
+        Args:
+            entries: The scoped timeline's entries.
+            carrier: The carrier, as its timeline subject (`EnergyCarrier.value`).
+
+        Returns:
+            `(cost, revenue)`, each a band; exact zeros when nothing is booked.
+        """
+        cost = UncertainValue.exact(0.0)
+        revenue = UncertainValue.exact(0.0)
+        subjects = bill_subjects(carrier)
+        for entry in entries:
+            if entry.year != 1 or entry.subject not in subjects:
+                continue
+            if entry.category in CategoryRules.BILL_CATEGORIES:
+                cost = cost + entry.amount_in_euro
+            elif entry.category == CostCategory.FEED_IN_REVENUE:
+                revenue = revenue + entry.amount_in_euro
+        return cost, revenue
+
+    @classmethod
+    def energy_bill_year1(cls, result: LifecycleCostResult) -> UncertainValue:
+        """Return an evaluation's whole year-1 energy bill, in euro: every carrier's charges minus its feed-in revenue.
+
+        The sum of `cost_in_euro + revenue_in_euro` over the evaluation's `energy_year1` rows, kept slot by slot, so the
+        difference of two such bills pairs the same world of both evaluations.
+
+        Args:
+            result: The reference or the plan.
+
+        Returns:
+            The bill as a band in its three worlds.
+        """
+        entries = result.scoped_timeline().entries
+        total = UncertainValue.exact(0.0)
+        for carrier in result.annual_energy_quantities_by_carrier:
+            cost, revenue = cls.carrier_bill_year1(entries, carrier)
+            total = total + cost + revenue
+        return total
+
     def _energy_year1(self, result: LifecycleCostResult) -> List[Dict[str, Any]]:
         """The year-1 bill per carrier: volumes, money and the effective price between them."""
         rows = []
-        scoped = result.scoped_timeline()
+        entries = result.scoped_timeline().entries
         for carrier in sorted(result.annual_energy_quantities_by_carrier):
             quantities = result.annual_energy_quantities_by_carrier[carrier]
-            cost = UncertainValue.exact(0.0)
-            revenue = UncertainValue.exact(0.0)
-            subjects = bill_subjects(carrier)
-            for entry in scoped.entries:
-                if entry.year != 1 or entry.subject not in subjects:
-                    continue
-                if entry.category in CategoryRules.BILL_CATEGORIES:
-                    cost = cost + entry.amount_in_euro
-                elif entry.category == CostCategory.FEED_IN_REVENUE:
-                    revenue = revenue + entry.amount_in_euro
+            cost, revenue = self.carrier_bill_year1(entries, carrier)
             rows.append(
                 {
                     "carrier": carrier,
@@ -1845,6 +1886,10 @@ class StagedDocument:
                 comparison.monthly_equivalent_cost_delta_in_euro
             ),
             "monthly_cost_year1_delta_in_euro": monthly_delta,
+            # Slot by slot, then sorted (`UncertainValue.__sub__`): each end pairs the same price world of both.
+            "energy_bill_year1_delta_in_euro": self._band(
+                self.energy_bill_year1(plan) - self.energy_bill_year1(reference)
+            ),
             # The range by value, not by slot: which world pays back first depends on which
             # uncertainty dominates the savings.
             "discounted_payback_year": comparison.discounted_payback_envelope.to_band(),

@@ -346,7 +346,8 @@ that investment enters (schema version 11, renovisorissues #87, owner decisions 
 cost and levelized cost of heat (`sunk_cost_written_off_in_euro` stays); in `by_group` and every
 `annual[].by_group` each group but `Energy` and `CO2`; in `by_category` each category of the other
 groups; every `by_payer` entry; `annual[].total_*`; the money of `cumulative[]`; the loans' principal
-and debt service; and in `comparison` every difference but `lifecycle_co2_delta_in_kg`, with every end
+and debt service; and in `comparison` every difference but `lifecycle_co2_delta_in_kg` and
+`energy_bill_year1_delta_in_euro`, with every end
 of `discounted_payback_year` null. The top-level `unpriced_investment` says why, once for all of them:
 `{"code": "unpriced_subjects", "unpriced_subjects": [...], "measure_ids": [...], "note": "..."}`
 (version 10 had it as `comparison.discounted_payback_year_null_reason`, for the payback alone). There
@@ -355,6 +356,13 @@ for the measure prices it, and every figure is stated again. A kept envelope ele
 (`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and the plan and
 withholds nothing. Without such a subject `unpriced_investment` is `null`, and a `null` end of the
 payback year means that world does not stay repaid within the horizon.
+
+`comparison.energy_bill_year1_delta_in_euro` (schema version 12, renovisorissues #95) is the plan's
+year-1 energy bill minus the reference's, over every carrier of `energy_year1`, charges minus feed-in
+revenue, as a band: each end pairs the same price world of the plan and the reference, and the three
+differences are then sorted into `min <= best <= max`, so a price uncertainty both share cancels
+instead of widening the band. Combining the two evaluations' own bands gives a wider, wrong range. No
+investment enters it, so it is stated when `unpriced_investment` withholds the other differences.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

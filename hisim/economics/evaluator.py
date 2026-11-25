@@ -40,6 +40,7 @@ from hisim.economics.calculators.co2 import (
     finalize_total_co2,
 )
 from hisim.economics.calculators.energy import build_energy_flows
+from hisim.economics.calculators.heat_cost import HeatCostAttribution, HeatCostBasis
 from hisim.economics.calculators.financing_application import (
     build_financing_flows,
     compute_year0_net_investment,
@@ -218,7 +219,7 @@ class EvaluationInputs:
     tariff_contracts: Dict[EnergyCarrier, TariffContract] = field(default_factory=dict)
     # Tariff ids whose price signal a controller consumed during the run (§4.6 boundary):
     consumed_tariff_ids: List[str] = field(default_factory=list)
-    # For the system cost per unit of heat: a figure the setup declared for a whole year, and the
+    # For the levelized cost of heat: a figure the setup declared for a whole year, and the
     # useful heat the simulation measured over its own period (the building's room-heating demand
     # plus the hot water drawn, `adapter.UsefulHeatSources`). `annual_heat_demand()` picks one.
     annual_heat_demand_in_kwh: Optional[float] = None
@@ -1210,6 +1211,11 @@ class EconomicEvaluator:
             # say so.
             levy_summary = _levy_summary(ruleset.modernization_levy_outcome(allocation_context))
 
+        # One run is one state of the house, so its electricity heat share holds in every year of the horizon.
+        electricity_heat_share = HeatCostAttribution.electricity_heat_share(
+            inputs.energy_attribution_by_subject_in_kwh,
+            (subject_facts.facts.asset_class for subject_facts in inputs.cost_facts),
+        )
         aggregation = aggregate_timeline(
             timeline=timeline,
             actor_scope=perspective.actor_scope,
@@ -1218,7 +1224,14 @@ class EconomicEvaluator:
             },
             co2_result=co2_result,
             parameters=params,
-            annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
+            heat=HeatCostBasis(
+                annual_heat_demand_in_kwh=inputs.annual_heat_demand(),
+                electricity_heat_share_by_year=(
+                    None
+                    if electricity_heat_share is None
+                    else (electricity_heat_share,) * (params.observation_period_in_years + 1)
+                ),
+            ),
         )
 
         return LifecycleCostResult(
@@ -1233,6 +1246,7 @@ class EconomicEvaluator:
             component_breakdowns=aggregation.component_breakdowns,
             annual_cost_series_nominal_in_euro=aggregation.annual_cost_series_nominal_in_euro,
             monthly_cost_year1_in_euro=aggregation.monthly_cost_year1_in_euro,
+            heat_cost_npv_in_euro=aggregation.heat_cost_npv_in_euro,
             levelized_cost_of_heat_in_euro_per_kwh=aggregation.levelized_cost_of_heat_in_euro_per_kwh,
             timeline=timeline,
             lifecycle_co2_result=co2_result,

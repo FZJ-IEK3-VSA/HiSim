@@ -34,6 +34,7 @@ from typing import (
 
 from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.calculators.financing_application import FinancingConstants
+from hisim.economics.calculators.heat_cost import HeatCostAttribution
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole, bill_subjects
 from hisim.economics.catalog_entries import CostDataError
@@ -41,6 +42,7 @@ from hisim.economics.numerics import bisect_root
 from hisim.economics.results import (
     AnywayBasisKinds,
     EvaluationMatrix,
+    HeatCostNaming,
     LifecycleCostResult,
     ModernizationLevySummary,
     RateOrigin,
@@ -4136,26 +4138,25 @@ _ABSENT: Any = object()
 
 @dataclass(frozen=True)
 class LevelizedHeatCostDerivation:
-    """The heat-cost figure written out as its division: numerator, denominator and quotient.
+    """The levelized cost of heat written out as its division: numerator, denominator and quotient.
 
-    The engine publishes `system cost per unit of heat = equivalent annual cost / annual heat demand`. The numerator is
-    the perspective's entire NPV, every subject included (PV and battery too), so on a multi-technology building it is
-    what the whole installation costs per kWh of heat, which is why the KPI is not called a levelized cost of heat
-    (`results.HeatCostNaming`). Dividing by the annuity factor equals dividing by the discounted sum of heat over the
-    horizon, the form the LCOH literature uses; both forms are given. For a staged plan the recorded demand is already
-    the equivalent annual heat of the horizon, so the same forms hold. Every figure is read off the result, not
-    recomputed.
+    The engine publishes `levelized cost of heat = heat-cost NPV x annuity factor / annual heat demand`. The numerator
+    is the net present value of the heat costs alone (`calculators.heat_cost.HeatCostAttribution`): the heat
+    generators', storages' and emitters' own cash flows, the fuels, and the heating devices' share of the electricity
+    bill. Dividing by the annuity factor equals dividing by the discounted sum of heat over the horizon, the form the
+    LCOH literature uses; both forms are given. For a staged plan the recorded demand is already the equivalent annual
+    heat of the horizon, so the same forms hold. Every figure is read off the result, not recomputed.
     """
 
     perspective_id: str
-    numerator_npv_in_euro: float
+    heat_cost_npv_in_euro: float
     annuity_factor: float
-    equivalent_annual_cost_in_euro: float
+    equivalent_annual_heat_cost_in_euro: float
     annual_heat_demand_in_kwh: float
     discounted_heat_in_kwh: float
     levelized_cost_in_euro_per_kwh: float
-    #: The subjects the numerator covers, in timeline order — the truthful statement of what is
-    #: attributed to heat, which is everything the perspective books.
+    #: The subjects the numerator counts, in timeline order: heat subjects and heat carriers in full, the electricity
+    #: carrier by its heat share.
     attributed_subjects: Tuple[str, ...] = ()
     #: True when the result stored no heat demand and the denominator was divided back out of the
     #: published figure instead. The division then reproduces the KPI by construction rather than
@@ -4169,9 +4170,9 @@ class LevelizedHeatCostDerivation:
         otherwise; this is the value it compares.
         """
         return (
-            self.numerator_npv_in_euro,
+            self.heat_cost_npv_in_euro,
             self.annuity_factor,
-            self.equivalent_annual_cost_in_euro,
+            self.equivalent_annual_heat_cost_in_euro,
             self.annual_heat_demand_in_kwh,
             self.discounted_heat_in_kwh,
             self.levelized_cost_in_euro_per_kwh,
@@ -4183,9 +4184,9 @@ class LevelizedHeatCostDerivation:
 def levelized_heat_cost_derivation(
     result: LifecycleCostResult,
 ) -> Optional[LevelizedHeatCostDerivation]:
-    """Return the division behind the published heat-cost KPI, or None when the run publishes none.
+    """Return the division behind the published levelized cost of heat, or None when the run publishes none.
 
-    The numerator is `total_npv_in_euro`, its annualization `equivalent_annual_cost_in_euro`, and the quotient is
+    The numerator is `heat_cost_npv_in_euro`, its annualization the equivalent annual heat cost, and the quotient is
     checked against `levelized_cost_of_heat_in_euro_per_kwh`. A stored result without a recorded heat demand still gets
     a derivation, with the demand divided back out of the published figure; it then sets
     `demand_inferred_from_published`, skips the check (which would be circular), and the caption says where the
@@ -4195,16 +4196,18 @@ def levelized_heat_cost_derivation(
         result: The perspective to explain.
 
     Returns:
-        The derivation, or None when the perspective publishes no heat-cost figure (no heat demand was declared).
+        The derivation, or None when the perspective publishes no levelized cost of heat (no heat demand, an unknown
+            electricity heat share) or the result predates the heat-cost numerator.
 
     Raises:
         CostDataError: If the stated division does not reproduce the published figure.
     """
     published = result.levelized_cost_of_heat_in_euro_per_kwh
-    if published is None:
+    heat_npv = result.heat_cost_npv_in_euro
+    if published is None or heat_npv is None:
         return None
     annuity = result.parameters.annuity_factor()
-    equivalent_annual = result.equivalent_annual_cost_in_euro.best_estimate
+    equivalent_annual = heat_npv.best_estimate * annuity
     recorded = (
         result.assumptions.annual_heat_demand_in_kwh if result.assumptions is not None else None
     )
@@ -4214,8 +4217,8 @@ def levelized_heat_cost_derivation(
         quotient = equivalent_annual / heat_demand
         if abs(quotient - published.best_estimate) > ViewTolerances.RECONCILIATION_EPSILON:
             raise CostDataError(
-                f"System cost per unit of heat does not reconcile for perspective "
-                f"{result.perspective_id!r}: equivalent annual cost {equivalent_annual:,.2f} "
+                f"{HeatCostNaming.FULL} does not reconcile for perspective "
+                f"{result.perspective_id!r}: equivalent annual heat cost {equivalent_annual:,.2f} "
                 f"EUR/a / {heat_demand:,.0f} kWh = {quotient:.4f} EUR/kWh, but the published "
                 f"figure is {published.best_estimate:.4f} EUR/kWh."
             )
@@ -4225,11 +4228,15 @@ def levelized_heat_cost_derivation(
         heat_demand = equivalent_annual / published.best_estimate
     if not heat_demand:
         return None
+    heat_subjects = HeatCostAttribution.heat_subjects(
+        {subject: breakdown.asset_class for subject, breakdown in result.component_breakdowns.items()}
+    )
+    counted = heat_subjects | HeatCostAttribution.HEAT_CARRIERS | {HeatCostAttribution.SHARED_CARRIER}
     return LevelizedHeatCostDerivation(
         perspective_id=result.perspective_id,
-        numerator_npv_in_euro=result.total_npv_in_euro.best_estimate,
+        heat_cost_npv_in_euro=heat_npv.best_estimate,
         annuity_factor=annuity,
-        equivalent_annual_cost_in_euro=equivalent_annual,
+        equivalent_annual_heat_cost_in_euro=equivalent_annual,
         annual_heat_demand_in_kwh=heat_demand,
         # The annuity factor is `i(1+i)^T / ((1+i)^T - 1)` or `1/T`, both strictly positive for
         # every parameter set `EconomicParameters.__post_init__` admits, so there is no zero to
@@ -4237,7 +4244,7 @@ def levelized_heat_cost_derivation(
         discounted_heat_in_kwh=heat_demand / annuity,
         levelized_cost_in_euro_per_kwh=published.best_estimate,
         attributed_subjects=tuple(
-            dict.fromkeys(entry.subject for entry in result.scoped_timeline().entries)
+            dict.fromkeys(entry.subject for entry in result.scoped_timeline().entries if entry.subject in counted)
         ),
         demand_inferred_from_published=inferred,
     )
@@ -4248,7 +4255,7 @@ def levelized_heat_cost_derivations(
 ) -> Dict[str, LevelizedHeatCostDerivation]:
     """Return one heat-cost derivation per perspective that publishes the figure, in matrix order.
 
-    Each perspective's numerator is its own whole NPV, so a caption for one would mis-describe the others; the section
+    Each perspective's numerator is its own heat-cost NPV, so a caption for one would mis-describe the others; the section
     decides whether they agree.
 
     Args:

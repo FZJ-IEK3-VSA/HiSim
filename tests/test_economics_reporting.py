@@ -45,7 +45,7 @@ def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> Eval
 
     One banded heat pump plus one bought-electricity carrier — the minimum that still produces
     every figure the reports need: an investment with whiskers, an energy bill, a heat demand for
-    the system cost per unit of heat, and a living area for the per-m2 checks. The two arguments exist
+    the levelized cost of heat, and a living area for the per-m2 checks. The two arguments exist
     so a *second*, deliberately worse variant (cheap device, high consumption) can be built from
     the same shape for the comparison sections.
     """
@@ -62,6 +62,11 @@ def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> Eval
         simulated_period_fraction=1.0,
         cost_facts=[SubjectCostFacts("HeatPump", facts)],
         billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=energy_kwh)],
+        # The heat pump's metered electricity beside the appliances': the heat bears 70 % of the bill.
+        energy_attribution_by_subject_in_kwh={
+            "HeatPump": {"HEAT_PUMP_ELECTRICITY": 0.7 * energy_kwh},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 0.3 * energy_kwh},
+        },
         annual_heat_demand_in_kwh=15000.0,
         living_area_in_m2=150.0,
     )
@@ -114,7 +119,7 @@ PANEL_BEFORE_W42 = [
     ("effective ELECTRICITY price (year 1)", "PASS", "0.352 EUR/kWh", "0.1 - 0.6 EUR/kWh",
      "1,760 EUR for 5,000 kWh — catches unit mix-ups"),
     ("equivalent annual cost per m2 (greenfield_gross)", "PASS", "24.032 EUR/m2a", "5 - 80 EUR/m2a", ""),
-    ("system cost per unit of heat", "PASS", "0.240 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
+    ("levelized cost of heat", "PASS", "0.198 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
     ("maintenance / investment NPV ratio (greenfield_gross)", "PASS", "0.145 ", "0.02 - 0.8 ",
      "a huge ratio usually means an absolute fee stored as a rate (issues #1)"),
     ("uncertainty band width max/min (greenfield_gross)", "PASS", "1.994 x", "1 - 3.5 x",

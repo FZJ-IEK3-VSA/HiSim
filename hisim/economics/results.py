@@ -579,21 +579,27 @@ class AnywayBasisKinds:
 
 
 class HeatCostNaming:
-    """The display names of the heat-cost figure.
+    """The display names of the levelized cost of heat (LCOH).
 
-    The figure divides a perspective's whole NPV (PV and battery included) by the heat delivered, so it is not a
-    levelized cost of heat (LCOH), which counts heating-related cost only. Every place a reader sees it says "system
-    cost per unit of heat": the KPI in `lifecycle_kpis.json`, the report KPI and perspectives tables, the plausibility
-    row and the derivation caption. The field `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` keeps its
-    name because it is the serialization key of stored results.
+    The figure divides the net present value of the heat costs alone -- the heat generators', storages' and emitters'
+    own cash flows, the fuels and the heating devices' share of the electricity bill
+    (`calculators.heat_cost.HeatCostAttribution`) -- annualized, by the annual useful heat. Appliance electricity, a
+    photovoltaic array, a battery and the envelope are not in it. Every place a reader sees it uses these names: the
+    KPI in `lifecycle_kpis.json`, the report KPI and perspectives tables, the plausibility row and the derivation
+    caption.
     """
 
     #: The published KPI name and the caption's lead-in.
-    FULL = "System cost per unit of heat"
+    FULL = "Levelized cost of heat"
     #: Column-header form, for the perspectives table where the full name would not fit.
-    COLUMN = "System cost/kWh heat"
+    COLUMN = "LCOH"
     #: Lower-case form for the plausibility panel, whose check names are sentences-in-lower-case.
-    CHECK_LABEL = "system cost per unit of heat"
+    CHECK_LABEL = "levelized cost of heat"
+    #: What the numerator counts, the sentence every derivation caption states.
+    COUNTED = (
+        "Heat costs are the heat generators', storages' and emitters' own cash flows, the fuels, and the heating "
+        "devices' share of the electricity bill; appliance electricity, PV, a battery and the envelope are not"
+    )
 
 
 @dataclass
@@ -689,6 +695,10 @@ class LifecycleCostResult:
     #: serialized before the field existed; the assumptions section then renders the parameter
     #: half only and says which half is missing rather than inventing it.
     assumptions: Optional[EconomicAssumptions] = None
+    #: The net present value of the heat costs alone (`calculators.heat_cost.HeatCostAttribution`), the numerator of
+    #: `levelized_cost_of_heat_in_euro_per_kwh`. None when the electricity heat share is unknown and for a result
+    #: serialized before the field existed, whose heat-cost figure divided the whole NPV.
+    heat_cost_npv_in_euro: Optional[UncertainValue] = None
     #: The dated replacement schedule behind the timeline: ``(subject, year, nominal escalated
     #: amount)`` per scheduled re-purchase, in the order the subjects were priced. It is the same
     #: schedule the REPLACEMENT entries carry — and the only record of it under OPERATING_ONLY,
@@ -861,6 +871,9 @@ class LifecycleCostResult:
             "levelized_cost_of_heat_in_euro_per_kwh": self.levelized_cost_of_heat_in_euro_per_kwh.to_json()
             if self.levelized_cost_of_heat_in_euro_per_kwh
             else None,
+            "heat_cost_npv_in_euro": (
+                self.heat_cost_npv_in_euro.to_json() if self.heat_cost_npv_in_euro is not None else None
+            ),
             "sunk_cost_written_off_in_euro": self.sunk_cost_written_off_in_euro.to_json(),
             "lifecycle_co2": self.lifecycle_co2_result.to_json(),
             "subsidy_decisions": [decision.to_json() for decision in self.subsidy_decisions],

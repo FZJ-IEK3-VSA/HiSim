@@ -1401,8 +1401,8 @@ class ReportProse:
         ),
         "KPIs": SectionProse(
             shows=(
-                "The published key figures in one table — NPV, equivalent annual cost, monthly cost, the system "
-                "cost per unit of heat, CO2, subsidies per program — each as average with its band. This table "
+                "The published key figures in one table — NPV, equivalent annual cost, monthly cost, the levelized "
+                "cost of heat, CO2, subsidies per program — each as average with its band. This table "
                 "is what the machine-readable export contains."
             ),
             adds=(
@@ -1415,14 +1415,13 @@ class ReportProse:
                      "a headline figure chosen to summarize the evaluation; each has a fixed name and recipe so"
                      " results are comparable across runs."
                  )),
-                ("System cost per unit of heat",
+                ("Levelized cost of heat (LCOH)",
                  (
-                     "this evaluation's entire cost (everything in the perspective: heating, PV, battery, "
-                     "revenues) divided by the heat delivered. Deliberately **not** called a levelized cost of "
-                     "heat: an LCOH in the literature counts heating costs only, and this system has no "
-                     "heating-only attribution — so this figure runs high whenever the system contains more "
-                     "than heating, and it is comparable between variants of the same system, not against "
-                     "published LCOH values."
+                     "the heat costs alone, annualized, divided by the heat delivered. Heat costs are the heat "
+                     "generators', storages' and emitters' own cash flows, the fuels, and the heating devices' "
+                     "share of the electricity bill (their metered electricity over the metered consumption of "
+                     "heating devices and appliances together). Appliance electricity, PV, a battery and the "
+                     "envelope are not heat costs, so a PV array leaves the figure of a gas-heated house as it is."
                  )),
                 ("Machine-readable export",
                  (
@@ -1434,9 +1433,9 @@ class ReportProse:
             ),
             calculation=(
                 (
-                    "Each KPI names its recipe: the system cost per unit of heat, for example, is the "
-                    "equivalent annual cost divided by the annual heat demand — equivalently the NPV divided "
-                    "by the discounted heat sum. Every KPI is an aggregation of the same timeline as every "
+                    "Each KPI names its recipe: the levelized cost of heat, for example, is the equivalent "
+                    "annual heat cost divided by the annual heat demand — equivalently the heat costs' NPV "
+                    "divided by the discounted heat sum. Every KPI is an aggregation of the same timeline as every "
                     "chart, so table and charts cannot disagree."
                 ),
             ),

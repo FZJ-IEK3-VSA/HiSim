@@ -104,7 +104,7 @@ def _perspective_section_html(matrix: EvaluationMatrix, context: _ChapterContext
     Putting all perspectives on one axis makes the expected orderings visible: a gross view above its net counterpart,
     operating-only below brownfield, the macroeconomic row differing from the financial one only by transfers and CO2
     damage. A violation points at the engine or the perspective bundle. The table gives NPV, equivalent annual cost,
-    monthly cost in year 1 and system cost per unit of heat per perspective, as bands. A sunk-cost column marked
+    monthly cost in year 1 and levelized cost of heat per perspective, as bands. A sunk-cost column marked
     "(info)" appears only when some perspective wrote off residual book value, since sunk cost is kept out of the
     decision KPIs.
 
@@ -437,14 +437,14 @@ def _kpi_section_html(matrix: EvaluationMatrix, context: _ChapterContext) -> str
 
 
 def _levelized_heat_cost_caption(matrix: EvaluationMatrix) -> str:
-    """Write out the heat-cost figure as its division, including what the numerator covers.
+    """Write out the levelized cost of heat as its division, including what the numerator covers.
 
-    The system cost per unit of heat divides the perspective's entire NPV (every booked subject, PV and battery
-    included) by the annual heat demand, so it is not the heating-related share readers tend to assume. The caption
-    leads with the computed form, equivalent annual cost over annual heat demand, and gives the discounted-sum form of
-    the LCOH literature as the equivalent second reading. Each perspective that publishes the figure divides a
-    different NPV, so each gets its own line; the caption collapses to one sentence only when all divisions are the
-    same.
+    The levelized cost of heat divides the NPV of the heat costs alone (the heat generators', storages' and emitters'
+    own cash flows, the fuels, and the heating devices' share of the electricity bill) by the annual heat demand. The
+    caption leads with the computed form, equivalent annual heat cost over annual heat demand, and gives the
+    discounted-sum form of the LCOH literature as the equivalent second reading. Each perspective that publishes the
+    figure divides a different NPV, so each gets its own line; the caption collapses to one sentence only when all
+    divisions are the same.
 
     Args:
         matrix: Every evaluated perspective; each that publishes the figure is explained.
@@ -465,9 +465,8 @@ def _levelized_heat_cost_caption(matrix: EvaluationMatrix) -> str:
     )
     return (
         lead
-        + "Each perspective divides its own <i>whole</i> NPV, annualized with the annuity factor, "
-        "by the heat it delivered; no heating-only attribution is applied, so every subject a "
-        f"perspective books counts:{lines}</p>"
+        + "Each perspective divides the NPV of its own heat costs, annualized with the annuity factor, by the heat it "
+        f"delivered. {HeatCostNaming.COUNTED}:{lines}</p>"
     )
 
 
@@ -478,15 +477,14 @@ def _derivation_sentence(derivation: views.LevelizedHeatCostDerivation) -> str:
     """
     inferred = _inferred_demand_note(derivation)
     return (
-        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a &divide; "
+        f"{_fmt(derivation.equivalent_annual_heat_cost_in_euro)} EUR/a &divide; "
         f"{derivation.annual_heat_demand_in_kwh:,.0f} kWh/a = "
         f"<b>{derivation.levelized_cost_in_euro_per_kwh:.4f} EUR/kWh</b> — equivalently NPV "
-        f"&divide; discounted heat sum ({_fmt(derivation.numerator_npv_in_euro)} EUR &divide; "
-        f"{derivation.discounted_heat_in_kwh:,.0f} kWh). The numerator is the <i>whole</i> NPV of "
-        f"perspective {_esc(derivation.perspective_id)}, {_fmt(derivation.numerator_npv_in_euro)} "
+        f"&divide; discounted heat sum ({_fmt(derivation.heat_cost_npv_in_euro)} EUR &divide; "
+        f"{derivation.discounted_heat_in_kwh:,.0f} kWh). The numerator is the NPV of the heat costs of "
+        f"perspective {_esc(derivation.perspective_id)}, {_fmt(derivation.heat_cost_npv_in_euro)} "
         f"EUR, annualized with the annuity factor {derivation.annuity_factor:.6f} to "
-        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a. No heating-only attribution is "
-        f"applied: every subject the perspective books counts"
+        f"{_fmt(derivation.equivalent_annual_heat_cost_in_euro)} EUR/a. {HeatCostNaming.COUNTED}"
         f"{_namely_clause(derivation)}{inferred}"
     )
 
@@ -497,10 +495,10 @@ def _derivation_division(derivation: views.LevelizedHeatCostDerivation) -> str:
     What the numerator covers is stated once above the list.
     """
     return (
-        f"{_fmt(derivation.equivalent_annual_cost_in_euro)} EUR/a &divide; "
+        f"{_fmt(derivation.equivalent_annual_heat_cost_in_euro)} EUR/a &divide; "
         f"{derivation.annual_heat_demand_in_kwh:,.0f} kWh/a = "
         f"<b>{derivation.levelized_cost_in_euro_per_kwh:.4f} EUR/kWh</b> (NPV "
-        f"{_fmt(derivation.numerator_npv_in_euro)} EUR &divide; discounted heat sum "
+        f"{_fmt(derivation.heat_cost_npv_in_euro)} EUR &divide; discounted heat sum "
         f"{derivation.discounted_heat_in_kwh:,.0f} kWh, annuity factor "
         f"{derivation.annuity_factor:.6f}).{_inferred_demand_note(derivation)}"
     )

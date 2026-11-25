@@ -784,6 +784,8 @@ def result_from_json(
         levelized_cost_of_heat_in_euro_per_kwh=UncertainValue.optional_from_json(
             raw.get("levelized_cost_of_heat_in_euro_per_kwh")
         ),
+        # Optional key; a result written before it divided the whole NPV and has no heat-cost numerator.
+        heat_cost_npv_in_euro=UncertainValue.optional_from_json(raw.get("heat_cost_npv_in_euro")),
         timeline=timeline if timeline is not None else CashFlowTimeline(),
         lifecycle_co2_result=LifecycleCo2Result(
             embodied_co2_in_kg=co2.get("embodied_co2_in_kg", 0.0),

@@ -482,13 +482,13 @@ class TestTheEndToEndDocument:
         )
 
     def test_both_evaluations_publish_a_cost_per_kwh_of_heat(self, priced_document, runs) -> None:
-        """hisim-4p86: the denominator is the useful heat each stage's run measured.
+        """hisim-4p86: the denominator is the useful heat each stage's run measured, the numerator the heat costs.
 
         Both job directories record the rooms' heat plus the hot water, and the package's
-        insulation leaves the house needing less of it. The published figure is bound to that
-        heat: the equivalent annual cost the document publishes, divided by the measured heat
-        annualized as the bills are. The reference is the baseline alone; the plan's two stages
-        both start in year 0, so its heat is the package's for the whole horizon.
+        insulation leaves the house needing less of it. The published figure divides the heat costs
+        alone, annualized, by that heat, so it is not the whole household's equivalent annual cost
+        over it. The reference is the baseline alone; the plan's two stages both start in year 0, so
+        its heat is the package's for the whole horizon.
         """
         _directory, baseline, package = runs
         annual_heat = {}
@@ -505,10 +505,9 @@ class TestTheEndToEndDocument:
             totals = priced_document[variant]["totals"]
             heat_cost = totals["levelized_cost_of_heat_in_euro_per_kwh"]
             assert heat_cost is not None and heat_cost["best"] > 0, variant
-            for slot in ("min", "best", "max"):
-                assert heat_cost[slot] == pytest.approx(
-                    totals["equivalent_annual_cost_in_euro"][slot] / heat, rel=1e-9
-                ), (variant, slot)
+            # Heat costs only (hisim-lcoh-heat-costs-only-9f07): not the whole household's cost over the heat.
+            whole = totals["equivalent_annual_cost_in_euro"]["best"] / heat
+            assert heat_cost["best"] != pytest.approx(whole, rel=1e-6), variant
 
     def test_the_subsidy_stack_is_the_awarded_rows(self, priced_document) -> None:
         """hisim-economics-engine-cyc.5 on a real run: the grant the stacks book is the grant the rows award."""

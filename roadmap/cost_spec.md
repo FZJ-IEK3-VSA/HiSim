@@ -550,6 +550,43 @@ The **discounted payback time** is the first year from which the cumulative disc
 above zero until the horizon, year 0 included (`None` when they end below zero; renovisorissues #102). It is
 computed per slot, yielding a payback band (best case / expected / worst case, each independently `None`-able).
 
+#### The levelized cost of heat counts heat costs only
+
+`levelized_cost_of_heat_in_euro_per_kwh` is the NPV of the heat costs alone, times the annuity factor, divided
+by the annual useful heat (rooms plus hot water; for a staged plan the equivalent annual heat of its horizon).
+By owner decision of 2026-11-13 (hisim-lcoh-heat-costs-only-9f07, renovisorissues #107) it counts heat costs
+only; the former figure, the whole household's NPV over the heat, is dropped. The rule
+(`hisim/economics/calculators/heat_cost.py`, `HeatCostAttribution`):
+
+1. **Heat subjects count in full.** A component whose asset class is a heat generator, a heat storage or an
+   emitter (heat pumps, boilers and heaters of every fuel, district heating, electric and solar thermal heaters,
+   buffers and hot-water cylinders, radiators and floor heating) books every cash flow into the heat costs:
+   investment, planning, removal, replacements, maintenance, residual value, subsidies and the anyway credit.
+2. **Heat carriers count in full.** Natural gas, heating oil, pellets, wood chips, district heating and
+   hydrogen are bought for heat only: every charge, the CO2 price included.
+3. **Electricity counts by the heating devices' metered share.** Each year, the electricity carrier's charges
+   (working, standing and capacity charges and the CO2 price) count times the share
+   `s = E_heat / (E_heat + E_household)`, where `E_heat` is the heating devices' metered electricity (the
+   energy-balance role `HEAT_PUMP_ELECTRICITY`) and `E_household` the appliances' (`HOUSEHOLD_ELECTRICITY`), both
+   of the stage active in that year. The standing charge is split by the same share.
+4. **Shared PV and battery (proposed, owner to confirm).** A photovoltaic array's and a battery's own cash flows
+   and the feed-in revenue are not heat costs. Their benefit reaches heat only through the smaller electricity
+   bill the share applies to: self-consumed PV electricity is shared between heating and appliances pro rata to
+   their consumption. This is the simplest rule that keeps the figure a property of the heating system; its
+   consequence is that adding PV to a heat-pump house lowers the heat pump's cost of heat without charging any of
+   the array's capital to it. The alternative is to apportion the array's and the battery's NPV and the feed-in
+   revenue by the same share `s`.
+5. **Everything else is not a heat cost**: appliances, the envelope (it lowers the heat, the denominator), the
+   meters, loan flows (the heat equipment counts at its purchase price) and the operating view's replacement
+   reserve.
+6. **Unknown is not zero.** A run with a heating device that runs on electricity (a heat pump, an electric
+   heater) but no metered heating electricity has an unknown share, and the figure is not stated. A resistive
+   electric heater has no metered role yet, so a house heated by one states no figure (proposed, owner to
+   confirm: give such heaters a role rather than leave them out). In `economics_result.json` an unpriced subject
+   withholds the figure only when it is a heat subject.
+
+A PV-only plan for a gas-heated house therefore leaves the figure unchanged, and a heat pump changes it.
+
 #### An unpriced purchase withholds every figure its investment enters
 
 A subject the engine holds no price for (an envelope measure without a cost block, a measure HiSim cannot
@@ -557,7 +594,8 @@ price, neither priced by a reader's quote) is booked at a placeholder zero. The 
 (`economics_result.json`) does not state a sum over that zero as if it were the investment: an evaluation
 that buys such a subject (a `by_subject` row with `unpriced: true` and a `measure_id`) states `null` in every
 figure the investment enters, directly or through what derives from it (maintenance, replacements,
-residual value, subsidies, loans, the levy): the totals but the written-off sunk cost, the NPV split by
+residual value, subsidies, loans, the levy): the totals but the written-off sunk cost (and the levelized cost
+of heat, unless an unpriced subject is a heat subject, since it counts heat costs only), the NPV split by
 group, category and payer but the energy and CO2 groups, the annual and cumulative series, the loans,
 and in the comparison every difference but the CO2 difference, the payback year included. There is no
 lower bound. The per-subject rows, the year-1 energy bill, the CO2 masses and the subsidy rows stay, and
@@ -1358,7 +1396,7 @@ KPIs are namespaced per perspective, e.g.:
 - `Warm rent change [EUR/month] (tenant)` + `Warm-rent neutral (tenant)` (bool)
 - `Discounted payback vs reference [a] (brownfield_net)`
 - `Total subsidies received [EUR]` + one KPI per applied scheme id
-- `System cost per unit of heat [EUR/kWh] (operating)`
+- `Levelized cost of heat [EUR/kWh] (operating)` (heat costs only, §3.7)
 
 Every monetary KPI carries its uncertainty band: `KpiEntry` gains optional `value_min` / `value_max`
 fields (an additive change — the webtool JSON stays backward compatible), with `value` itself being

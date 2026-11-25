@@ -33,6 +33,7 @@ import pytest
 
 from hisim.economics import views
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.heat_cost import HeatCostBasis
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import ActorScope
@@ -99,7 +100,8 @@ def make_result(
         facts_by_subject={},
         co2_result=LifecycleCo2Result(),
         parameters=parameters,
-        annual_heat_demand_in_kwh=heat_demand,
+        # No heating device runs on electricity here: the electricity bill is no heat cost in any year.
+        heat=HeatCostBasis(annual_heat_demand_in_kwh=heat_demand, electricity_heat_share_by_year=(0.0,) * (horizon + 1)),
     )
     return LifecycleCostResult(
         perspective_id="test",
@@ -114,6 +116,7 @@ def make_result(
         annual_cost_series_nominal_in_euro=aggregation.annual_cost_series_nominal_in_euro,
         monthly_cost_year1_in_euro=aggregation.monthly_cost_year1_in_euro,
         levelized_cost_of_heat_in_euro_per_kwh=aggregation.levelized_cost_of_heat_in_euro_per_kwh,
+        heat_cost_npv_in_euro=aggregation.heat_cost_npv_in_euro,
         timeline=timeline,
         lifecycle_co2_result=LifecycleCo2Result(),
         scope_payer=aggregation.scope_payer,
@@ -124,7 +127,7 @@ class TestLevelizedHeatCostDerivation:
     """Q26 F6: the heat-cost KPI as a division a reader can redo, or a refusal."""
 
     def heated_result(self, demand: float = 15000.0) -> LifecycleCostResult:
-        """Twenty years of energy cost, priced per kWh of heat exactly as the engine does it.
+        """Twenty years of gas, a heat carrier, priced per kWh of heat exactly as the engine does it.
 
         The heat demand goes into `aggregate_timeline`, so the published figure is the engine's
         own quotient and the reconciliation below is a real check rather than a restatement of a
@@ -132,7 +135,10 @@ class TestLevelizedHeatCostDerivation:
         evaluator records, which is what the derivation divides by.
         """
         result = make_result(
-            [entry(year, 1000.0, CostCategory.ENERGY_WORKING) for year in range(1, 21)],
+            [
+                entry(year, 1000.0, CostCategory.ENERGY_WORKING, subject="NATURAL_GAS", subject_kind=SubjectKind.CARRIER)
+                for year in range(1, 21)
+            ],
             heat_demand=demand,
         )
         result.assumptions = EconomicAssumptions(annual_heat_demand_in_kwh=demand)
@@ -143,14 +149,15 @@ class TestLevelizedHeatCostDerivation:
         result = self.heated_result()
         derivation = views.levelized_heat_cost_derivation(result)
         assert derivation is not None
-        assert derivation.numerator_npv_in_euro == pytest.approx(
-            result.total_npv_in_euro.best_estimate
-        )
-        assert derivation.equivalent_annual_cost_in_euro == pytest.approx(
-            derivation.numerator_npv_in_euro * derivation.annuity_factor
+        assert result.heat_cost_npv_in_euro is not None
+        assert derivation.heat_cost_npv_in_euro == pytest.approx(result.heat_cost_npv_in_euro.best_estimate)
+        # Gas is wholly a heat cost, so here the heat-cost NPV is the whole NPV.
+        assert derivation.heat_cost_npv_in_euro == pytest.approx(result.total_npv_in_euro.best_estimate)
+        assert derivation.equivalent_annual_heat_cost_in_euro == pytest.approx(
+            derivation.heat_cost_npv_in_euro * derivation.annuity_factor
         )
         assert (
-            derivation.equivalent_annual_cost_in_euro / derivation.annual_heat_demand_in_kwh
+            derivation.equivalent_annual_heat_cost_in_euro / derivation.annual_heat_demand_in_kwh
         ) == pytest.approx(derivation.levelized_cost_in_euro_per_kwh)
 
     def test_the_discounted_heat_sum_is_the_stated_equivalent_form(self):
@@ -161,18 +168,24 @@ class TestLevelizedHeatCostDerivation:
             derivation.annual_heat_demand_in_kwh / derivation.annuity_factor
         )
         assert (
-            derivation.numerator_npv_in_euro / derivation.discounted_heat_in_kwh
+            derivation.heat_cost_npv_in_euro / derivation.discounted_heat_in_kwh
         ) == pytest.approx(derivation.levelized_cost_in_euro_per_kwh)
 
     def test_the_attribution_set_is_stated_truthfully(self):
-        """Every subject the perspective books, because there is no heating-only attribution."""
+        """The heat costs the numerator counts: the gas, not a photovoltaic array the perspective also books."""
         result = self.heated_result()
         result.timeline.extend(
             [entry(0, 9000.0, CostCategory.INVESTMENT, subject="PhotovoltaicSystem")]
         )
         derivation = views.levelized_heat_cost_derivation(result)
         assert derivation is not None
-        assert derivation.attributed_subjects == ("HeatPump", "PhotovoltaicSystem")
+        assert derivation.attributed_subjects == ("NATURAL_GAS",)
+
+    def test_a_result_without_a_heat_cost_numerator_publishes_no_derivation(self):
+        """A stored result from before the heat-only rule divided the whole NPV; it is not explained as heat costs."""
+        result = self.heated_result()
+        result.heat_cost_npv_in_euro = None
+        assert views.levelized_heat_cost_derivation(result) is None
 
     def test_a_run_without_a_heat_demand_publishes_no_derivation(self):
         """No KPI, no caption: the section stays silent rather than inventing a denominator."""

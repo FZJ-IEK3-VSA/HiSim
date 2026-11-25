@@ -2939,6 +2939,7 @@ class EnergyBalanceLayout:
     )
     SINK_ROLES = (
         EnergyFlowRole.HEAT_PUMP_ELECTRICITY,
+        EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY,
         EnergyFlowRole.HOUSEHOLD_ELECTRICITY,
         EnergyFlowRole.GRID_EXPORT,
         EnergyFlowRole.BATTERY_CHARGE,
@@ -2946,7 +2947,11 @@ class EnergyBalanceLayout:
     #: The roles the meter contributes; they do not count towards `MINIMUM_DEVICE_FLOWS`.
     METER_ROLES = (EnergyFlowRole.GRID_IMPORT, EnergyFlowRole.GRID_EXPORT)
     #: Roles that are consumption in the self-sufficiency sense — what the house actually used.
-    CONSUMPTION_ROLES = (EnergyFlowRole.HEAT_PUMP_ELECTRICITY, EnergyFlowRole.HOUSEHOLD_ELECTRICITY)
+    CONSUMPTION_ROLES = (
+        EnergyFlowRole.HEAT_PUMP_ELECTRICITY,
+        EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY,
+        EnergyFlowRole.HOUSEHOLD_ELECTRICITY,
+    )
     MINIMUM_DEVICE_FLOWS = 2
 
     LABELS = {
@@ -2954,6 +2959,7 @@ class EnergyBalanceLayout:
         EnergyFlowRole.GRID_IMPORT: "grid import",
         EnergyFlowRole.BATTERY_DISCHARGE: "battery discharge",
         EnergyFlowRole.HEAT_PUMP_ELECTRICITY: "heat pump",
+        EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY: "electric heater",
         EnergyFlowRole.HOUSEHOLD_ELECTRICITY: "household",
         EnergyFlowRole.GRID_EXPORT: "grid export",
         EnergyFlowRole.BATTERY_CHARGE: "battery charge",
@@ -3074,8 +3080,8 @@ def has_energy_balance(result: LifecycleCostResult) -> bool:
 def energy_balance_flows(result: LifecycleCostResult) -> EnergyBalanceFlows:
     """Return where the house's electricity came from and where it went, in year-1 kWh.
 
-    Sources (PV generation, grid import, battery discharge), the house's electricity, and sinks (heat pump, household,
-    grid export, battery charge). Money appears only as annotations on the two grid nodes, read from
+    Sources (PV generation, grid import, battery discharge), the house's electricity, and sinks (heat pump, electric
+    heater, household, grid export, battery charge). Money appears only as annotations on the two grid nodes, read from
     `carrier_year_one_bills`. The view checks that the grid nodes equal the bought and sold quantities of
     `annual_energy_quantities_by_carrier` (the meter the bills come from); the two sides balance because any remainder
     becomes a `losses / unattributed` terminal on the shorter side. Unknown roles go to `unattributed_roles_in_kwh`

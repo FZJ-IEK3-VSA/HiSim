@@ -81,6 +81,12 @@ class HeatCostAttribution:
         }
     )
 
+    #: The energy-balance roles of the heating devices' electricity: a heat pump's (its compressor, pumps and backup
+    #: heating rod) and a resistive heater's. Their sum is the numerator of the electricity heat share.
+    HEATING_ELECTRICITY_ROLES: ClassVar[FrozenSet[EnergyFlowRole]] = frozenset(
+        {EnergyFlowRole.HEAT_PUMP_ELECTRICITY, EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY}
+    )
+
     #: The heat generators that run on electricity: their electricity must be metered for the share to be known.
     ELECTRIC_HEAT_ASSET_CLASSES: ClassVar[FrozenSet[ComponentType]] = frozenset(
         {
@@ -130,9 +136,11 @@ class HeatCostAttribution:
         """Return the share of the household's electricity bill that is heat cost, or None when it is unknown.
 
         The share is the heating devices' metered electricity over the metered consumption of heating devices and
-        appliances together: `heat pump / (heat pump + household)`, from the energy-balance roles
-        `HEAT_PUMP_ELECTRICITY` and `HOUSEHOLD_ELECTRICITY`. Both are annual or both are over the simulated period;
-        the ratio is the same. For example 3,000 kWh of heat pump and 2,000 kWh of appliances give 0.6.
+        appliances together: `heating / (heating + household)`. The heating electricity is the sum of the roles in
+        `HEATING_ELECTRICITY_ROLES` (`HEAT_PUMP_ELECTRICITY` and `ELECTRIC_HEATER_ELECTRICITY`), the household's the
+        role `HOUSEHOLD_ELECTRICITY`. Both are annual or both are over the simulated period; the ratio is the same.
+        For example 3,000 kWh of heat pump and 2,000 kWh of appliances give 0.6, and so do 3,000 kWh of a resistive
+        heater beside the same appliances.
 
         Args:
             attribution_by_subject_in_kwh: Subject -> energy-balance role -> kWh, as one run records it.
@@ -140,10 +148,12 @@ class HeatCostAttribution:
 
         Returns:
             The share in [0, 1]; 0.0 when no heating device runs on electricity; None when one does but no heating
-                electricity is metered (a resistive heater has no metered role), so the heat cost is unknown.
+                electricity is metered, so the heat cost is unknown.
         """
         heat_in_kwh = sum(
-            by_role.get(EnergyFlowRole.HEAT_PUMP_ELECTRICITY.value, 0.0) for by_role in attribution_by_subject_in_kwh.values()
+            by_role.get(role.value, 0.0)
+            for by_role in attribution_by_subject_in_kwh.values()
+            for role in cls.HEATING_ELECTRICITY_ROLES
         )
         if heat_in_kwh > 0.0:
             household_in_kwh = sum(

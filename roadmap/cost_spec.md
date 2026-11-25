@@ -566,24 +566,27 @@ only; the former figure, the whole household's NPV over the heat, is dropped. Th
    hydrogen are bought for heat only: every charge, the CO2 price included.
 3. **Electricity counts by the heating devices' metered share.** Each year, the electricity carrier's charges
    (working, standing and capacity charges and the CO2 price) count times the share
-   `s = E_heat / (E_heat + E_household)`, where `E_heat` is the heating devices' metered electricity (the
-   energy-balance role `HEAT_PUMP_ELECTRICITY`) and `E_household` the appliances' (`HOUSEHOLD_ELECTRICITY`), both
-   of the stage active in that year. The standing charge is split by the same share.
-4. **Shared PV and battery (proposed, owner to confirm).** A photovoltaic array's and a battery's own cash flows
+   `s = E_heat / (E_heat + E_household)`, where `E_heat` is the heating devices' metered electricity (the sum of
+   the energy-balance roles `HEAT_PUMP_ELECTRICITY` and `ELECTRIC_HEATER_ELECTRICITY`) and `E_household` the
+   appliances' (`HOUSEHOLD_ELECTRICITY`), both of the stage active in that year. The standing charge is split by
+   the same share.
+4. **Shared PV and battery (owner decision 2026-11-26).** A photovoltaic array's and a battery's own cash flows
    and the feed-in revenue are not heat costs. Their benefit reaches heat only through the smaller electricity
    bill the share applies to: self-consumed PV electricity is shared between heating and appliances pro rata to
    their consumption. This is the simplest rule that keeps the figure a property of the heating system; its
    consequence is that adding PV to a heat-pump house lowers the heat pump's cost of heat without charging any of
-   the array's capital to it. The alternative is to apportion the array's and the battery's NPV and the feed-in
-   revenue by the same share `s`.
+   the array's capital to it. Rejected: apportioning the array's and the battery's NPV and the feed-in revenue by
+   the same share `s`.
 5. **Everything else is not a heat cost**: appliances, the envelope (it lowers the heat, the denominator), the
    meters, loan flows (the heat equipment counts at its purchase price) and the operating view's replacement
    reserve.
 6. **Unknown is not zero.** A run with a heating device that runs on electricity (a heat pump, an electric
-   heater) but no metered heating electricity has an unknown share, and the figure is not stated. A resistive
-   electric heater has no metered role yet, so a house heated by one states no figure (proposed, owner to
-   confirm: give such heaters a role rather than leave them out). In `economics_result.json` an unpriced subject
-   withholds the figure only when it is a heat subject.
+   heater) but no metered heating electricity has an unknown share, and the figure is not stated. Every heating
+   device HiSim models on electricity is metered (owner decision 2026-11-26): a heat pump's compressor, pumps and
+   backup heating rod under `HEAT_PUMP_ELECTRICITY` (`MoreAdvancedHeatPumpHPLib`, `GenericHeatPump`), and a
+   resistive heater's rooms and hot-water circuits under `ELECTRIC_HEATER_ELECTRICITY` (`ElectricHeating`, the
+   RenoVisor `electric_heating` system), so a house heated by either states the figure. In
+   `economics_result.json` an unpriced subject withholds the figure only when it is a heat subject.
 
 A PV-only plan for a gas-heated house therefore leaves the figure unchanged, and a heat pump changes it.
 

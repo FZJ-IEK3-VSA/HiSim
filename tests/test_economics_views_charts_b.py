@@ -703,6 +703,25 @@ class TestEnergyBalanceFlows:
         flows = views.energy_balance_flows(result)
         assert flows.house_electricity_total_in_kwh == pytest.approx(9000.0)
 
+    def test_a_resistive_heater_is_a_consumer_of_its_own(self):
+        """A resistive heater's electricity is a sink labelled as such and counts as consumption, not residual.
+
+        9,000 kWh of PV feed a 6,000 kWh heater and 3,000 kWh of appliances off grid: the sinks close without a
+        residual node, and all 9,000 kWh consumed come from the array, so the self-sufficiency share is 1.
+        """
+        result = make_result(
+            [entry(1, 100.0, CostCategory.MAINTENANCE)],
+            attribution={
+                "PVSystem": {"PV_GENERATION": 9000.0},
+                "ElectricHeating": {"ELECTRIC_HEATER_ELECTRICITY": 6000.0},
+                "UTSPConnector": {"HOUSEHOLD_ELECTRICITY": 3000.0},
+            },
+        )
+        flows = views.energy_balance_flows(result)
+        sink_by_label = {node.label: node.quantity_in_kwh for node in flows.sinks}
+        assert sink_by_label == {"electric heater": pytest.approx(6000.0), "household": pytest.approx(3000.0)}
+        assert flows.self_sufficiency_share == pytest.approx(1.0)
+
     def test_a_battery_that_discharged_more_than_it_charged_reports_no_loss(self):
         """Carried-over charge is not energy the battery made, so the loss clamps at zero."""
         result = make_result(

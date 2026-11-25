@@ -1119,6 +1119,24 @@ class TestDeviceEnergyFlows:
         )
         assert flows == {"HEAT_PUMP_ELECTRICITY": pytest.approx(2.0)}
 
+    def test_a_resistive_heaters_two_circuits_make_one_role(self):
+        """The rooms' and the hot water's electricity of an `ElectricHeating` add up under one role.
+
+        Rooms: 4,000 + 2,000 W over 0.25 h = 1.5 kWh; hot water: 2,000 W over 0.25 h = 0.5 kWh; together 2 kWh.
+        """
+        flows = self._flows(
+            _device(
+                "ElectricHeating",
+                ElectricOutputShPower="ElectricOutputShPower",
+                ElectricOutputDhwPower="ElectricOutputDhwPower",
+            ),
+            [
+                ("ElectricOutputShPower", lt.Units.WATT, [4000.0, 2000.0]),
+                ("ElectricOutputDhwPower", lt.Units.WATT, [0.0, 2000.0]),
+            ],
+        )
+        assert flows == {"ELECTRIC_HEATER_ELECTRICITY": pytest.approx(2.0)}
+
     def test_a_signed_battery_series_becomes_two_positive_roles(self):
         """Charging and discharging are two roles of one column, both positive magnitudes.
 

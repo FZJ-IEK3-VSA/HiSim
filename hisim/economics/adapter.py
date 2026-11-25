@@ -458,6 +458,11 @@ class DeviceEnergySpecs:
         "GenericHeatPump": (
             DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricityOutput"),
         ),
+        # A resistive heater for the rooms and the hot water: each circuit publishes its own electricity.
+        "ElectricHeating": (
+            DeviceEnergySpec(EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY, "ElectricOutputShPower"),
+            DeviceEnergySpec(EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY, "ElectricOutputDhwPower"),
+        ),
         "UtspLpgConnector": (
             DeviceEnergySpec(EnergyFlowRole.HOUSEHOLD_ELECTRICITY, "ElectricalEnergyConsumption"),
         ),
@@ -490,9 +495,7 @@ class DeviceEnergySpecs:
         # energy), so it cannot be drawn under the battery's charge/discharge pair.
         "CarBattery": (),
         "Car": (),
-        # Electric heat and cooling: resistive space/DHW heat and air conditioning are neither the
-        # household base load nor a heat pump's electricity.
-        "ElectricHeating": (),
+        # Air conditioning, which cools and heats: neither the household base load nor a heat pump's electricity.
         "AirConditioner": (),
         "SimpleAirConditioner": (),
         # The idealized heater holds a building at its set points to measure its demand; its electricity

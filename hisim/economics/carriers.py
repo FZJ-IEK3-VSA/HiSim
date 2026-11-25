@@ -40,13 +40,16 @@ class EnergyFlowRole(str, enum.Enum):
     Example: a battery has two roles, one for charging and one for discharging. Roles carry positive magnitudes; the
     direction is the role, not the sign. `GRID_IMPORT` and `GRID_EXPORT` are the meter's flows and the only roles that
     sit at a priced carrier boundary; the others are internal device flows no bill is computed from. A flow without a
-    role is not recorded.
+    role is not recorded. The heating devices' electricity has two roles, one per kind of device:
+    `HEAT_PUMP_ELECTRICITY` for a heat pump (its compressor, pumps and backup heating rod) and
+    `ELECTRIC_HEATER_ELECTRICITY` for a resistive heater, which turns each kWh of electricity into one kWh of heat.
     """
 
     PV_GENERATION = "PV_GENERATION"
     BATTERY_CHARGE = "BATTERY_CHARGE"
     BATTERY_DISCHARGE = "BATTERY_DISCHARGE"
     HEAT_PUMP_ELECTRICITY = "HEAT_PUMP_ELECTRICITY"
+    ELECTRIC_HEATER_ELECTRICITY = "ELECTRIC_HEATER_ELECTRICITY"
     HOUSEHOLD_ELECTRICITY = "HOUSEHOLD_ELECTRICITY"
     GRID_IMPORT = "GRID_IMPORT"
     GRID_EXPORT = "GRID_EXPORT"

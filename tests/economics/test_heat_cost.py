@@ -12,6 +12,7 @@ from typing import Dict, List
 import pytest
 
 from hisim.economics.calculators.heat_cost import HeatCostAttribution
+from hisim.economics.carriers import EnergyFlowRole
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.staged import Stage, StagedEvaluator
 from hisim.economics.timeline import CashFlowEntry, CashFlowTimeline, CostCategory, SubjectKind, discount_factor
@@ -96,6 +97,33 @@ class TestTheElectricityHeatShare:
         attribution = {"Occupancy": {"HOUSEHOLD_ELECTRICITY": 2000.0}}
         assert HeatCostAttribution.electricity_heat_share(attribution, [ComponentType.ELECTRIC_HEATING_DHW]) is None
         assert HeatCostAttribution.electricity_heat_share({}, [ComponentType.HEAT_PUMP]) is None
+
+    def test_a_resistive_heaters_share_of_the_metered_consumption(self):
+        """3,000 kWh of a resistive heater beside 2,000 kWh of appliances: 60 %, as for a heat pump."""
+        attribution = {
+            "ElectricHeating": {"ELECTRIC_HEATER_ELECTRICITY": 3000.0},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 2000.0},
+        }
+        share = HeatCostAttribution.electricity_heat_share(attribution, [ComponentType.ELECTRIC_HEATER])
+        assert share == pytest.approx(0.6)
+
+    def test_every_heating_devices_electricity_is_summed(self):
+        """A heat pump (2,000 kWh) and a resistive heater (1,000 kWh) beside 2,000 kWh of appliances: 60 %."""
+        attribution = {
+            SyntheticPlan.HEAT_PUMP_SUBJECT: {"HEAT_PUMP_ELECTRICITY": 2000.0},
+            "ElectricHeating": {"ELECTRIC_HEATER_ELECTRICITY": 1000.0},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 2000.0},
+        }
+        share = HeatCostAttribution.electricity_heat_share(
+            attribution, [ComponentType.HEAT_PUMP, ComponentType.ELECTRIC_HEATER]
+        )
+        assert share == pytest.approx(0.6)
+
+    def test_the_heating_roles_are_the_heat_pumps_and_the_resistive_heaters(self):
+        """The numerator's roles: the two heating devices' electricity, and no supply or appliance role."""
+        assert HeatCostAttribution.HEATING_ELECTRICITY_ROLES == frozenset(
+            {EnergyFlowRole.HEAT_PUMP_ELECTRICITY, EnergyFlowRole.ELECTRIC_HEATER_ELECTRICITY}
+        )
 
     def test_a_heat_pump_without_appliances_bears_the_whole_bill(self):
         """No metered appliance electricity: the heat pump is the only consumer."""

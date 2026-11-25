@@ -362,9 +362,10 @@ renovisorissues #107, owner decision of 2026-11-13): the heat generators', stora
 cash flows, the fuels, and each year's share of the electricity bill that the heating devices' metered
 electricity is of the metered consumption of heating devices and appliances, annualized and divided by
 the useful heat. Appliance electricity, PV, a battery, the feed-in revenue and the envelope are not in
-it, so a PV-only plan leaves the figure of a gas-heated house as it was. It is `null` when a heating
-device runs on electricity no role meters, and an unpriced subject withholds it only when the subject
-is a heat generator, storage or emitter. The rule is written out in `roadmap/cost_spec.md`, §3.7.
+it, so a PV-only plan leaves the figure of a gas-heated house as it was. The heating devices' electricity
+is a heat pump's (backup heating rod included) and a resistive heater's, so a house on `electric_heating`
+states the figure too. It is `null` when a heating device runs on electricity no role meters, and an
+unpriced subject withholds it only when the subject is a heat generator, storage or emitter. The rule is written out in `roadmap/cost_spec.md`, §3.7.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

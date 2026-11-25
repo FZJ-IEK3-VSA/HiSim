@@ -240,8 +240,8 @@ def build_lifecycle_kpi_entries(
 ) -> List[KpiEntry]:
     """Build the namespaced lifecycle KPI list; every monetary KPI carries its band.
 
-    Per perspective: equivalent annual cost, net present cost over the horizon, year-1 monthly cost, system cost per
-    unit of heat, one KPI per applied subsidy scheme and the total support. Then the per-actor net present costs of
+    Per perspective: equivalent annual cost, net present cost over the horizon, year-1 monthly cost, levelized cost of
+    heat, one KPI per applied subsidy scheme and the total support. Then the per-actor net present costs of
     `actor_kpi_entries` and, with a comparison, the NPV delta, discounted payback and warm-rent figures. The HTML
     report's KPI table and `lifecycle_kpis.json` both use this list. A KPI whose band is None is omitted, not published
     as zero. The discounted payback (a range across the three worlds, in the description) and the warm-rent-neutral

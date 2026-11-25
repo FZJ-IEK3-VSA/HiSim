@@ -137,6 +137,11 @@ def make_inputs(energy_kwh: float = 5200.0, investment: float = 16000.0) -> Eval
                 energy_sold_in_kwh=2500.0,
             )
         ],
+        # The heat pump's metered electricity beside the appliances': the heat bears 70 % of the bill.
+        energy_attribution_by_subject_in_kwh={
+            "HeatPump": {"HEAT_PUMP_ELECTRICITY": 0.7 * energy_kwh},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 0.3 * energy_kwh},
+        },
         existing_assets=register,
         subsidy_context=SubsidyContext(
             applicant=ApplicantProfile(

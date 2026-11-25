@@ -8,14 +8,11 @@ multiplied out as `share x like-for-like cost`, the assumption each scenario row
 of its values, and the footnote a row whose swing is exactly zero carries to say why its axis was
 inert here.
 
-It also owns the **rename** (Q27 R1). The heat KPI divides a perspective's whole NPV by the heat
-delivered, which is not the literature's levelized cost of heat, and the F6 caption made that
-impossible to keep calling one — so the figure now reads "system cost per unit of heat" at every
-surface a reader sees: the KPI export, both perspectives tables, the plausibility row and the
-caption. There is deliberately **no alias**: the tests below pin the new name at each surface and,
-jointly, that the old one is gone from rendered output. The serialization key
-`levelized_cost_of_heat_in_euro_per_kwh` is untouched and is not asserted on here; see
-`results.HeatCostNaming` for why a name and a key part ways.
+It also owns the **name**. The heat KPI is the levelized cost of heat: since hisim-lcoh-heat-costs-only-9f07 it
+divides the NPV of the heat costs alone (`calculators.heat_cost.HeatCostAttribution`) by the heat delivered, and it
+reads "levelized cost of heat" at every surface a reader sees: the KPI export, both perspectives tables, the
+plausibility row and the caption. The tests below pin the name at each surface and, jointly, that the former name
+"system cost per unit of heat" (Q27 R1, when the figure divided the whole NPV) is gone from rendered output.
 
 Two fixtures rather than one, because the four captions need different runs: a greenfield cash
 purchase with a heat demand carries the heat-cost figure and the KPI set, and a brownfield run
@@ -136,6 +133,11 @@ def make_inputs() -> EvaluationInputs:
         billing=[
             BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=5000.0)
         ],
+        # The heat pump's metered electricity beside the appliances': the heat bears 70 % of the bill.
+        energy_attribution_by_subject_in_kwh={
+            "HeatPump": {"HEAT_PUMP_ELECTRICITY": 0.7 * 5000.0},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 0.3 * 5000.0},
+        },
         existing_assets=register,
         annual_heat_demand_in_kwh=15000.0,
         living_area_in_m2=150.0,
@@ -150,6 +152,11 @@ _BROWNFIELD_NET = Perspective(
     id="brownfield_net",
     installation_context=InstallationContext.BROWNFIELD,
     subsidy_mode=SubsidyMode.full(),
+)
+_OPERATING_ONLY = Perspective(
+    id="operating_only",
+    installation_context=InstallationContext.OPERATING_ONLY,
+    subsidy_mode=SubsidyMode.none(),
 )
 _GREENFIELD = Perspective(
     id="greenfield",
@@ -249,12 +256,14 @@ def fixture_report(matrix, cube, audit) -> str:
 
 
 class TestHeatCostKpiIsNamedForWhatItMeasures:
-    """Q27 R1: the heat KPI reads "system cost per unit of heat" everywhere a reader sees it.
+    """The heat KPI reads "levelized cost of heat" everywhere a reader sees it, and counts heat costs only.
 
-    These pin the rename at each published surface and, jointly, that the old name is gone from
-    rendered output. The break is intended and unaliased: a consumer reading the KPI set by name
-    sees the new one and nothing else.
+    These pin the name at each published surface and, jointly, that the former name "system cost per unit of heat" is
+    gone from rendered output: a consumer reading the KPI set by name sees the new one and nothing else.
     """
+
+    #: The name the figure had while it divided the whole NPV.
+    FORMER_NAME = "system cost per unit of heat"
 
     def test_the_kpi_export_publishes_the_new_name(self, matrix):
         """The name in `lifecycle_kpis.json` is the name in the report's KPI table: one list."""
@@ -262,28 +271,22 @@ class TestHeatCostKpiIsNamedForWhatItMeasures:
         heat = [name for name in names if "heat" in name.lower()]
         assert heat, "the fixture declares an annual heat demand, so the KPI must exist"
         assert all(name.startswith(f"{HeatCostNaming.FULL} [EUR/kWh]") for name in heat)
-        assert not [name for name in names if "levelized" in name.lower()]
+        assert not [name for name in names if self.FORMER_NAME in name.lower()]
 
     def test_the_summary_carries_the_new_column_and_the_new_check_row(self, matrix):
-        """The markdown perspectives column and the plausibility row both renamed, no alias left."""
+        """The markdown perspectives column and the plausibility row both carry the name, no alias left."""
         text = build_cost_summary_markdown(matrix, run_plausibility_checks(matrix))
         assert f"| {HeatCostNaming.COLUMN} |" in text
         assert f"| {HeatCostNaming.CHECK_LABEL} |" in text
-        assert "levelized" not in text.lower()
+        assert self.FORMER_NAME not in text.lower()
 
     def test_the_html_perspectives_table_carries_the_new_column(self, report):
-        """The HTML column header is the same constant as the markdown one, from one place.
-
-        `LCOH` survives in exactly one place on the page and must: the authored "Terms used here"
-        entry explains that this figure is deliberately *not* one, which is the whole reason for
-        the rename. The assertion is therefore on the header cell rather than on the document.
-        """
+        """The HTML column header is the same constant as the markdown one, from one place."""
         assert f"<th>{HeatCostNaming.COLUMN}</th>" in report
-        assert "<th>LCOH</th>" not in report
-        assert "Levelized cost of heat" not in report
+        assert self.FORMER_NAME not in report.lower()
 
     def test_the_derivation_caption_leads_with_the_annual_division(self, report):
-        """Q27 R4: EAC / annual heat first, the discounted-sum form as the stated equivalent."""
+        """EAC / annual heat first, the discounted-sum form as the stated equivalent, and what heat costs are."""
         caption = re.search(
             rf"<b>{HeatCostNaming.FULL}, in full\.</b>(.*?)</p>", report, re.S
         )
@@ -291,33 +294,35 @@ class TestHeatCostKpiIsNamedForWhatItMeasures:
         body = caption.group(1)
         assert body.index("EUR/a &divide;") < body.index("equivalently NPV")
         assert "&divide; discounted heat sum" in body
-        assert "No heating-only attribution is applied" in body
+        assert HeatCostNaming.COUNTED in body
 
     def test_the_caption_names_every_subject_the_numerator_covers(self, report):
-        """The attribution set is the honest half: the windows count toward the cost of heat."""
+        """The heat pump and the electricity count toward the cost of heat; the windows do not."""
         caption = re.search(
             rf"<b>{HeatCostNaming.FULL}, in full\.</b>(.*?)</p>", report, re.S
         )
         assert caption
-        assert "Envelope.Windows" in caption.group(1)
+        namely = caption.group(1).split("namely", 1)[1]
+        assert "HeatPump" in namely and "ELECTRICITY" in namely
+        assert "Envelope.Windows" not in namely
 
     def test_each_perspective_that_publishes_the_figure_gets_its_own_division(self, database):
         """The KPI table publishes the figure per perspective, and so does the caption below it.
 
         Written for the matrix's first perspective, the caption stated one row's division and
-        silently mis-described the others: the numerator is that perspective's *whole* NPV, and a
-        net view books a different set of flows from a gross one. Two perspectives that divide
+        silently mis-described the others: the numerator is that perspective's heat-cost NPV, and an
+        operating-only view books no purchase of the heat pump. Two perspectives that divide
         differently now get a line each, named.
         """
-        caption = _levelized_heat_cost_caption(_matrix_for(database, [_BROWNFIELD, _GREENFIELD]))
-        assert "Each perspective divides its own" in caption
-        assert "<b>brownfield</b> — " in caption and "<b>greenfield</b> — " in caption
+        caption = _levelized_heat_cost_caption(_matrix_for(database, [_BROWNFIELD, _OPERATING_ONLY]))
+        assert "Each perspective divides the NPV of its own heat costs" in caption
+        assert "<b>brownfield</b> — " in caption and "<b>operating_only</b> — " in caption
         assert caption.count("Subjects counted:") == 2
 
     def test_perspectives_that_divide_alike_state_the_division_once(self, matrix):
         """The shipped fixture has one perspective, so the caption is the single sentence form."""
         caption = _levelized_heat_cost_caption(matrix)
-        assert "Each perspective divides its own" not in caption
+        assert "Each perspective divides the NPV of its own heat costs" not in caption
         assert caption.count("EUR/kWh</b>") == 1
 
 

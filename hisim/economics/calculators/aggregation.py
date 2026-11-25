@@ -2,7 +2,8 @@
 
 It filters, discounts and pivots the allocated timeline and never creates cash flows: scoping to one actor's flows, NPV
 and EAC (NPV times the annuity factor), pivots by category, component and payer, the nominal liquidity view and year-1
-monthly figure, the cost per kWh of heat, and the per-subject breakdowns. The discounting arithmetic lives on
+monthly figure, the levelized cost of heat (heat costs only, `calculators/heat_cost.py`), and the per-subject
+breakdowns. The discounting arithmetic lives on
 `CashFlowTimeline`.
 """
 
@@ -13,6 +14,7 @@ from typing import ClassVar, Dict, List, Optional
 
 from hisim.economics.calculators.annualization import annualize
 from hisim.economics.calculators.categories import EngineCategoryRules
+from hisim.economics.calculators.heat_cost import HeatCostAttribution, HeatCostBasis
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import validate_energy_attribution
 from hisim.economics.facts import BillingDeterminants, ComponentCostFacts
@@ -31,8 +33,10 @@ class TimelineAggregation:
     negative NPV means the variant earns money). `equivalent_annual_cost_in_euro` is the NPV times the VDI 2067-1
     annuity factor, in euro per year; `monthly_equivalent_cost_in_euro` is that over twelve.
     `annual_cost_series_nominal_in_euro` is undiscounted nominal euro per year 0..T (the liquidity view) and
-    `monthly_cost_year1_in_euro` its year-1 element over twelve. All are scoped to `scope_payer` except `npv_by_payer`,
-    which covers every payer for the zero-sum check.
+    `monthly_cost_year1_in_euro` its year-1 element over twelve. `heat_cost_npv_in_euro` is the NPV of the heat costs
+    alone (`HeatCostAttribution`) and `levelized_cost_of_heat_in_euro_per_kwh` that NPV times the annuity factor over
+    the annual heat, in euro per kWh; both None when the heat or the electricity heat share is unknown. All are scoped
+    to `scope_payer` except `npv_by_payer`, which covers every payer for the zero-sum check.
     """
 
     #: Months per year: the one divisor behind every monthly figure the engine publishes — the
@@ -51,6 +55,7 @@ class TimelineAggregation:
     component_breakdowns: Dict[str, ComponentCostBreakdown]
     annual_cost_series_nominal_in_euro: List[UncertainValue]
     monthly_cost_year1_in_euro: Optional[UncertainValue]
+    heat_cost_npv_in_euro: Optional[UncertainValue]
     levelized_cost_of_heat_in_euro_per_kwh: Optional[UncertainValue]
 
 
@@ -189,14 +194,14 @@ def aggregate_timeline(
     facts_by_subject: Dict[str, ComponentCostFacts],
     co2_result: LifecycleCo2Result,
     parameters: EconomicParameters,
-    annual_heat_demand_in_kwh: Optional[float],
+    heat: HeatCostBasis,
 ) -> TimelineAggregation:
     """Derive the perspective's KPIs from the allocated timeline.
 
     The last step of an evaluation and the only evaluation step that discounts the timeline into KPIs. `npv_by_payer` is
     taken on the full timeline, so both sides of the landlord/tenant split are visible; everything else on the timeline
-    scoped with `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The cost per kWh of heat is `NPV *
-    annuity / annual heat`, an annual cost per annual kWh.
+    scoped with `CashFlowTimeline.scoped_to`, the same scoping `explain` uses. The levelized cost of heat is `heat-cost
+    NPV * annuity / annual heat`, an annual heat cost per annual kWh, over the heat costs `HeatCostAttribution` names.
 
     Args:
         timeline: The finished, payer-allocated timeline.
@@ -204,8 +209,9 @@ def aggregate_timeline(
         facts_by_subject: Declared cost facts per component subject, passed to :func:`build_breakdowns`.
         co2_result: Finished CO2 accounting, passed to :func:`build_breakdowns`.
         parameters: Economic parameters; supply the interest rate, the horizon and the annuity factor.
-        annual_heat_demand_in_kwh: Annual useful heat for the per-kWh figure; for a staged plan the equivalent annual
-            heat of its horizon (`StagedEvaluator._equivalent_annual_heat`). None or zero suppresses the figure.
+        heat: The annual useful heat the levelized cost of heat divides by (for a staged plan the equivalent annual heat
+            of its horizon, `StagedEvaluator._equivalent_annual_heat`) and each year's electricity heat share. An
+            unknown or zero heat, or an unknown share, suppresses the figure.
 
     Returns:
         A `TimelineAggregation`.
@@ -230,9 +236,17 @@ def aggregate_timeline(
 
     equivalent_annual_cost = total_npv.scale(annuity)
 
+    heat_npv = None
     levelized = None
-    if annual_heat_demand_in_kwh:
-        levelized = total_npv.scale(annuity / annual_heat_demand_in_kwh)
+    if heat.electricity_heat_share_by_year is not None:
+        heat_npv = HeatCostAttribution.heat_cost_npv_in_euro(
+            scoped,
+            HeatCostAttribution.heat_subjects({subject: facts.asset_class for subject, facts in facts_by_subject.items()}),
+            heat.electricity_heat_share_by_year,
+            interest,
+        )
+        if heat.annual_heat_demand_in_kwh:
+            levelized = heat_npv.scale(annuity / heat.annual_heat_demand_in_kwh)
 
     return TimelineAggregation(
         scope_payer=scope_actor,
@@ -247,5 +261,6 @@ def aggregate_timeline(
         ),
         annual_cost_series_nominal_in_euro=annual_series,
         monthly_cost_year1_in_euro=monthly_year1,
+        heat_cost_npv_in_euro=heat_npv,
         levelized_cost_of_heat_in_euro_per_kwh=levelized,
     )

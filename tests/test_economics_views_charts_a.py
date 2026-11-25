@@ -41,6 +41,7 @@ import pytest
 
 from hisim.economics import views
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.heat_cost import HeatCostBasis
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import ActorScope
@@ -123,7 +124,7 @@ def make_result(
         facts_by_subject={},
         co2_result=LifecycleCo2Result(),
         parameters=parameters,
-        annual_heat_demand_in_kwh=None,
+        heat=HeatCostBasis(annual_heat_demand_in_kwh=None, electricity_heat_share_by_year=None),
     )
     return LifecycleCostResult(
         perspective_id="test",

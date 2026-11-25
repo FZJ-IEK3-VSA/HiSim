@@ -69,6 +69,14 @@ def _stage(windows_in_euro: Optional[float], kept_door: bool = False) -> Stage:
     if windows_in_euro is not None:
         subjects.append((WINDOWS, ComponentType.WINDOWS_TRIPLE_GLAZED, 20.0, windows_in_euro))
     inputs = state_inputs(subjects, SyntheticPlan.RENOVATED_ELECTRICITY_IN_KWH)
+    # The heat pump's electricity is metered, so the plan states a levelized cost of heat.
+    inputs = replace(
+        inputs,
+        energy_attribution_by_subject_in_kwh={
+            SyntheticPlan.HEAT_PUMP_SUBJECT: {"HEAT_PUMP_ELECTRICITY": 3000.0},
+            "Occupancy": {"HOUSEHOLD_ELECTRICITY": 1000.0},
+        },
+    )
     if windows_in_euro is None:
         inputs.cost_facts.append(_unpriced_facts(WINDOWS, ComponentType.WINDOWS_TRIPLE_GLAZED))
     if kept_door:
@@ -201,6 +209,27 @@ def _evaluation_block() -> Dict[str, Any]:
     }
 
 
+class TestTheKeptTotals:
+    """`UnpricedInvestment.kept_totals` keeps the levelized cost of heat unless a heat subject is unpriced."""
+
+    def test_unpriced_windows_leave_the_levelized_cost_of_heat_stated(self):
+        """Windows are no heat cost, so their unknown price does not enter the figure."""
+        rows = [{**_row(WINDOWS, WINDOWS, True), "asset_class": ComponentType.WINDOWS_TRIPLE_GLAZED.value}]
+        assert UnpricedInvestment.kept_totals(rows, [WINDOWS]) == UnpricedInvestment.PRICE_FREE_TOTALS | {
+            UnpricedInvestment.HEAT_COST_TOTAL
+        }
+
+    def test_an_unpriced_buffer_withholds_it(self):
+        """A heat storage is a heat cost: its unknown price makes the figure unknown."""
+        rows = [{**_row("Buffer", "heating_system", True), "asset_class": ComponentType.BUFFER.value}]
+        assert UnpricedInvestment.kept_totals(rows, ["Buffer"]) == UnpricedInvestment.PRICE_FREE_TOTALS
+
+    def test_a_measure_without_an_asset_class_is_no_heat_cost(self):
+        """A measure HiSim holds no class for (the hot-water lagging) is not counted, priced or not."""
+        rows = [{**_row("lagging", "lagging", True), "asset_class": None}]
+        assert UnpricedInvestment.HEAT_COST_TOTAL in UnpricedInvestment.kept_totals(rows, ["lagging"])
+
+
 class TestTheWithheldGroups:
     """`UnpricedInvestment.withheld_groups` keeps the energy and CO2 stacks and withholds the rest."""
 
@@ -225,12 +254,12 @@ class TestTheWithheldEvaluation:
 
     def test_the_totals_but_the_sunk_cost_are_null(self):
         """The NPV contains the unknown investment; the book value written off does not."""
-        totals = UnpricedInvestment.withheld_evaluation(_evaluation_block())["totals"]
+        totals = UnpricedInvestment.withheld_evaluation(_evaluation_block(), UnpricedInvestment.PRICE_FREE_TOTALS)["totals"]
         assert totals == {"npv_in_euro": None, "sunk_cost_written_off_in_euro": _band(5.0)}
 
     def test_the_npv_split_keeps_only_the_energy_and_co2_categories(self):
         """By category the energy and carbon-price entries stay; by payer every entry mixes the investment in."""
-        withheld = UnpricedInvestment.withheld_evaluation(_evaluation_block())
+        withheld = UnpricedInvestment.withheld_evaluation(_evaluation_block(), UnpricedInvestment.PRICE_FREE_TOTALS)
         assert withheld["by_category"] == {
             "INVESTMENT": None,
             "ENERGY_WORKING": _band(20.0),
@@ -241,7 +270,7 @@ class TestTheWithheldEvaluation:
 
     def test_the_series_and_loans_lose_their_money_and_keep_their_years(self):
         """Every annual total, cumulative row and loan amount is null; years, events and loan terms stay."""
-        withheld = UnpricedInvestment.withheld_evaluation(_evaluation_block())
+        withheld = UnpricedInvestment.withheld_evaluation(_evaluation_block(), UnpricedInvestment.PRICE_FREE_TOTALS)
         year = withheld["annual"][0]
         assert (year["total_nominal_in_euro"], year["total_discounted_in_euro"]) == (None, None)
         assert year["by_group"][CostGroup.ENERGY.value] == _band(1.0)
@@ -254,11 +283,11 @@ class TestTheWithheldEvaluation:
     def test_rows_energy_co2_and_subsidies_stay_and_the_input_is_unchanged(self):
         """The per-subject rows and the price-free blocks are kept as they were; a cash purchase stays None."""
         block = _evaluation_block()
-        withheld = UnpricedInvestment.withheld_evaluation(block)
+        withheld = UnpricedInvestment.withheld_evaluation(block, UnpricedInvestment.PRICE_FREE_TOTALS)
         for key in ("by_subject", "energy_year1", "co2", "subsidies"):
             assert withheld[key] == block[key]
         assert block["totals"]["npv_in_euro"] == _band(100.0)
-        assert UnpricedInvestment.withheld_evaluation({**block, "financing": None})["financing"] is None
+        assert UnpricedInvestment.withheld_evaluation({**block, "financing": None}, frozenset())["financing"] is None
 
 
 class TestTheWithheldComparison:
@@ -300,7 +329,6 @@ WITHHELD_TOTALS = (
     "monthly_equivalent_cost_in_euro",
     "monthly_cost_year1_in_euro",
     "investment_year0_in_euro",
-    "levelized_cost_of_heat_in_euro_per_kwh",
 )
 
 #: The differences of `comparison` an unknown investment withholds.
@@ -332,6 +360,10 @@ class TestTheDocument:
         for key in WITHHELD_TOTALS:
             assert plan["totals"][key] is None, key
         assert plan["totals"]["sunk_cost_written_off_in_euro"] is not None
+        # The windows are no heat cost: the levelized cost of heat is the engine's.
+        engine_heat_cost = result.plan.levelized_cost_of_heat_in_euro_per_kwh
+        assert engine_heat_cost is not None
+        assert plan["totals"]["levelized_cost_of_heat_in_euro_per_kwh"] == _as_band(engine_heat_cost)
         comparison = document["comparison"]
         for key in WITHHELD_DIFFERENCES:
             assert comparison[key] is None, key

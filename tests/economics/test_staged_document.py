@@ -534,7 +534,7 @@ class TestTheDocumentShape:
         """
         import jsonschema
 
-        assert document["schema_version"] == 11
+        assert document["schema_version"] == 12
         StagedDocument.validate(document)
         for older in (1, 2, 3, 4, 5, 6, 7):
             with pytest.raises(jsonschema.ValidationError):

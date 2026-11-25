@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.economics.calculators.financing_application import FinancingConstants
+from hisim.economics.calculators.heat_cost import HeatCostAttribution
 from hisim.economics.carriers import bill_subjects
 from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.parameters import EconomicParameters
@@ -34,6 +35,7 @@ from hisim.economics.subsidies import PayoutKind, SchemeMaximum, SchemeMaximumNo
 from hisim.economics.timeline import CashFlowEntry, CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.hisim_commit import HiSimCommit
+from hisim.loadtypes import ComponentType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiSource
 
 
@@ -208,7 +210,8 @@ class UnpricedInvestment:
     An unpriced subject -- an envelope measure without a cost block, a measure HiSim holds no price for -- is booked at
     a placeholder zero. A sum over it would state part of the investment as the whole, so by owner decision (2026-11-13
     for the payback year, 2026-11-25 for every other figure; renovisorissues #87) an evaluation that buys such a
-    subject states `null` in every figure its investment enters: the headline totals but the written-off sunk cost, the
+    subject states `null` in every figure its investment enters: the headline totals but the written-off sunk cost (and
+    the levelized cost of heat, which counts heat costs only, unless an unpriced subject is a heat subject), the
     NPV's split by group, category and payer (but the energy and CO2 groups), the annual and cumulative series, the
     loans, and every difference to the reference but the CO2 difference. There is no lower bound. The `by_subject`
     rows, the year-1 energy bill, the CO2 masses and the subsidy rows stay: they do not depend on the unknown price. The
@@ -246,6 +249,10 @@ class UnpricedInvestment:
 
     #: The `totals` an unknown investment leaves stated: the book value of the reference's equipment written off.
     PRICE_FREE_TOTALS: ClassVar[FrozenSet[str]] = frozenset({"sunk_cost_written_off_in_euro"})
+
+    #: The total that counts heat costs only (`HeatCostAttribution`): stated unless an unpriced subject is a heat
+    #: subject.
+    HEAT_COST_TOTAL: ClassVar[str] = "levelized_cost_of_heat_in_euro_per_kwh"
 
     #: The `comparison` figures an unknown investment leaves stated: differences of quantities priced without it.
     PRICE_FREE_DIFFERENCES: ClassVar[FrozenSet[str]] = frozenset({"lifecycle_co2_delta_in_kg"})
@@ -303,6 +310,31 @@ class UnpricedInvestment:
         }
 
     @classmethod
+    def kept_totals(cls, by_subject: Sequence[Mapping[str, Any]], subjects: Sequence[str]) -> FrozenSet[str]:
+        """Return the `totals` an evaluation that buys the given unpriced subjects still states.
+
+        The written-off sunk cost always; the levelized cost of heat too when none of the subjects is a heat
+        generator, storage or emitter, since it counts heat costs only. For example unpriced windows leave it stated,
+        an unpriced buffer withholds it.
+
+        Args:
+            by_subject: The evaluation's `by_subject` rows, for the asset classes of the subjects.
+            subjects: The unpriced subjects it buys, from :meth:`subjects`.
+
+        Returns:
+            The keys of `totals` to keep.
+        """
+        wanted = set(subjects)
+        classes = {
+            str(row["subject"]): ComponentType(row["asset_class"]) if row["asset_class"] is not None else None
+            for row in by_subject
+            if row["subject"] in wanted
+        }
+        if HeatCostAttribution.heat_subjects(classes):
+            return cls.PRICE_FREE_TOTALS
+        return cls.PRICE_FREE_TOTALS | {cls.HEAT_COST_TOTAL}
+
+    @classmethod
     def withheld_groups(cls, by_group: Mapping[str, Any]) -> Dict[str, Any]:
         """Return a group stack with every group an investment enters set to None.
 
@@ -322,24 +354,23 @@ class UnpricedInvestment:
         }
 
     @classmethod
-    def withheld_evaluation(cls, evaluation: Mapping[str, Any]) -> Dict[str, Any]:
+    def withheld_evaluation(cls, evaluation: Mapping[str, Any], kept_totals: FrozenSet[str]) -> Dict[str, Any]:
         """Return an evaluation block with every figure its investment enters set to None.
 
-        Withheld: the `totals` but `PRICE_FREE_TOTALS`; the `by_group` stack and each year's stack but
+        Withheld: the `totals` but `kept_totals` (:meth:`kept_totals`); the `by_group` stack and each year's stack but
         `PRICE_FREE_GROUPS`; the `by_category` entries of the other groups; every `by_payer` entry; each year's
         `total_nominal_in_euro` and `total_discounted_in_euro`; every `cumulative` row's money; each loan's principal
         and debt service. Kept: `by_subject`, `energy_year1`, `co2`, `subsidies`, the events and the years.
 
         Args:
             evaluation: The `reference` or `plan` block as `StagedDocument` builds it.
+            kept_totals: The keys of `totals` the unknown investment does not enter.
 
         Returns:
             A new block; the one given is not changed.
         """
         withheld = dict(evaluation)
-        withheld["totals"] = {
-            key: value if key in cls.PRICE_FREE_TOTALS else None for key, value in evaluation["totals"].items()
-        }
+        withheld["totals"] = {key: value if key in kept_totals else None for key, value in evaluation["totals"].items()}
         withheld["by_group"] = cls.withheld_groups(evaluation["by_group"])
         withheld["by_category"] = {
             category: band if CostGroups.of(CostCategory(category)) in cls.PRICE_FREE_GROUPS else None
@@ -427,7 +458,7 @@ class StagedDocument:
     """
 
     #: Version of this document format, bumped whenever a consumer would have to change.
-    SCHEMA_VERSION: ClassVar[int] = 11
+    SCHEMA_VERSION: ClassVar[int] = 12
 
     #: The one currency the engine prices in.
     CURRENCY: ClassVar[str] = "EUR"
@@ -591,9 +622,13 @@ class StagedDocument:
         reference_unpriced = UnpricedInvestment.subjects(reference["by_subject"], self._has_measure_map)
         plan_unpriced = UnpricedInvestment.subjects(plan["by_subject"], self._has_measure_map)
         if reference_unpriced:
-            reference = UnpricedInvestment.withheld_evaluation(reference)
+            reference = UnpricedInvestment.withheld_evaluation(
+                reference, UnpricedInvestment.kept_totals(reference["by_subject"], reference_unpriced)
+            )
         if plan_unpriced:
-            plan = UnpricedInvestment.withheld_evaluation(plan)
+            plan = UnpricedInvestment.withheld_evaluation(
+                plan, UnpricedInvestment.kept_totals(plan["by_subject"], plan_unpriced)
+            )
         unpriced = sorted(set(reference_unpriced) | set(plan_unpriced))
         if unpriced:
             comparison = UnpricedInvestment.withheld_comparison(comparison)

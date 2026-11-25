@@ -584,10 +584,21 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
     BASELINE_HEAT_IN_KWH = 20000.0
     RENOVATED_HEAT_IN_KWH = 8000.0
 
-    @staticmethod
-    def _with_heat(stage: Stage, heat) -> Stage:
-        """The stage with its heat demand replaced."""
-        return replace(stage, inputs=replace(stage.inputs, annual_heat_demand_in_kwh=heat))
+    #: The heat stage's metered electricity: 3,000 kWh for the heat pump beside 1,000 kWh of appliances.
+    HEAT_PUMP_ATTRIBUTION = {
+        SyntheticPlan.HEAT_PUMP_SUBJECT: {"HEAT_PUMP_ELECTRICITY": 3000.0},
+        "Occupancy": {"HOUSEHOLD_ELECTRICITY": 1000.0},
+    }
+
+    @classmethod
+    def _with_heat(cls, stage: Stage, heat) -> Stage:
+        """The stage with its heat demand replaced, and the heat pump's electricity metered where it has one."""
+        has_heat_pump = any(facts.subject == SyntheticPlan.HEAT_PUMP_SUBJECT for facts in stage.inputs.cost_facts)
+        attribution = cls.HEAT_PUMP_ATTRIBUTION if has_heat_pump else {}
+        return replace(
+            stage,
+            inputs=replace(stage.inputs, annual_heat_demand_in_kwh=heat, energy_attribution_by_subject_in_kwh=attribution),
+        )
 
     def test_two_stages_divide_the_cost_npv_by_the_heat_npv(self, database, parameters):
         """Heat of 20 MWh a year for years 1..3, then 8 MWh from year 4: the hand-made NPV ratio."""
@@ -604,10 +615,10 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
             for year in range(1, SyntheticPlan.HORIZON + 1)
         )
         levelized = plan.levelized_cost_of_heat_in_euro_per_kwh
-        assert levelized is not None
+        assert levelized is not None and plan.heat_cost_npv_in_euro is not None
         for slot in ("minimum", "best_estimate", "maximum"):
             assert getattr(levelized, slot) == pytest.approx(
-                getattr(plan.total_npv_in_euro, slot) / heat_npv, rel=1e-12
+                getattr(plan.heat_cost_npv_in_euro, slot) / heat_npv, rel=1e-12
             )
         # The published assumption is the equivalent annual heat the KPI divided by, so the
         # heat-cost derivation (equivalent annual cost / this figure) states the same division.
@@ -626,7 +637,8 @@ class TestThePlansHeatCostDividesByItsDiscountedHeat:
 
         plan = StagedEvaluator(database).evaluate(stages, parameters, brownfield_perspective()).plan
 
-        assert plan.levelized_cost_of_heat_in_euro_per_kwh == plan.total_npv_in_euro.scale(
+        assert plan.heat_cost_npv_in_euro is not None
+        assert plan.levelized_cost_of_heat_in_euro_per_kwh == plan.heat_cost_npv_in_euro.scale(
             parameters.annuity_factor() / self.RENOVATED_HEAT_IN_KWH
         )
         assert plan.assumptions is not None

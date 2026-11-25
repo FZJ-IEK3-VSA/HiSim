@@ -45,8 +45,7 @@ class CheckIds:
     CHECK_SUBSIDIES_BELOW_BASIS = "subsidies_below_basis"
     CHECK_EFFECTIVE_PRICE = "effective_price"
     CHECK_EAC_PER_M2 = "equivalent_annual_cost_per_m2"
-    # The check reads "system cost per unit of heat" (`results.HeatCostNaming`); the id keeps
-    # its spelling because ids are a contract and names are prose.
+    # The check reads "levelized cost of heat" (`results.HeatCostNaming`).
     CHECK_LEVELIZED_COST_OF_HEAT = "levelized_cost_of_heat"
     CHECK_MAINTENANCE_RATIO = "maintenance_to_investment_ratio"
     CHECK_BAND_WIDTH = "band_width"
@@ -454,7 +453,7 @@ def _extrapolation_findings(simulated_period_fraction: Optional[float]) -> List[
 def _heat_without_hot_water_findings(heat_without_hot_water_in_kwh: Optional[float]) -> List[PlausibilityFinding]:
     """Warn when the heat-cost figure divides by room heat only, without hot water.
 
-    The system cost per unit of heat divides by the measured useful heat, rooms plus hot water
+    The levelized cost of heat divides by the measured useful heat, rooms plus hot water
     (`adapter.UsefulHeatSources`). If the building's hot-water source is not one the table lists, only room heat is
     measured while the costs still pay for hot water, so the figure reads too high.
 

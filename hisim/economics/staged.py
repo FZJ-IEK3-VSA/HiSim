@@ -27,6 +27,7 @@ from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequ
 
 from hisim import log
 from hisim.economics.calculators.aggregation import aggregate_timeline
+from hisim.economics.calculators.heat_cost import HeatCostAttribution, HeatCostBasis
 from hisim.economics.calculators.annualization import annualize
 from hisim.economics.calculators.context_resolution import installation_verdict
 from hisim.economics.calculators.energy import (
@@ -2496,7 +2497,10 @@ class StagedEvaluator:
             facts_by_subject=facts_by_subject,
             co2_result=co2,
             parameters=parameters,
-            annual_heat_demand_in_kwh=equivalent_heat,
+            heat=HeatCostBasis(
+                annual_heat_demand_in_kwh=equivalent_heat,
+                electricity_heat_share_by_year=self.electricity_heat_share_by_year(stages, active),
+            ),
         )
         shares: Dict[str, float] = {}
         bases: Dict[str, float] = {}
@@ -2517,6 +2521,7 @@ class StagedEvaluator:
             component_breakdowns=aggregation.component_breakdowns,
             annual_cost_series_nominal_in_euro=aggregation.annual_cost_series_nominal_in_euro,
             monthly_cost_year1_in_euro=aggregation.monthly_cost_year1_in_euro,
+            heat_cost_npv_in_euro=aggregation.heat_cost_npv_in_euro,
             levelized_cost_of_heat_in_euro_per_kwh=aggregation.levelized_cost_of_heat_in_euro_per_kwh,
             timeline=timeline,
             lifecycle_co2_result=co2,
@@ -2555,12 +2560,40 @@ class StagedEvaluator:
         )
 
     @staticmethod
+    def electricity_heat_share_by_year(stages: Tuple[Stage, ...], active: Tuple[int, ...]) -> Optional[Tuple[float, ...]]:
+        """Return each horizon year's share of the electricity bill that is heat cost: the active stage's.
+
+        Each stage is one state of the house with its own metered heat-pump and household electricity
+        (`HeatCostAttribution.electricity_heat_share`), so a heat pump a later stage installs raises the share from its
+        year on. For example a gas house until year 4 and a heat pump with share 0.6 after gives 0.0 for years 0..3
+        and 0.6 from year 4.
+
+        Args:
+            stages: The plan as given.
+            active: Which stage is active in each horizon year 0..T (`_active_by_year`).
+
+        Returns:
+            One share per year 0..T, or None when the share of any active stage is unknown.
+        """
+        by_stage = [
+            HeatCostAttribution.electricity_heat_share(
+                stage.inputs.energy_attribution_by_subject_in_kwh,
+                (subject_facts.facts.asset_class for subject_facts in stage.inputs.cost_facts),
+            )
+            for stage in stages
+        ]
+        shares = tuple(by_stage[index] for index in active)
+        if any(share is None for share in shares):
+            return None
+        return tuple(float(share) for share in shares if share is not None)
+
+    @staticmethod
     def _equivalent_annual_heat(
         stages: Tuple[Stage, ...], active: Tuple[int, ...], parameters: EconomicParameters
     ) -> Optional[float]:
         """Return the plan's heat as one annual figure: the annuity of its discounted per-year heat.
 
-        The plan's levelized cost of heat is NPV(costs) / NPV(heat), with each year's heat that of the stage active in
+        The plan's levelized cost of heat is NPV(heat costs) / NPV(heat), with each year's heat that of the stage active in
         it. The aggregation divides `total_npv x annuity` by this figure, `annuity x sum_y heat_active[y] x df_y` over
         years 1..T with the discount factors `CashFlowTimeline.npv` uses, so the annuity cancels. When every year's
         heat is the same, that figure is returned unchanged, to avoid rounding and match the unstaged evaluation.

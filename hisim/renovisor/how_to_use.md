@@ -342,8 +342,9 @@ A plan that buys a subject with no price -- a `by_subject` row with `unpriced: t
 `measure_id`, such as an envelope measure without a cost block or the hot-water lagging -- has an
 unknown investment, not the sum of its priced rows, so the document states `null` in every figure
 that investment enters (schema version 11, renovisorissues #87, owner decisions of 2026-11-13 and
-2026-11-25): in `plan.totals` the investment, NPV, equivalent annual and monthly cost, year-1 monthly
-cost and levelized cost of heat (`sunk_cost_written_off_in_euro` stays); in `by_group` and every
+2026-11-25): in `plan.totals` the investment, NPV, equivalent annual and monthly cost and year-1 monthly
+cost (`sunk_cost_written_off_in_euro` stays, and so does the levelized cost of heat unless an unpriced
+subject is a heat generator, storage or emitter); in `by_group` and every
 `annual[].by_group` each group but `Energy` and `CO2`; in `by_category` each category of the other
 groups; every `by_payer` entry; `annual[].total_*`; the money of `cumulative[]`; the loans' principal
 and debt service; and in `comparison` every difference but `lifecycle_co2_delta_in_kg`, with every end
@@ -355,6 +356,16 @@ for the measure prices it, and every figure is stated again. A kept envelope ele
 (`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and the plan and
 withholds nothing. Without such a subject `unpriced_investment` is `null`, and a `null` end of the
 payback year means that world does not stay repaid within the horizon.
+
+`totals.levelized_cost_of_heat_in_euro_per_kwh` counts heat costs only (schema version 12,
+renovisorissues #107, owner decision of 2026-11-13): the heat generators', storages' and emitters' own
+cash flows, the fuels, and each year's share of the electricity bill that the heating devices' metered
+electricity is of the metered consumption of heating devices and appliances, annualized and divided by
+the useful heat. Appliance electricity, PV, a battery, the feed-in revenue and the envelope are not in
+it, so a PV-only plan leaves the figure of a gas-heated house as it was. The heating devices' electricity
+is a heat pump's (backup heating rod included) and a resistive heater's, so a house on `electric_heating`
+states the figure too. It is `null` when a heating device runs on electricity no role meters, and an
+unpriced subject withholds it only when the subject is a heat generator, storage or emitter. The rule is written out in `roadmap/cost_spec.md`, §3.7.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

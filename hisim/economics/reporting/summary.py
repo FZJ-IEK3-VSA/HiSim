@@ -207,7 +207,7 @@ class _CheckHints:
             "(controller signal or price series inverted?)"
         ),
         CheckIds.CHECK_USEFUL_HEAT_WITHOUT_HOT_WATER: (
-            "no hot-water source the cost engine recognizes, so the system cost per unit of heat "
+            "no hot-water source the cost engine recognizes, so the levelized cost of heat "
             "divides by the rooms' heat only and reads too high by the hot water's share (hisim-4wlu)"
         ),
     }

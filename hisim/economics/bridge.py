@@ -133,7 +133,7 @@ class EconomicContext:
     - `living_area_in_m2`, `heated_floor_area_in_m2`, `current_cold_rent_in_euro_per_m2_month`,
       `building_specific_emissions_in_kg_per_m2_a`: what the CO2 split and the modernization levy need to
       divide costs between landlord and tenant.
-    - `annual_heat_demand_in_kwh`: overrides the measured useful heat as the denominator of the cost per unit of heat;
+    - `annual_heat_demand_in_kwh`: overrides the measured useful heat as the denominator of the levelized cost of heat;
       must be positive.
     - `scenario_set`: triggers the scenario cube evaluation and the report's scenario section.
 
@@ -200,7 +200,7 @@ class EconomicContext:
         if heat is not None and not (math.isfinite(heat) and heat > 0):
             raise ValueError(
                 f"EconomicContext.annual_heat_demand_in_kwh={heat!r}: a declared heat demand is the "
-                "denominator of the system cost per unit of heat and must be a positive, finite "
+                "denominator of the levelized cost of heat and must be a positive, finite "
                 "number of kWh a year. Leave it unset to divide by the heat the simulation measured."
             )
 
@@ -882,7 +882,7 @@ def build_evaluation_inputs(
         # plausibility panel carries the same statement into the report.
         log.warning(
             "Lifecycle cost engine: the run has a building but no hot-water source of "
-            "adapter.UsefulHeatSources, so the system cost per unit of heat divides by the rooms' "
+            "adapter.UsefulHeatSources, so the levelized cost of heat divides by the rooms' "
             "heat only and reads too high by the hot water's share (hisim-4wlu)."
         )
     return inputs

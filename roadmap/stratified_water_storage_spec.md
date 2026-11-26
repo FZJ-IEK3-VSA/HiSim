@@ -1,6 +1,6 @@
 # Spec: the stratified hot-water cylinder is a second component, interchangeable with the mixed one: N explicit start-of-step layers with real flows, valid where one step moves at most one layer
 
-Status: draft, decided (owner decisions D1 to D11 of 2026-11-25 recorded; §8 lists what is still open), nothing
+Status: decided (owner decisions D1 to D11 of 2026-11-25 and the two questions of §8 of 2026-11-26 recorded), nothing
 built. Owner: Noah Pflugradt. Epic: hisim-hydronics-fxix (bead hisim-hydronics-fxix.1; the coarse model is
 hisim-stratified-storage-coarse-0392; the rename is hisim-dhw-return-outputs-rename-653d; the sourcing of the
 defaults is hisim-stratified-cylinder-defaults-1eff). Builds on: `roadmap/hydronic_coupling_spec.md` (§4.5, §5.3,
@@ -89,7 +89,7 @@ the coarse model exists; the recorded twins keep the mixed one (§5).
 
 **D7 — The cylinder now; the buffer's dead path goes** (owner, 2026-11-25; the old Q3). The space-heating buffer's
 `heat_exchanger_is_present=False` path, its mixing factor and its mass-mixing law are deleted in the first PR. A
-stratified buffer, if ever wanted, is its own component later, on the pattern of D5; no bead for it now (§8).
+stratified buffer is its own component later, on the pattern of D5: bead hisim-stratified-buffer-eb26 (P2, §8 Q2).
 
 **D8 — The defaults are accepted as presets marked as estimates** (owner, 2026-11-25; the old Q5). Five layers,
 the backup coil from 1.0 to 0.5 of the height, the solar coil from 0.25 to 0.0, the pockets at 0.7 and 0.1,
@@ -621,7 +621,7 @@ model's test under hisim-stratified-storage-coarse-0392; the solar priority (his
 2026-11-25, the flows of §4.4 (one June day of the heat pump + solar twin at 60 s). The yields of T10 and the
 passes per step are filled in by PR 5.
 
-## 8. Decisions of 2026-11-25, and what is still open
+## 8. Decisions of 2026-11-25 and 2026-11-26
 
 The eight open questions of the draft of 2026-11-25 were decided by the owner the same day and are D5 to D11 of
 §2: Q1 (above the threshold) and Q2 (a flow exceeding a layer) are D6, one run-time refusal; Q3 (which storages, the
@@ -630,21 +630,18 @@ Q5 (the defaults) is D8; Q6 (the rename) is D9; Q7 (two pockets) is D11; Q8 (his
 this spec under D5: the lower pocket is on both classes (§4.1); the two classes share the valve and the
 `SimpleWaterStorage` base and nothing else (§4.8); `preset_standard` on both (§4.7).
 
-Still open, each with a recommendation:
+Decided by the owner on 2026-11-26, the two questions this review left open:
 
-- **Q1. Does the stratified cylinder get a recorded energy-system file of its own before the coarse model exists?**
-  Context: every recorded twin is a golden pair at 60 s and 900 s (`results_and_interfaces.md` §1), and the
-  stratified class fails at 900 s by design (D6), so a recorded stratified twin cannot join the gate. Options: (a) no
-  recorded file; T10 runs the two solar twins with the class swapped, and a user who wants the stratified cylinder
-  copies a twin and changes the class path; (b) a recorded file `household_heatpump_solar_thermal_stratified`
-  without a golden pair, as the example to copy, whose 900 s run fails with the message of §4.4. Recommendation: (a)
-  now, since a file in `energy_systems/` that fails at the step length RenoVisor uses invites the wrong copy; (b)
-  with the coarse model, when the file runs at both step lengths.
-- **Q2. A stratified buffer: a bead now or none?** The owner asked. Recommendation: none now. D7 records that a
-  stratified buffer would be its own component on the pattern of D5; nobody asks for one (the buffer's dead path has
-  no user), and the part-load mode of the buffer above 600 s rests on linear end temperatures (part-load spec,
-  decision 21), which a buoyancy merge breaks, so a stratified buffer needs the coarse model first. A bead is filed
-  when a use exists, under hisim-hydronics-fxix.
+- **Q1. No recorded energy-system file for the stratified cylinder before the coarse model exists.** Every recorded twin
+  is a golden pair at 60 s and 900 s (`results_and_interfaces.md` §1), and the stratified class fails at 900 s by design
+  (D6), so a recorded stratified twin could not join the gate and would invite a copy that fails at the step length
+  RenoVisor uses. T10 runs the two solar twins with the class swapped; a user who wants the stratified cylinder copies a
+  twin and changes the class path. The recorded file `household_heatpump_solar_thermal_stratified` comes with the coarse
+  model (hisim-stratified-storage-coarse-0392), when it runs at both step lengths.
+- **Q2. A stratified buffer gets a bead now, P2** (hisim-stratified-buffer-eb26, under hisim-hydronics-fxix, blocked by
+  hisim-hydronics-fxix.1). It is its own class on the pattern of D5, interchangeable with the mixed buffer, and needs a
+  short spec first: the buffer's part-load mode above 600 s rests on linear end temperatures (part-load spec, decision
+  21), which a buoyancy merge breaks. Like the stratified cylinder, it runs at 900 s only with the coarse model.
 
 ## 9. Beads and pull requests
 
@@ -657,10 +654,10 @@ Epic hisim-hydronics-fxix.
 | hisim-stratified-cylinder-defaults-1eff (P3, new, D8) | sources the layer count, the coil and pocket heights and `λ_eff` from manufacturer data sheets, VDI 6002, EN 12977 or similar, before RenoVisor uses the stratified cylinder; names RenoVisor's equipment register | – |
 | hisim-stratified-storage-coarse-0392 (P3, blocked by hisim-hydronics-fxix.1) | the coarse model: about the same totals as the fine model where the fine one is not valid; the twins and RenoVisor switch to the stratified class with it | – |
 | hisim-bq3h (P2 since D10, after the stratified cylinder) | solar priority in the controllers, measured on the stratified cylinder | – |
+| hisim-stratified-buffer-eb26 (P2, new, §8 Q2; blocked by hisim-hydronics-fxix.1) | the stratified space-heating buffer as a separate class interchangeable with the mixed one, a short spec first | – |
 | hisim-report-states-defaults-41e9 (P3) | the mapping report names the cylinder's volume; unchanged by this spec | – |
 
-The open questions of §8 get `owner-decision` beads only for what stays open after the review of this document
-(spec template: an open question is a bead as well as an entry here).
+No question of §8 stays open, so no `owner-decision` bead is filed.
 
 The pull requests, each small and stacked on the one before (AGENTS.md, "Pull requests and merging"):
 

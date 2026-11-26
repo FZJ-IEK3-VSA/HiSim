@@ -550,6 +550,31 @@ The **discounted payback time** is the first year from which the cumulative disc
 above zero until the horizon, year 0 included (`None` when they end below zero; renovisorissues #102). It is
 computed per slot, yielding a payback band (best case / expected / worst case, each independently `None`-able).
 
+#### The year-1 energy-bill difference is one band, world by world
+
+The staged document states `comparison.energy_bill_year1_delta_in_euro`: the plan's year-1 energy bill minus
+the reference's, over every carrier, charges minus feed-in revenue. Like every delta it is computed slot-wise
+(the plan's LOW world minus the reference's LOW world, and so on) and then sorted into min, best and max, so
+a price band both evaluations share cancels rather than widening the range, as subtracting two independent
+bands would (renovisorissues #95). Per-stage bills are not stated yet.
+
+#### An unpriced purchase withholds every figure its investment enters
+
+A subject the engine holds no price for (an envelope measure without a cost block, a measure HiSim cannot
+price, neither priced by a reader's quote) is booked at a placeholder zero. The staged document
+(`economics_result.json`) does not state a sum over that zero as if it were the investment: an evaluation
+that buys such a subject (a `by_subject` row with `unpriced: true` and a `measure_id`) states `null` in every
+figure the investment enters, directly or through what derives from it (maintenance, replacements,
+residual value, subsidies, loans, the levy): the totals but the written-off sunk cost, the NPV split by
+group, category and payer but the energy and CO2 groups, the annual and cumulative series, the loans,
+and in the comparison every difference but the CO2 and the year-1 energy-bill differences, the payback year
+included. There is no
+lower bound. The per-subject rows, the year-1 energy bill, the CO2 masses and the subsidy rows stay, and
+the document's `unpriced_investment` names the subjects once (owner decisions of 2026-11-13 for the
+payback and 2026-11-25 for the rest; renovisorissues #87). A kept envelope element, unpriced but bought
+by no measure, is renewed alike in the reference and the plan and withholds nothing. The engine's own
+result objects keep their numbers; only the document withholds them.
+
 ### 3.8 CO2 accounting
 
 Separate, parallel `LifecycleCo2Result`: embodied emissions at install and each replacement (no

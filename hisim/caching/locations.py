@@ -1,7 +1,7 @@
 """The ordered cache directories of one calculation: read in order, write to the first writable one.
 
-A container maps a persistent volume and a baked-in seed directory in and passes both as
-``SimulationParameters.cache_directories`` (hisim-renovisor-translator-epc.22): a read finds an entry in any of them,
+A container maps a persistent volume and a baked-in seed directory in and lists both in
+``HISIM_CACHE_DIRECTORIES`` (hisim-renovisor-translator-epc.22): a read finds an entry in any of them,
 in order, and a new entry is written to the first directory that can take it, so a read-only seed
 is never written to and the volume accumulates what the seed lacks. The cache is content-keyed and
 deterministic, which is what makes reading across directories safe: an entry found in a later
@@ -36,8 +36,9 @@ class CacheLocations:
     """The ordered cache directories of one calculation: read in order, write to the first writable one.
 
     Built from :meth:`hisim.simulationparameters.SimulationParameters.cache_locations`, which
-    resolves the parameter list against the single legacy path: an empty list means the one
-    ``cache_dir_path``, exactly the behaviour every caller had before the list existed.
+    resolves the parameters' own list, the list in ``HISIM_CACHE_DIRECTORIES`` and the single
+    ``cache_dir_path``, in that order of precedence; with neither list, the one ``cache_dir_path``
+    is exactly the behaviour every caller had before the lists existed.
     """
 
     def __init__(self, directories: Sequence[str]) -> None:

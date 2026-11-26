@@ -719,6 +719,24 @@
       "retrieved": "2026-10-21",
       "kind": "MARKET_SURVEY",
       "notes": "'Community Power has set a rate of 20 cent per kWh produced effective from 1st July 2023' (read 2026-10-21); the highest standard CEG rate found, and the high end of HiSim's band. Flogas publishes the same figure including VAT (18.5c excluding it)."
+    },
+    {
+      "id": "src_de_geg_anlage9_2024",
+      "citation": "Gebaeudeenergiegesetz (GEG; published today as Gebaeudemodernisierungsgesetz, GModG), Anlage 9 (zu Paragraph 85 Absatz 6): Umrechnung in Treibhausgasemissionen, Erdgas 240 g CO2-Aequivalent je kWh",
+      "url": "https://www.gesetze-im-internet.de/geg/anlage_9.html",
+      "publication_year": 2024,
+      "retrieved": "2026-11-25",
+      "kind": "STATUTE",
+      "notes": "The factors multiply GEG final energy, which is stated on the Heizwert (NCV): Bekanntmachung der Regeln fuer Energieverbrauchswerte und der Vergleichswerte im Wohngebaeudebestand, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption to the Heizwert with DIN V 18599-1:2018-09 Table B.1; the Gebaeudeforum factsheet 'Factsheet_65ProzentEE_14_GasBrennwert' states the gas factor on the Heizwert too (hisim-gas-emission-factor-basis-3c9e)."
+    },
+    {
+      "id": "src_ipcc_2006_stationary_combustion",
+      "citation": "IPCC (2006): 2006 IPCC Guidelines for National Greenhouse Gas Inventories, Vol. 2 Energy, Ch. 2 Stationary Combustion, Table 2.2: natural gas 56,100 kg CO2/TJ on a net calorific basis",
+      "url": "https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/2_Volume2/V2_2_Ch2_Stationary_Combustion.pdf",
+      "publication_year": 2006,
+      "retrieved": "2026-11-25",
+      "kind": "LITERATURE",
+      "notes": "56.1 t CO2/TJ NCV is 0.202 kg CO2 per kWh of NCV, the basis the AI-estimate gas rows' 0.20 kg/kWh was stated on; cited for that basis (hisim-gas-emission-factor-basis-3c9e)."
     }
   ]
 }

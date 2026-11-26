@@ -64,15 +64,16 @@
         "max": 140
       },
       "grid_exit_fee_in_euro": 200,
-      "emission_factor_in_kg_per_kwh": 0.2,
+      "emission_factor_in_kg_per_kwh": 0.1803,
       "co2_price_exposure": 1.0,
       "tax_and_levy_share": 0.15,
       "quantity_unit": "kWh",
       "calorific_basis": "GROSS",
       "source_ids": [
-        "src_ai_estimates"
+        "src_ai_estimates",
+        "src_ipcc_2006_stationary_combustion"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.1803 kg CO2 per kWh of GCV: the estimate's 0.20 kg per kWh is natural gas's combustion factor per kWh of NCV (IPCC 2006, Vol. 2, Ch. 2, Table 2.2: 56.1 t CO2/TJ NCV = 0.202 kg/kWh), so 0.20 / 1.1093 = 0.1803, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -238,15 +239,16 @@
         "max": 160
       },
       "grid_exit_fee_in_euro": 250,
-      "emission_factor_in_kg_per_kwh": 0.2,
+      "emission_factor_in_kg_per_kwh": 0.1803,
       "co2_price_exposure": 1.0,
       "tax_and_levy_share": 0.15,
       "quantity_unit": "kWh",
       "calorific_basis": "GROSS",
       "source_ids": [
-        "src_ai_estimates"
+        "src_ai_estimates",
+        "src_ipcc_2006_stationary_combustion"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.1803 kg CO2 per kWh of GCV: the estimate's 0.20 kg per kWh is natural gas's combustion factor per kWh of NCV (IPCC 2006, Vol. 2, Ch. 2, Table 2.2: 56.1 t CO2/TJ NCV = 0.202 kg/kWh), so 0.20 / 1.1093 = 0.1803, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",

@@ -25,6 +25,7 @@ import pytest
 
 from hisim import hisim_main, log
 from hisim import result_path_provider
+from hisim.caching import CacheSettings, CacheSettingsError
 from hisim.calculation_scope import CalculationScope
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton
@@ -97,6 +98,54 @@ def test_writes_below_the_result_and_cache_directories_are_allowed(tmp_path: Pat
             null.write("discarded")
         assert not guard.stray_writes
     assert (run / "b.txt").read_text(encoding="utf-8") == "a"
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "name", [CacheSettings.Variables.RETIRED_DIRECTORY, CacheSettings.Variables.RETIRED_SHARED_DIRECTORY]
+)
+def test_a_retired_cache_variable_fails_the_calculation_before_it_starts(
+    name: str, tmp_path: Path, clean_provider: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``HISIM_CACHE_DIR`` or ``HISIM_CACHE_SHARED_DIR`` set: the scope refuses to open, naming the replacement.
+
+    Every entry point opens one scope first, so this is where a stale ``.env`` line stops a run of any
+    kind, before anything is built or simulated.
+
+    Catches: the refusal waiting for the first cache lookup deep inside a component.
+    """
+    del clean_provider
+    monkeypatch.setenv(name, str(tmp_path / "old"))
+    body_ran = False
+    with pytest.raises(CacheSettingsError, match=f"{name}.*{CacheSettings.Variables.DIRECTORIES}"):
+        with CalculationScope.open("test", run_directory=tmp_path / "run", mode=GuardMode.ENFORCE):
+            body_ran = True
+    assert not body_ran
+    assert not (tmp_path / "run").exists()
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("stated", [False, True])
+def test_the_guard_admits_exactly_the_resolved_cache_directories(
+    stated: bool, tmp_path: Path, clean_provider: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The registry holds the directories ``cache_locations()`` resolved, and the variable's only when they won.
+
+    With no list on the parameters, the variable's directories are the run's and are registered; with a
+    list stated on the parameters, that list is registered and the variable's directory stays a stray place.
+
+    Catches: the guard registering the environment's directories on its own, beside the resolved list.
+    """
+    del clean_provider
+    environment, stated_directory = tmp_path / "environment", tmp_path / "stated"
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(environment))
+    parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+    if stated:
+        parameters.cache_directories = [str(stated_directory)]
+    expected = stated_directory if stated else environment
+    with CalculationScope.open("test", run_directory=tmp_path / "run", mode=GuardMode.COLLECT) as guard:
+        parameters.cache_locations()
+        assert guard.directories.cache_directories == (str(expected.resolve()),)
 
 
 @pytest.mark.base
@@ -396,7 +445,7 @@ def test_matplotlib_imported_mid_calculation_writes_nothing_in_an_empty_home(tmp
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key not in ("MPLCONFIGDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR")
+        if key not in ("MPLCONFIGDIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME") and not key.startswith("HISIM_CACHE")
     }
     environment["HOME"] = str(home)
     environment["PYTHONPATH"] = str(REPO_ROOT)

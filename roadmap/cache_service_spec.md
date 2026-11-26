@@ -217,7 +217,7 @@ class MyComponent(Component):
 `get_or_fetch` behavior, in order:
 1. Local hit → return `exists=True` immediately (no network).
 2. Remote enabled and reachable → `GET`; on 200, decompress, atomic-write locally, return hit.
-3. Shared directory configured (§5.1) → copy in on hit, return.
+3. ~~Shared directory configured (§5.1) → copy in on hit, return.~~ (dropped 2026-11-25; see §5.1)
 4. Miss → return `exists=False` with a **temp path**; `entry.commit()` performs
    `os.replace(tmp, final)` and then, if the environment is write-authorized, PUTs in a
    background thread (fire-and-forget with bounded queue; process exit joins with a short cap).
@@ -245,16 +245,26 @@ HISIM_CACHE_URL_INTERNAL=https://10.x.x.x/hisim-cache        # institute network
 HISIM_CACHE_URL_EXTERNAL=https://cache.example.fzj.de/hisim-cache
 HISIM_CACHE_NETWORK=auto | internal | external | off          # default: auto
 HISIM_CACHE_API_KEY=...                                        # write token (read may not need one)
-HISIM_CACHE_DIR=...                                            # optional local-dir override
-HISIM_CACHE_SHARED_DIR=...                                     # optional shared-directory tier (§5.1)
+HISIM_CACHE_DIRECTORIES=/seed:/volume                          # ordered local cache directories
 ```
+
+**Changed on 2026-11-25 (owner decision):** `HISIM_CACHE_DIRECTORIES` is the one variable that names
+cache directories, read by every run: an ordered `os.pathsep`-separated list of absolute paths, read in
+order, a miss written to the first writable entry; one entry is a single directory. A
+`SimulationParameters.cache_directories` list given in code or a simulation file outranks it; it replaces
+the default `cache_dir_path`. `HISIM_CACHE_DIR` (the single-directory override this section first listed)
+and `HISIM_CACHE_SHARED_DIR` (the shared-directory tier of §5.1) are refused when set.
 
 **Standalone guarantee:** a plain `pip install hisim` with no environment variables gives
 exactly today's behavior — a local cache directory, no network activity, no FZJ
-infrastructure involved. The shared-dir and server tiers are strictly additive opt-ins; the
+infrastructure involved. The server tier is a strictly additive opt-in; the
 library never requires them, and users outside FZJ lose nothing by not having them.
 
-### 5.1 Shared-directory tier
+### 5.1 Shared-directory tier (dropped)
+
+**Dropped on 2026-11-25, never built.** An ordered `HISIM_CACHE_DIRECTORIES` list covers a shared
+filesystem: list the shared directory in it, and entries are read from every listed directory and written
+to the first writable. `HISIM_CACHE_SHARED_DIR` is refused. The original design follows for the record.
 
 For groups with a shared filesystem (HPC `$PROJECT` paths, an institute NAS),
 `HISIM_CACHE_SHARED_DIR` enables an additional tier with the same read-through / write-back

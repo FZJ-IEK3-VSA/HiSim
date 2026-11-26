@@ -1,7 +1,8 @@
 """The cache client: looks an entry up, says where it lives, and lands a new one atomically.
 
 ``roadmap/cache_service_spec.md`` §4 describes ``CacheClient`` as the object that walks the tiers --
-local directory, server, shared directory -- and falls back to computing. This phase implements the
+the local directories, then the server -- and falls back to computing (the shared-directory tier of
+§5.1 was dropped on 2026-11-25: an ordered ``HISIM_CACHE_DIRECTORIES`` list covers it). This phase implements the
 local tier only. It is already shaped as the client, and ``hisim.utils.get_cache_file`` already
 delegates to it, so that the later tiers can be added behind :meth:`CacheClient.lookup` without any
 component changing. A component that has been extracted into a producer goes through
@@ -91,16 +92,12 @@ class CacheEntry:
 class CacheClient:
     """Looks cache entries up in the configured tiers.
 
-    One tier exists today (the local directory). The remote and shared-directory tiers are added behind
-    :meth:`lookup` in later phases.
+    One tier exists today: the local cache directories, read in order. The remote tier is added behind
+    :meth:`lookup` in a later phase.
     """
 
     #: The extension every local entry carries. Defined once, on the metadata class that parses it back.
     SUFFIX: ClassVar[str] = CacheEntryMetadata.DATA_SUFFIX
-
-    #: Whether the ``HISIM_CACHE_DIR`` redirect has been announced in the log this process. One line
-    #: is enough; the override applies to every lookup identically.
-    _override_announced: ClassVar[bool] = False
 
     def __init__(self, settings: CacheSettings) -> None:
         """Bind the client to one set of settings.
@@ -146,8 +143,8 @@ class CacheClient:
 
         Creates the directory if needed. An existing file counts as a hit only if its ``.meta`` companion
         hashes to the filename; otherwise it is deleted and the lookup is a miss. The caller resolves
-        which directory applies (see :meth:`CacheSettings.resolve_local_directory` for the
-        ``HISIM_CACHE_DIR`` override); the lookup itself takes the decision as given.
+        which directory applies (:meth:`CacheSettings.resolve_directories`, through
+        ``SimulationParameters.cache_locations()``); the lookup itself takes the decision as given.
 
         Args:
             component_key: the filename prefix.
@@ -197,7 +194,7 @@ class CacheClient:
     def lookup_producer(
         self,
         key: CacheKey,
-        default_locations: Union["CacheLocations", str, Sequence[str]],
+        locations: Union["CacheLocations", str, Sequence[str]],
     ) -> CacheEntry:
         """Look a producer's artifact up under the key scheme of spec §3.
 
@@ -207,28 +204,21 @@ class CacheClient:
         DTO rather than over a configuration JSON. The entry therefore changes when the calculation
         changes, and it is the same on every machine that runs the same code on the same inputs.
 
-        The locations are resolved here, because a producer has no reason to know about the
-        ``HISIM_CACHE_DIR`` override or the simulation's directory list: the caller passes the
-        simulation's own cache locations and this method decides whether something else takes
-        their place. A ``HISIM_CACHE_DIR`` override keeps its single-directory meaning and
-        replaces the whole list; otherwise the read walks the locations in order and a miss is
-        written to the first writable one (hisim-renovisor-translator-epc.22).
+        The locations are used as given: ``SimulationParameters.cache_locations()`` has already
+        resolved the parameters' own list against ``HISIM_CACHE_DIRECTORIES``. The read walks them in
+        order and a miss is written to the first writable one (hisim-renovisor-translator-epc.22).
 
         Args:
             key: the key, from :meth:`hisim.caching.keys.CacheKey.for_producer`.
-            default_locations: the locations to use unless the environment redirects them, normally
-                ``SimulationParameters.cache_locations()``; a bare directory keeps working.
+            locations: the locations to read and write, normally ``SimulationParameters.cache_locations()``;
+                a bare directory keeps working.
 
         Returns:
             CacheEntry: where the entry is or will be, and whether a validated one is there. On a hit
                 in a later directory the path is that hit; on a miss, the caller computes the artifact
                 and writes it through :meth:`CacheEntry.writing` into the first writable directory.
         """
-        locations = _as_locations(default_locations)
-        if self.settings.local_directory is not None:
-            locations = CacheLocations([self.settings.local_directory])
-            self.announce_environment_override(locations.write_directory())
-        return self.lookup_across(key.artifact_kind, key.material, locations)
+        return self.lookup_across(key.artifact_kind, key.material, _as_locations(locations))
 
     @staticmethod
     def _validated_local_hit(path: str) -> bool:
@@ -253,35 +243,3 @@ class CacheClient:
         )
         CacheEntryMetadata.discard(path)
         return False
-
-    def describe(self) -> str:
-        """Return one line naming the tiers this client uses, for logs.
-
-        Returns:
-            str: the description.
-        """
-        if self.settings.is_standalone:
-            return "local cache directory only"
-        parts = ["local cache directory"]
-        if self.settings.shared_directory is not None:
-            parts.append(f"shared directory {self.settings.shared_directory}")
-        parts.append(f"network {self.settings.network.value} (not yet active in this phase)")
-        return ", ".join(parts)
-
-    def announce_environment_override(self, directory: str) -> None:
-        """Log, once per process, that ``HISIM_CACHE_DIR`` is redirecting the cache.
-
-        The override silently relocates every component's cache away from the simulation's own
-        directory -- existing entries elsewhere are ignored and recomputed -- so the first redirected
-        lookup says so in the log. One line is enough: the override applies to every lookup the same
-        way, and a line per lookup would only bury it.
-
-        Args:
-            directory: the directory the override points at.
-        """
-        if CacheClient._override_announced:
-            return
-        CacheClient._override_announced = True
-        log.information(
-            f"{CacheSettings.Variables.DIRECTORY} redirects the cache to {directory} ({self.describe()})."
-        )

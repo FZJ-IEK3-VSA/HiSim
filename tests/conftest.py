@@ -38,10 +38,12 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 def _isolate_cache_environment() -> Iterator[None]:
     """Clears every ``HISIM_CACHE_*`` variable, so the suite runs the same on every machine.
 
-    ``hisim.utils.get_cache_file`` reads these variables on every call; a developer with
-    ``HISIM_CACHE_DIR`` in a ``.env`` or exported shell would otherwise have cache paths land outside
-    pytest's ``tmp_path`` and see spurious failures. Tests that exercise an override set the variable
-    themselves with ``monkeypatch.setenv``, which applies after this fixture.
+    ``SimulationParameters.cache_locations()`` and ``hisim.utils.get_cache_file`` read these variables on
+    every call; a developer with ``HISIM_CACHE_DIRECTORIES`` in a ``.env`` or exported shell would otherwise
+    have cache paths land outside pytest's ``tmp_path``, and one with a retired ``HISIM_CACHE_DIR`` left
+    over would see every run refused. Every name in ``CacheSettings.Variables`` is cleared, the retired
+    ones included. Tests that exercise a variable set it themselves with ``monkeypatch.setenv``, which
+    applies after this fixture.
 
     The fixture builds its own ``MonkeyPatch`` instead of requesting the ``monkeypatch`` fixture.
     Requesting it would instantiate the shared function-scoped instance before every later fixture,

@@ -4,8 +4,8 @@ Which part of `hisim/` may import which. The graph itself is data, `system_docs/
 explains it. `tests/test_module_graph.py` (marker `base`) checks every import against it, with a ratchet baseline of
 today's violations, `tests/module_graph_baseline.yaml`.
 
-Status: a first draft of the seams design for hisim-ylxf (drawing v5, 2026-11-10). The groups and edges are not yet
-approved by the owner; changing an edge is a change of one `may_import` line in the YAML.
+Status: the seams design for hisim-ylxf, approved by the owner on 2026-11-25 (seams spec,
+`roadmap/hisim_seams_spec.html`). Changing an edge is a change of one `may_import` line in the YAML.
 
 ## Groups
 

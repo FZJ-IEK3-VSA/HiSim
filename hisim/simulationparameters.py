@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from hisim import log
 from hisim.caching.locations import CacheLocations
+from hisim.caching.settings import CacheSettings
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulation_day import SimulationDay
 
@@ -120,15 +121,17 @@ class SimulationParameters:
                 excess generation (e.g., from PV systems). Defaults to True.
             cache_dir_path: Directory path for caching intermediate data (e.g., weather
                 data, processed inputs). Defaults to the 'inputs/cache' directory
-                within the hisim package.
+                within the hisim package. The default cache directory: ``HISIM_CACHE_DIRECTORIES``,
+                when set, replaces it (see :meth:`cache_locations`).
             multiple_buildings: If True, configure the simulation for multiple buildings.
                 Defaults to False (single building).
             log_connections: If True, enable logging of component connections for
                 debugging and verification. Defaults to False.
             cache_directories: Ordered cache directories, read in order and written to the
                 first writable one, for a container that maps a read-only seed directory and a writable
-                one in (hisim-renovisor-translator-epc.22). Empty (the default) means the single
-                ``cache_dir_path``, exactly as before. A single string is one directory, not a
+                one in (hisim-renovisor-translator-epc.22). Given, they outrank ``HISIM_CACHE_DIRECTORIES``.
+                Empty (the default) means the variable's list when it is set, else the single
+                ``cache_dir_path``; see :meth:`cache_locations`. A single string is one directory, not a
                 sequence of one-letter ones. Every entry has to be absolute; see
                 :meth:`validated_cache_directories`.
             weather_year: The year whose weather the run reads, when it is not the calendar year
@@ -683,14 +686,25 @@ class SimulationParameters:
         )
 
     def cache_locations(self) -> "CacheLocations":
-        """The ordered cache directories this calculation reads, and the first writable one it writes.
+        """Return the ordered cache directories this calculation reads, and of which it writes the first writable one.
 
         Every cache reader and writer of a run goes through this, so a container that maps a
         read-only seed directory and a writable one in (hisim-renovisor-translator-epc.22) redirects the whole cache
-        at once. Empty ``cache_directories`` means the single ``cache_dir_path``, exactly the
-        behaviour every caller had before the list existed.
+        at once. The directories are, in this order of precedence: ``cache_directories`` when the
+        parameters were given any (in code or a simulation file), else the list in the environment variable
+        ``HISIM_CACHE_DIRECTORIES`` when it is set, else the single ``cache_dir_path``
+        (:meth:`hisim.caching.settings.CacheSettings.resolve_directories`). Reading the environment here
+        also refuses the retired ``HISIM_CACHE_DIR`` and ``HISIM_CACHE_SHARED_DIR``.
+
+        Returns:
+            CacheLocations: the directories, which registers them with the running calculation's write guard.
+
+        Raises:
+            hisim.caching.settings.CacheSettingsError: When a retired variable is set, or a cache variable
+                holds a value that cannot be used.
         """
-        return CacheLocations(self.cache_directories or [self.cache_dir_path])
+        settings = CacheSettings.from_environment()
+        return CacheLocations(settings.resolve_directories(self.cache_directories, self.cache_dir_path))
 
 
 class FigureFormat(str, enum.Enum):

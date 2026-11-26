@@ -76,13 +76,6 @@ class SimulationSetup:
     #: The logging verbosity of a container run: warnings and above.
     LOGGING_LEVEL: ClassVar[int] = 3
 
-    #: The environment variable holding the ordered cache directories a container maps in,
-    #: separated by :data:`os.pathsep` (hisim-renovisor-translator-epc.22). Every entry must be absolute: a relative
-    #: one would resolve against whatever the worker's working directory happens to be, and two
-    #: workers would then disagree about where the cache is. An explicit ``cache_directory``
-    #: argument to :meth:`parameters` outranks the variable, which is then not consulted.
-    CACHE_DIRECTORIES_VARIABLE: ClassVar[str] = "HISIM_CACHE_DIRECTORIES"
-
     #: The post-processing options the result payload cannot be assembled without.
     #: ``COMPUTE_KPIS`` produces the KPI collection, ``WRITE_KPIS_TO_JSON`` writes it as
     #: ``all_kpis.json``, and ``COMPUTE_LIFECYCLE_COSTS`` produces the cost engine's exports
@@ -115,8 +108,9 @@ class SimulationSetup:
             cache_directory: Where the occupancy and weather caches live, when the caller names
                 one. It is the one location outside the output directory a calculation writes
                 to, and it is shared state rather than output (decision Q25). Given, it is the
-                single cache directory and ``HISIM_CACHE_DIRECTORIES`` is not consulted; absent,
-                the variable fills the ordered directory list when it is set (hisim-renovisor-translator-epc.22).
+                parameters' single cache directory and outranks ``HISIM_CACHE_DIRECTORIES``; absent,
+                ``SimulationParameters.cache_locations()`` reads the variable as for every run, which a
+                container sets to its ordered directory list (hisim-renovisor-translator-epc.22).
                 Either way every cache directory has to be absolute.
             country: The dwelling's country, which selects the legacy fuel-price and emission
                 tables. For a country registered as a placeholder the numbers in them are the
@@ -127,8 +121,7 @@ class SimulationSetup:
             and the lifecycle costs required.
 
         Raises:
-            ValueError: When ``cache_directory`` is relative, or ``HISIM_CACHE_DIRECTORIES`` holds a
-                relative entry or nothing but separators.
+            ValueError: When ``cache_directory`` is relative.
         """
         start = datetime.datetime(cls.YEAR, 1, 1)
         days = period.days
@@ -149,35 +142,15 @@ class SimulationSetup:
         # one without them (owner decision 2026-09-27, renovisorissues #66).
         parameters.require_lifecycle_costs()
         if cache_directory is not None:
-            # The explicit argument outranks the environment: a caller that names a directory
-            # gets exactly that one, and the variable is not consulted.
+            # The explicit argument is the parameters' own list, which outranks the environment:
+            # a caller that names a directory gets exactly that one.
             if not cache_directory.is_absolute():
                 raise ValueError(
                     f"the cache directory {str(cache_directory)!r} is relative; every cache directory has to be "
                     "absolute, so two workers agree on where the cache is whatever their working directory is"
                 )
             cache_directory.mkdir(parents=True, exist_ok=True)
-            parameters.cache_dir_path = str(cache_directory)
-            return parameters
-        env_directories = os.environ.get(cls.CACHE_DIRECTORIES_VARIABLE)
-        if env_directories:
-            directories = [entry for entry in env_directories.split(os.pathsep) if entry]
-            if not directories:
-                raise ValueError(
-                    f"{cls.CACHE_DIRECTORIES_VARIABLE} is {env_directories!r}, which names no directory; "
-                    "unset it to use the default cache directory, or list at least one absolute path"
-                )
-            relative = [entry for entry in directories if not os.path.isabs(entry)]
-            if relative:
-                raise ValueError(
-                    f"{cls.CACHE_DIRECTORIES_VARIABLE} holds relative path(s) {relative!r}; "
-                    "every cache directory has to be absolute, so two workers agree on where "
-                    "the cache is whatever their working directory is"
-                )
-            parameters.cache_directories = directories
-            # Keep the recorded single path consistent with the list the run actually uses. The
-            # writes go to the first writable entry, which the locations resolve at lookup time.
-            parameters.cache_dir_path = directories[0]
+            parameters.cache_directories = [str(cache_directory)]
         return parameters
 
     @classmethod

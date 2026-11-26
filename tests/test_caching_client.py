@@ -15,7 +15,7 @@ from typing import ClassVar
 import pytest
 
 from hisim import utils
-from hisim.caching import CacheClient, CacheEntryMetadata, CacheSettings, atomic_cache_write
+from hisim.caching import CacheClient, CacheEntryMetadata, CacheSettings, CacheSettingsError, atomic_cache_write
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"
@@ -33,6 +33,16 @@ class Given:
     KEY_MATERIAL: ClassVar[str] = '{"location": "Aachen"}2021-01-01###2021-12-31###60'
     COMPONENT_KEY: ClassVar[str] = "Weather"
     PAYLOAD: ClassVar[str] = "index,value\n0,1.5\n"
+
+    @dataclasses.dataclass
+    class Config:
+        """The smallest thing ``get_cache_file`` accepts: something with ``to_json``."""
+
+        name: str = "demo"
+
+        def to_json(self) -> str:
+            """The configuration's JSON, as ``ConfigBase`` would produce it."""
+            return '{"name": "demo"}'
 
     @classmethod
     def client(cls, tmp_path: pathlib.Path, **environment: str) -> CacheClient:
@@ -142,15 +152,15 @@ def test_an_entry_whose_metadata_disagrees_with_its_name_is_discarded(tmp_path: 
 def test_lookup_uses_exactly_the_directory_it_is_given(tmp_path: pathlib.Path) -> None:
     """``lookup`` takes the directory decision as given and does not consult the environment.
 
-    The ``HISIM_CACHE_DIR`` override is applied by the caller through
-    ``CacheSettings.resolve_local_directory`` (pinned in the settings tests and, end to end, in
+    ``HISIM_CACHE_DIRECTORIES`` is resolved by ``SimulationParameters.cache_locations()`` through
+    ``CacheSettings.resolve_directories`` (pinned in the settings tests and, end to end, in
     ``test_an_explicit_directory_argument_outranks_the_environment``). A lookup that second-guessed
-    the caller would apply the override even where an explicit argument had already outranked it.
+    the caller would apply the variable even where an explicit argument had already outranked it.
 
-    Catches: the override resolution creeping back into the lookup.
+    Catches: the directory resolution creeping back into the lookup.
     """
     override = tmp_path / "override"
-    client = Given.client(tmp_path, HISIM_CACHE_DIR=str(override))
+    client = Given.client(tmp_path, HISIM_CACHE_DIRECTORIES=str(override))
 
     entry = client.lookup(Given.COMPONENT_KEY, Given.KEY_MATERIAL, str(tmp_path / "default"))
 
@@ -167,9 +177,9 @@ def test_get_cache_file_returns_exactly_the_path_it_always_did(
     The expected path is computed here from the published rule (digest of the legacy key material under the
     component key), not asked of the client, so this test would notice the client changing the rule.
     """
-    # The suite-wide conftest fixture already clears the override; repeated here so this test stays
-    # hermetic on its own -- it asserts the exact default-directory path, which the override would move.
-    monkeypatch.delenv(CacheSettings.Variables.DIRECTORY, raising=False)
+    # The suite-wide conftest fixture already clears the variable; repeated here so this test stays
+    # hermetic on its own -- it asserts the exact default-directory path, which the variable would move.
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
 
     @dataclasses.dataclass
     class Config:
@@ -201,12 +211,13 @@ def test_get_cache_file_returns_exactly_the_path_it_always_did(
 def test_an_explicit_directory_argument_outranks_the_environment(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A caller that names a directory gets that directory, whatever ``HISIM_CACHE_DIR`` says.
+    """A caller that names a directory gets that directory, whatever ``HISIM_CACHE_DIRECTORIES`` says.
 
     Every test that points ``get_cache_file`` at its own ``tmp_path`` relies on this; without it a
-    developer's override would make those tests write into the developer's cache.
+    developer's variable would make those tests write into the developer's cache. Without the argument,
+    the variable replaces the parameters' default ``cache_dir_path``.
 
-    Catches: the environment override silently redirecting an explicit request.
+    Catches: the environment silently redirecting an explicit request.
     """
 
     @dataclasses.dataclass
@@ -219,7 +230,7 @@ def test_an_explicit_directory_argument_outranks_the_environment(
             """The configuration's JSON."""
             return '{"name": "demo"}'
 
-    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path / "env"))
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path / "env"))
     parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     parameters.cache_dir_path = str(tmp_path / "params")
     explicit = tmp_path / "explicit"
@@ -229,6 +240,94 @@ def test_an_explicit_directory_argument_outranks_the_environment(
 
     assert from_argument.startswith(str(explicit))
     assert from_environment.startswith(str(tmp_path / "env"))
+
+
+@pytest.mark.base
+class TestAPlainRunReadsTheVariable:
+    """``HISIM_CACHE_DIRECTORIES`` names the cache directories of a plain HiSim run, not only RenoVisor's.
+
+    ``SimulationParameters.cache_locations()`` is the one place a run resolves them (owner decision of
+    2026-11-25): the parameters' own list, else the variable's, else ``cache_dir_path``.
+    """
+
+    def test_the_variable_fills_the_list_of_a_plain_run_in_order(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two entries: both are read, in the given order, and the first writable one is written.
+
+        Catches: the variable being read by one entry point only, as it was by RenoVisor alone.
+        """
+        seed, volume = tmp_path / "seed", tmp_path / "volume"
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, os.pathsep.join([str(seed), str(volume)]))
+        parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+
+        locations = parameters.cache_locations()
+
+        assert locations.directories == (str(seed), str(volume))
+        assert locations.write_directory() == str(seed)
+
+    def test_one_entry_is_the_single_cache_directory(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One entry replaces the default ``cache_dir_path``, what ``HISIM_CACHE_DIR`` did before.
+
+        Catches: a single entry being treated differently from the retired single-directory variable.
+        """
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path / "only"))
+        parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+
+        assert parameters.cache_locations().directories == (str(tmp_path / "only"),)
+
+    def test_a_miss_lands_in_the_first_writable_directory_and_a_later_hit_is_read(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``get_cache_file`` over the variable's list: a miss names the first entry, a hit in the second is read.
+
+        Catches: the variable reaching the parameters but not the lookup of a component's cache file.
+        """
+        first, second = tmp_path / "first", tmp_path / "second"
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, os.pathsep.join([str(first), str(second)]))
+        parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+        material = utils.build_cache_key_string(Given.Config(), parameters)
+
+        exists, path = utils.get_cache_file("demo", Given.Config(), parameters)
+        assert not exists and path.startswith(str(first))
+
+        with Given.client(tmp_path).lookup("demo", material, str(second)).writing() as temporary_path:
+            pathlib.Path(temporary_path).write_text(Given.PAYLOAD, encoding="utf-8")
+        exists_after, path_after = utils.get_cache_file("demo", Given.Config(), parameters)
+        assert exists_after and path_after.startswith(str(second))
+
+    def test_the_parameters_own_list_outranks_the_variable(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A list given in code or a simulation file wins; the variable only replaces the default.
+
+        Catches: the environment overriding a list a setup stated on purpose, which ``HISIM_CACHE_DIR`` used to do.
+        """
+        monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path / "environment"))
+        parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+        parameters.cache_directories = [str(tmp_path / "stated")]
+
+        assert parameters.cache_locations().directories == (str(tmp_path / "stated"),)
+
+    @pytest.mark.parametrize(
+        "name", [CacheSettings.Variables.RETIRED_DIRECTORY, CacheSettings.Variables.RETIRED_SHARED_DIRECTORY]
+    )
+    def test_a_retired_variable_fails_the_lookup(
+        self, name: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A run that reaches its cache with a retired variable set fails, naming it, instead of ignoring it.
+
+        Catches: a code path that resolves the cache directories without reading the settings.
+        """
+        monkeypatch.setenv(name, str(tmp_path / "old"))
+        parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
+
+        with pytest.raises(CacheSettingsError, match=name):
+            parameters.cache_locations()
+        with pytest.raises(CacheSettingsError, match=name):
+            utils.get_cache_file("demo", Given.Config(), parameters)
 
 
 @pytest.mark.base

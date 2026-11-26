@@ -217,8 +217,6 @@ def test_an_edit_to_the_producer_or_the_conversion_misses_the_cache(
     Catches: a key that does not follow the producer's code, which is the defect the legacy key had --
     a changed calculation kept serving the profiles the old one wrote.
     """
-    for variable in ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR"):
-        monkeypatch.delenv(variable, raising=False)
     (tmp_path / "code").mkdir()
     probe = ProducerCopy(tmp_path / "code", monkeypatch)
     cache_directory = tmp_path / "cache"

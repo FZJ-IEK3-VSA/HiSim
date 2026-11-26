@@ -535,6 +535,69 @@ class TestTheWoodFuelEmissionFactors:
                 assert factor >= 0.004, (country, entry.carrier.value if hasattr(entry.carrier, "value") else entry.carrier, entry.year, factor)
 
 
+class TestTheNaturalGasEmissionFactors:
+    """Every natural-gas emission factor is stated per kWh of GCV, the basis gas is priced and reported on.
+
+    hisim-gas-emission-factor-basis-3c9e: the gas rows declare `calorific_basis` GROSS, but their factors were the
+    sources' figures per kWh of NCV, so every gas CO2 figure was about 10.9 % high. Owner decision of 2026-11-25:
+    divide each NCV factor by natural gas's GCV over NCV (39.819 / 35.895 = 1.1093), and take a source's own GCV figure where it states
+    one. For example, the GEG Anlage 9 factor of 0.24 kg per kWh of NCV becomes 0.24 / 1.1093 = 0.2163 kg per kWh of
+    GCV. These tests pin each row to its source figure and its conversion.
+    """
+
+    #: The sources' factors per kWh of NCV, in kg CO2(-eq) per kWh, by (country, year): GEG Anlage 9 (240 g/kWh) for
+    #: the legacy German rows, the legacy table's unsourced 0.247 for 2023, and the IPCC 2006 combustion factor
+    #: (56.1 t/TJ, rounded to 0.20) for the AI-estimate rows.
+    NET_FACTORS_IN_KG_PER_KWH_NCV = {
+        **{("DE", year): 0.24 for year in (2018, 2019, 2020, 2021, 2022, 2024, 2050)},
+        ("DE", 2023): 0.247,
+        **{(country, year): 0.20 for country in ("DE", "IE") for year in (2026, 2035)},
+    }
+
+    #: The factors a source states per kWh of GCV itself, taken unconverted: Umweltbundesamt AT REP-0888, Erdgas
+    #: (fossil) (Brennwert), 181 + 44 upstream = 225 g CO2-eq/kWh.
+    GROSS_FACTORS_IN_KG_PER_KWH_GCV = {("AT", 2025): 0.225, ("AT", 2040): 0.225}
+
+    @staticmethod
+    def _natural_gas_rows(database):
+        """Return every shipped natural-gas row as a dict from (country, year) to the row."""
+        return {
+            (country, entry.year): entry
+            for country, entries in database.energy_prices.items()
+            for entry in entries
+            if entry.carrier == EnergyCarrier.NATURAL_GAS
+        }
+
+    def test_every_natural_gas_row_is_pinned_here(self, database):
+        """A new gas row needs its factor's basis checked, so it fails here until it is added to one of the tables."""
+        pinned = set(self.NET_FACTORS_IN_KG_PER_KWH_NCV) | set(self.GROSS_FACTORS_IN_KG_PER_KWH_GCV)
+
+        assert set(self._natural_gas_rows(database)) == pinned
+
+    def test_an_ncv_factor_is_divided_by_gross_over_net(self, database):
+        """Each NCV source figure over natural gas's GCV/NCV of 1.1093, rounded to four decimals, is the shipped factor."""
+        from hisim.components.generic_boiler import BoilerEfficiencySources  # deferred: no top-level component imports here
+
+        gross_over_net = BoilerEfficiencySources.gross_over_net(lt.LoadTypes.GAS)
+        assert gross_over_net == pytest.approx(1.1093, abs=5e-5)
+        rows = self._natural_gas_rows(database)
+        for key, net_factor in self.NET_FACTORS_IN_KG_PER_KWH_NCV.items():
+            assert rows[key].emission_factor_in_kg_per_kwh == round(net_factor / gross_over_net, 4), key
+
+    def test_a_gcv_factor_is_the_sources_own_figure(self, database):
+        """The Austrian rows ship the source's Brennwert figure, and their notes say so."""
+        rows = self._natural_gas_rows(database)
+        for key, gross_factor in self.GROSS_FACTORS_IN_KG_PER_KWH_GCV.items():
+            assert rows[key].emission_factor_in_kg_per_kwh == pytest.approx(gross_factor), key
+            assert "Brennwert" in rows[key].notes, key
+
+    def test_every_natural_gas_row_states_its_conversion_in_its_notes(self, database):
+        """The notes name the decision, so a reader of the data file finds why the factor differs from its source."""
+        for key, entry in self._natural_gas_rows(database).items():
+            assert entry.notes is not None and "hisim-gas-emission-factor-basis-3c9e" in entry.notes, key
+            assert "per kWh of GCV" in entry.notes, key
+
+
 class TestCalorificBasisOfPriceRows:
     """Every fuel row states the calorific basis of its price and emission factor (hisim-boiler-fuel-one-basis-b7e2).
 

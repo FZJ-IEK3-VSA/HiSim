@@ -49,7 +49,6 @@ import argparse
 import contextlib
 import dataclasses
 import datetime
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -107,7 +106,9 @@ class OracleWindow:
             reference: whether to build the reference, which starts on 1 January of the window's year
                 and ends with the window.
             result_directory: where the run writes; created when missing.
-            cache_directory: the run's own cache directory; created when missing.
+            cache_directory: the run's own cache directory; created when missing. It is the parameters' own
+                directory list, which outranks ``HISIM_CACHE_DIRECTORIES``, so each run gets the cache
+                directory it is given whatever the environment says.
 
         Returns:
             SimulationParameters: the parameters, with no post-processing options.
@@ -121,7 +122,7 @@ class OracleWindow:
             seconds_per_timestep=self.seconds_per_timestep,
             result_directory=str(result_directory),
             post_processing_options=[],
-            cache_dir_path=str(cache_directory),
+            cache_directories=[str(cache_directory)],
         )
 
 
@@ -250,7 +251,7 @@ class OracleRun:
             effective = simulator.get_simulation_parameters()
             effective.post_processing_options = []
             effective.result_directory = parameters.result_directory
-            effective.cache_dir_path = parameters.cache_dir_path
+            effective.cache_directories = list(parameters.cache_directories)
         else:
             # pylint: disable-next=import-outside-toplevel
             from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
@@ -419,14 +420,6 @@ class Verdict:
 class MidyearOracle:
     """Runs the four runs of one window and builds the verdict."""
 
-    #: The cache environment variables that would redirect every run into one shared cache; the oracle
-    #: removes them so that each run gets the empty cache directory it is given.
-    CACHE_ENVIRONMENT: ClassVar[Tuple[str, ...]] = (
-        "HISIM_CACHE_DIR",
-        "HISIM_CACHE_DIRECTORIES",
-        "HISIM_CACHE_SHARED_DIR",
-    )
-
     def __init__(self, setup: Path, window: OracleWindow, tolerance: float, work_directory: Path) -> None:
         """Remember what to run and where.
 
@@ -447,8 +440,6 @@ class MidyearOracle:
         Returns:
             Verdict: the outcome.
         """
-        for variable in self.CACHE_ENVIRONMENT:
-            os.environ.pop(variable, None)
         reference = self.simulate("reference", reference=True)
         perturbation = Perturbation()
         with perturbation.applied():

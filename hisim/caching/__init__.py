@@ -1,8 +1,9 @@
 """Public API of the HiSim cache client (``roadmap/cache_service_spec.md`` §4).
 
 Phase 1 of §10 is implemented: the local tier (``local``), the settings (``settings``), the key scheme
-(``keys``) and a client with one tier behind it (``client``). The remote and shared-directory tiers and
-the dataset retrieval come with later phases and will be re-exported from here.
+(``keys``) and a client with one tier behind it (``client``). The remote tier and
+the dataset retrieval come with later phases and will be re-exported from here; the shared-directory tier
+was dropped on 2026-11-25, since an ordered ``HISIM_CACHE_DIRECTORIES`` list covers it.
 
 This package sits at the same layer as ``hisim/config/`` and is imported by components and by
 ``hisim/utils.py``. It therefore imports only the standard library and ``hisim.log`` -- never a component,

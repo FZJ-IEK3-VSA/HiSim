@@ -453,12 +453,41 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             "maximal_thermal_power_in_watt": MoreAdvancedHeatPumpHPLib.refuse_an_impossible_thermal_power(config)
         }
 
+    @staticmethod
+    def minimum_time_facts(config: "MoreAdvancedHeatPumpHPLibConfig", ctx: SizingContext) -> dict:
+        """Contribute the machine's minimum running and idle times for its space-heating controller, in s.
+
+        The times are the machine's device protection (:attr:`minimum_running_time_in_seconds`,
+        :attr:`minimum_idle_time_in_seconds`). A machine that does not cycle (``cycling_mode`` false) keeps no minimum
+        and contributes 0 s for both. For example, the preset machine contributes 600 s and 600 s. The space-heating
+        controller floors the run and the pause of the cycles it estimates above the part-load threshold at them.
+
+        Args:
+            config: This heat pump configuration, fully resolved.
+            ctx: The sizing context; unused, the values are this config's own.
+
+        Returns:
+            The two facts named in :attr:`SIZING_CONTRIBUTIONS`, each in s or None where the cycling machine states
+            none, which the heat pump refuses in its first step.
+        """
+        del ctx
+        if not config.cycling_mode:
+            return {"minimum_running_time_in_seconds": 0.0, "minimum_idle_time_in_seconds": 0.0}
+        return {
+            "minimum_running_time_in_seconds": config.minimum_running_time_in_seconds,
+            "minimum_idle_time_in_seconds": config.minimum_idle_time_in_seconds,
+        }
+
     #: Sizing facts this config contributes: its resolved thermal output power, under the name
     #: the heating-generator family shares, so a buffer vessel sizes from a heat pump exactly
     #: as it sizes from a boiler. With two generators in one scenario each is addressable as
     #: "<its name>.maximal_thermal_power_in_watt" and a consumer must say which one it means.
+    #: Beside it the minimum running and idle times, which its space-heating controller reads.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
         FactContribution(facts=("maximal_thermal_power_in_watt",), compute=sizing_facts),
+        FactContribution(
+            facts=("minimum_running_time_in_seconds", "minimum_idle_time_in_seconds"), compute=minimum_time_facts
+        ),
     )
 
     @preset

@@ -4882,6 +4882,45 @@
                         "const": "AUTO"
                       }
                     ]
+                  },
+                  "storage_heat_capacity_in_joule_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heat_pump_minimum_running_time_in_seconds": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heat_pump_minimum_idle_time_in_seconds": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
@@ -4890,7 +4929,10 @@
                 "propertyNames": {
                   "enum": [
                     "heat_distribution_system_type",
-                    "set_heating_temperature_in_celsius"
+                    "minimum_idle_time_in_seconds",
+                    "minimum_running_time_in_seconds",
+                    "set_heating_temperature_in_celsius",
+                    "storage_heat_capacity_in_joule_per_kelvin"
                   ]
                 }
               }

@@ -71,6 +71,14 @@ class SizingContext:
     set_cooling_temperature_in_celsius: FactValue = None
     roof_area_in_m2: FactValue = None
     pv_peak_power_in_watt: FactValue = None
+    #: The heat a water store takes per kelvin it warms, its water mass times water's specific heat, in J/K. The
+    #: space-heating buffer contributes it; the heat pump's space-heating controller reads it to estimate how often
+    #: the machine cycles on the buffer's hysteresis band where a step is longer than a cycle.
+    storage_heat_capacity_in_joule_per_kelvin: FactValue = None
+    #: The shortest run a heat generator keeps once it started, in s, its device protection; 0 for none.
+    minimum_running_time_in_seconds: FactValue = None
+    #: The shortest pause a heat generator keeps once it stopped, in s, its device protection; 0 for none.
+    minimum_idle_time_in_seconds: FactValue = None
     #: Where the building's technical room is, the heated zone or an unheated space: the place every device stands
     #: unless its own configuration names another one. The building derives it from its TABULA row's cellar code.
     technical_room_location: Optional["InstallationLocation"] = None
@@ -174,6 +182,10 @@ class Size:
     SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")
     ROOF_AREA_IN_M2: ClassVar[_FactTerm] = _FactTerm("roof_area_in_m2")
     PV_PEAK_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("pv_peak_power_in_watt")
+    STORAGE_HEAT_CAPACITY_IN_JOULE_PER_KELVIN: ClassVar[_FactTerm] = _FactTerm(
+        "storage_heat_capacity_in_joule_per_kelvin")
+    MINIMUM_RUNNING_TIME_IN_SECONDS: ClassVar[_FactTerm] = _FactTerm("minimum_running_time_in_seconds")
+    MINIMUM_IDLE_TIME_IN_SECONDS: ClassVar[_FactTerm] = _FactTerm("minimum_idle_time_in_seconds")
     TECHNICAL_ROOM_LOCATION: ClassVar[_FactTerm] = _FactTerm("technical_room_location")
     ENERGY_CARRIER: ClassVar[_FactTerm] = _FactTerm("energy_carrier")
     HEATING_VALUE_OF_FUEL_IN_KWH_PER_LITER: ClassVar[_FactTerm] = _FactTerm(

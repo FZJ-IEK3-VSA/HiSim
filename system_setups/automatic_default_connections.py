@@ -145,12 +145,45 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_heat_distribution_controller_config
     )
 
+    # The heat pump's and the buffer's configurations are resolved before the space-heating controller's: the
+    # controller copies the buffer's heat capacity and the heat pump's minimum times, which the two contribute.
+    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
+        "MoreAdvancedHeatPumpHPLib"
+    ).resolve(
+        SizingContext(
+            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=(
+                my_weather_config.heating_reference_temperature_in_celsius
+            ),
+        )
+    )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
+
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
+        "SimpleHotWaterStorage"
+    )
+    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
+    # so the option is set on the preset before the configuration is resolved.
+    my_simple_heat_water_storage_config.sizing_option = (
+        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+    )
+    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
+        SizingContext(
+            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt),
+            technical_room_location=concrete(my_building_config.technical_room_location),
+        )
+    )
+
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = (
         MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.preset_standard(
             "MoreAdvancedHeatPumpHPLibControllerSH"
         ).resolve(
             SizingContext(
+                **MoreAdvancedHeatPumpHPLibConfig.minimum_time_facts(my_heatpump_config, SizingContext()),
+                **simple_water_storage.SimpleHotWaterStorageConfig.sizing_facts(
+                    my_simple_heat_water_storage_config, SizingContext()
+                ),
                 set_heating_temperature_in_celsius=concrete(
                     my_building_information.set_heating_temperature_for_building_in_celsius
                 ),
@@ -175,18 +208,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Pump (for dhw and space heating)
-    my_heatpump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water(
-        "MoreAdvancedHeatPumpHPLib"
-    ).resolve(
-        SizingContext(
-            heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=(
-                my_weather_config.heating_reference_temperature_in_celsius
-            ),
-        )
-    )
-    my_heatpump_config.with_domestic_hot_water_preparation = True
-
     my_heatpump = MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -216,20 +237,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.preset_buffer(
-        "SimpleHotWaterStorage"
-    )
-    # The litres-per-kilowatt figure is per kind of generator, and the volume law reads the field,
-    # so the option is set on the preset before the configuration is resolved.
-    my_simple_heat_water_storage_config.sizing_option = (
-        simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
-    )
-    my_simple_heat_water_storage_config = my_simple_heat_water_storage_config.resolve(
-        SizingContext(
-            maximal_thermal_power_in_watt=concrete(my_heatpump_config.set_thermal_output_power_in_watt),
-            technical_room_location=concrete(my_building_config.technical_room_location),
-        )
-    )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,

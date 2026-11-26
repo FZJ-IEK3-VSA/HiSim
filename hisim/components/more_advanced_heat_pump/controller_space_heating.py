@@ -106,6 +106,24 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(
         rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS
     )
+    #: The heat the space-heating buffer takes per kelvin, in J/K, copied from the buffer. Above the part-load
+    #: threshold the controller estimates from it how often the heat pump cycles on the buffer's hysteresis band
+    #: (:meth:`MoreAdvancedHeatPumpHPLibControllerSpaceHeating.starts_per_step_of_hysteresis_cycle`). Sizable: left
+    #: ``AUTO`` it is the buffer's own heat capacity; a stated value wins. ``None`` (``null`` in a file) is a system
+    #: without a buffer: the controller then estimates no starts, and the heat pump counts its own.
+    storage_heat_capacity_in_joule_per_kelvin: Sizable[Optional[float]] = sized_field(
+        rule=Size.STORAGE_HEAT_CAPACITY_IN_JOULE_PER_KELVIN, optional=True
+    )
+    #: The heat pump's minimum running time, in s, copied from the heat pump: the shortest on phase of an estimated
+    #: cycle. Sizable: left ``AUTO`` it is the heat pump's own; ``None`` means no minimum.
+    heat_pump_minimum_running_time_in_seconds: Sizable[Optional[float]] = sized_field(
+        rule=Size.MINIMUM_RUNNING_TIME_IN_SECONDS, optional=True, unit=Units.SECONDS
+    )
+    #: The heat pump's minimum idle time, in s, copied from the heat pump: the shortest off phase of an estimated
+    #: cycle. Sizable: left ``AUTO`` it is the heat pump's own; ``None`` means no minimum.
+    heat_pump_minimum_idle_time_in_seconds: Sizable[Optional[float]] = sized_field(
+        rule=Size.MINIMUM_IDLE_TIME_IN_SECONDS, optional=True, unit=Units.SECONDS
+    )
 
     @preset
     @classmethod
@@ -116,14 +134,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         hysteresis band either side of the requested flow temperature, and no cooling below
         20 °C outside. What the preset does not fix is the emitter type and the room setpoint,
         which stay ``AUTO`` so that they are copied from the heat distribution controller and the
-        building instead of repeating their choices here. The heating season comes from the
+        building instead of repeating their choices here, nor the buffer's heat capacity and the
+        heat pump's minimum running and idle times, copied from the buffer and the heat pump for
+        the cycle estimate above the part-load threshold. The heating season comes from the
         heating curve.
 
         Args:
             name: Instance name of the controller in the simulation.
 
         Returns:
-            The configuration, with its two sizable fields still ``AUTO``.
+            The configuration, with its five sizable fields still ``AUTO``.
         """
         return cls(component_id=ComponentID(name=name))
 

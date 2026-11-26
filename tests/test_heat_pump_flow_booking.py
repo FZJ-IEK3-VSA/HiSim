@@ -227,7 +227,8 @@ class SingleStep:
             position: Where its storage sits: ``PARALLEL`` (hplib's flow) or ``SERIES`` (the nominal flow).
             seconds_per_timestep: The step length of its simulation, in s; above 600 s it runs part-load ratios.
             cycling_mode: Whether it keeps a minimum running and idle time, 3600 s each; off by default, so a step
-                runs the mode the inputs command.
+                runs the mode the inputs command. 3600 s rather than the preset's 600 s, so that the times outlast a
+                900 s step and a test sees whether a step started them.
         """
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0

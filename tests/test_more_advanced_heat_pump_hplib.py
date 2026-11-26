@@ -10,6 +10,7 @@ from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,
 )
+from hisim.components.more_advanced_heat_pump.hplib_operation import HeatPumpRunTimers
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ComponentID, SizingContext
@@ -409,3 +410,82 @@ def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(i
     expected_hours = sum(is_active_profile) * simpars.seconds_per_timestep / 3600
     assert heating_hours == pytest.approx(expected_hours)
     assert cooling_hours == pytest.approx(expected_hours)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("mode_before", "seconds_in_mode", "expected_mode"),
+    [(1, 540, 1), (1, 600, 0), (2, 540, 2), (2, 600, 0), (-1, 540, -1), (-1, 600, 0)],
+    ids=[
+        "space_heating_540_s_keeps_heating",
+        "space_heating_600_s_stops",
+        "hot_water_540_s_keeps_heating",
+        "hot_water_600_s_stops",
+        "cooling_540_s_keeps_cooling",
+        "cooling_600_s_stops",
+    ],
+)
+def test_a_machine_asked_to_stop_runs_on_until_the_default_minimum_running_time_of_600_s(
+    mode_before: int, seconds_in_mode: int, expected_mode: int
+) -> None:
+    """The preset's minimum running time is 600 s, and a stop is obeyed exactly at it, not one step later.
+
+    A machine that has heated (1 space heating, 2 hot water) or cooled (-1) for 540 s and is asked to stop (0) keeps
+    its mode; at 600 s it stops. Catches a default that drifts from the sourced 600 s (it was 3600 s, which held
+    every 60 s run on for an hour) and a comparison at the edge that cuts the minimum short or holds it one step longer.
+    """
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
+    minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
+    assert minimum_running_time_in_seconds == 600 and minimum_idle_time_in_seconds == 600
+    heating_seconds = seconds_in_mode if mode_before in (1, 2) else 0
+    cooling_seconds = seconds_in_mode if mode_before == -1 else 0
+    timers = HeatPumpRunTimers(
+        time_on_heating_in_seconds=heating_seconds, time_on_cooling_in_seconds=cooling_seconds, time_off_in_seconds=0
+    )
+    mode = MoreAdvancedHeatPumpHPLib.on_off_after_minimum_times(
+        on_off=0,
+        on_off_previous=mode_before,
+        timers=timers,
+        minimum_running_time_in_seconds=minimum_running_time_in_seconds,
+        minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+    )
+    assert mode == expected_mode
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("requested_mode", "seconds_off", "expected_mode"),
+    [(1, 540, 0), (1, 600, 1), (2, 540, 0), (2, 600, 2), (-1, 540, 0), (-1, 600, -1)],
+    ids=[
+        "space_heating_after_540_s_stays_off",
+        "space_heating_after_600_s_starts",
+        "hot_water_after_540_s_stays_off",
+        "hot_water_after_600_s_starts",
+        "cooling_after_540_s_stays_off",
+        "cooling_after_600_s_starts",
+    ],
+)
+def test_a_machine_asked_to_start_rests_until_the_default_minimum_idle_time_of_600_s(
+    requested_mode: int, seconds_off: int, expected_mode: int
+) -> None:
+    """The preset's minimum idle time is 600 s, and a start is obeyed exactly at it, not one step later.
+
+    A machine that has been off for 540 s and is asked to heat space (1), heat water (2) or cool (-1) stays off; at
+    600 s it starts in the requested mode. Catches a default that drifts from the sourced 600 s (it was 3600 s, which
+    held the machine off through the evening's hot-water draws at 60 s) and a comparison at the edge that cuts the
+    rest short or holds it one step longer.
+    """
+    config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
+    minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
+    minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
+    assert minimum_running_time_in_seconds == 600 and minimum_idle_time_in_seconds == 600
+    timers = HeatPumpRunTimers(time_on_heating_in_seconds=0, time_on_cooling_in_seconds=0, time_off_in_seconds=seconds_off)
+    mode = MoreAdvancedHeatPumpHPLib.on_off_after_minimum_times(
+        on_off=requested_mode,
+        on_off_previous=0,
+        timers=timers,
+        minimum_running_time_in_seconds=minimum_running_time_in_seconds,
+        minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+    )
+    assert mode == expected_mode

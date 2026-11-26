@@ -6,8 +6,7 @@ human reviewer.
 **Related:** HiSim SoftwareX paper, section "Verification suite" and illustrative example
 "Verification against ANSI/ASHRAE 140 and EN ISO 52016-1".
 
-**Changes in revision 6** (re-check against `origin/main` after the merge of 2026-11-03, gap
-analysis §7)
+**Changes in revision 6** (re-check against `origin/main` after the merge of 2026-11-03)
 
 - The mass-state finding F1 is fixed on `main` (PR #1079): the state carries θ_m,t. The F1
   register entry leaves §3.1 and §8.3; bead hisim-x6c7.1 is proposed for closure (D15).
@@ -17,13 +16,12 @@ analysis §7)
 - Every test carries exactly one job marker (`system_docs/testing.md` §2); the marker
   `verification` needs D14 (§5, §9.1, §9.2, §11 step 2a, §A).
 - The EPW reader also supplies the relative humidity and an entry in the station-header reader;
-  the weather is window-aware on `main` (gap analysis §7.2 row 9), the rest of FR6 is unchanged.
+  the weather is window-aware on `main`, the rest of FR6 is unchanged.
 
 **Changes in revision 5** (decisions on §3.2.1, 3.2.3 and 3.2.4; standards opened, 2026-11-02)
 
 - §3.2.1, 3.2.3 and 3.2.4 decided as recommended: printed U-values and no thermal bridges; the
-  ISO 13786 effective-thickness rule with all three conditions; actual A_tot and A_m by formula
-  (gap analysis D10 to D12).
+  ISO 13786 effective-thickness rule with all three conditions; actual A_tot and A_m by formula.
 - The explicit building description takes κ per element; the layer-to-κ rule of §3.2.3 is applied
   in the suite's system builder, not in HiSim (FR2, §11 steps 2 and 3; two step-2 PRs).
 - ISO 13790 is available as the FDIS text of 2007, the text HiSim was built from; ISO 13786 is
@@ -35,21 +33,20 @@ analysis §7)
   into any file, not even a temporary one.
 - Added 2026-11-03: `verification_spec` branched from `main` on 2026-10-12 and `main` has moved
   since (building, weather, CSV loader, component base, pytest configuration). Before step 2,
-  `origin/main` is merged into `verification_spec` and the gap-analysis rows for the changed
-  files are re-checked (§A).
+  `origin/main` is merged into `verification_spec` and the capability rows of §5 for the
+  changed files are re-checked (§A).
 
-**Changes in revision 4** (decisions of the human on the gap analysis,
-`docs/verification/gap_analysis.md`, 2026-11-02)
+**Changes in revision 4** (decisions of the human on the gap analysis, 2026-11-02)
 
 - The mass-state finding F1 (state = mid-step average, 2·C_m dynamics) is recorded as a `model`
   register entry; no code change before the first full report (§3.1, §8.3).
 - The thermostat is the Building's C.4 step; the ideal heater stays unchanged; air control in
   every suite (§3.1, §3.2.10, FR4).
-- §3.2.8 and §3.2.9 resolved; ground reflectance 0.2 is the standard's value (F3, F4).
+- §3.2.8 and §3.2.9 resolved; ground reflectance 0.2 is the standard's value.
 - Warm-up: two-pass run instead of a prepended month (§3.2.11).
 - The `iso52016` suite is deferred: feeding irradiance per orientation needs a new Building
   input, which rule 3 excludes for phase 1 (§2.1, §7.4, §11).
-- Explicit building description as a second parameter source (FR2, gap analysis D6, option C);
+- Explicit building description as a second parameter source (FR2);
   constant gains through the existing `CSVLoader` (FR7); no new component besides the EPW reader.
 - Rule added: a case is `not_modelled` when its defining feature is missing; a mechanism missing
   for all cases alike is a register entry (§0 rule 3).
@@ -119,11 +116,11 @@ analysis §7)
       program cannot model; note the result in `docs/verification/README.md`. *Before step 6.*
 - [ ] Fill `iso52016_tables_28_34.json` from Tables 28 to 34, using the corrected Case 900
       columns (§7.3). *Before step 7; deferred with the ISO suite (§2.1).*
-- [x] `origin/main` merged into `verification_spec` on 2026-11-03 (`389ac8c0`); gap analysis §7
-      re-checks the rows for the files changed on `main` since 2026-10-12 (bead hisim-x6c7.7).
+- [x] `origin/main` merged into `verification_spec` on 2026-11-03 (`389ac8c0`); the capability
+      rows of §5 re-checked for the files changed on `main` since 2026-10-12 (bead hisim-x6c7.7).
 - [x] D14: the new job marker `verification`, run by the catch-all CI job, the suite's unit tests
       carrying `base` (option (a)); D15: hisim-x6c7.1 closed as superseded by `main` PR #1079.
-      Both decided 2026-11-03 (gap analysis §7.4).
+      Both decided 2026-11-03.
 - [ ] Verify the [verify] items of §3.2 and Appendix B against the standards. ISO 13790 items
       checked against the FDIS 2007 text on 2026-11-02 (§3.1, §3.2.3 to 3.2.5, 3.2.9, 3.2.10,
       Appendix B.4). Open: the ASHRAE 140 items, the layer data of Appendix B (Tables 7-2,
@@ -146,14 +143,14 @@ analysis §7)
       known deviation is set. The agent never sets these (rule 10).
 - [x] The four conditions of the BESTEST-GSR licence (§12) accepted on 2026-11-02 for the
       redistribution of `725650TYCST.epw` and `LICENSE.md` in the HiSim repository.
-- [x] Gap analysis reviewed on 2026-11-02; decisions D1 to D9 recorded in
-      `docs/verification/gap_analysis.md` §4 and in this revision.
+- [x] Gap analysis reviewed on 2026-11-02; its decisions are recorded in this spec (notes of
+      revision 4 and the sections they concern).
 - [x] Warm-up: two-pass run (§3.2.11), decided 2026-11-02.
 - [x] Input-mapping decisions of §3.2.1, 3.2.3 and 3.2.4 confirmed on 2026-11-02 as
-      recommended (gap analysis D10 to D12); §3.2.8 to 3.2.11 were decided on 2026-11-02.
+      recommended; §3.2.8 to 3.2.11 were decided on 2026-11-02.
 - [x] The agent reads the standards in the private folder to resolve [verify] marks; only
       clause and table numbers and the suite's own derived values enter the repository
-      (2026-11-02, gap analysis D13). The standards are read in place; no text of a standard
+      (2026-11-02). The standards are read in place; no text of a standard
       is extracted or copied into any file, not even a temporary one (2026-11-03).
 - [x] Thermostat variable: air control with a register entry (§3.2.10), decided 2026-11-02; the
       ideal heater stays unchanged.
@@ -303,22 +300,22 @@ change the formal result at all.
 - The thermostat is the Building's two-step demand procedure (ISO 13790, clause C.4) on the zone
   air temperature, which is what ASHRAE 140 requires (7.2.1.13 [verify]); the setpoints are
   `BuildingConfig` fields; the ideal heater delivers the power its L1 controller sets, and that
-  controller copies the Building's demand, so the delivered power is the demand (gap analysis
-  F2 and §7.1).
+  controller copies the Building's demand, so the delivered power is the demand.
 - The thermal-mass update divides C_m by the simulation time step, not by 3600 s
   (`hisim/components/building/building.py`, equation (C.4)), so the scheme is time-step aware and
-  consistent at 900 s and 60 s (gap analysis §6.1). The state carried into the next step is
+  consistent at 900 s and 60 s (a free decay of the mass node at 3600, 900 and 60 s matched the
+  analytic solution, 2026-11-02). The state carried into the next step is
   θ_m,t of equation (C.4) since `main` PR #1079; the mid-step average of (C.9) serves the surface
   and air equations of the step and is published as the mass-temperature output (equations
   checked against the FDIS 2007 text). The 2·C_m finding of 2026-11-02 concerned the code before
-  that PR (gap analysis F1 and §7.1; D15).
+  that PR (D15).
 - Solar gains enter the model as irradiance on each window's plane times the window's
   effective collecting area (ISO 13790 clause 11 [verify]); the model itself needs no
   beam/diffuse split. HiSim's window optics compute that plane irradiance from DNI, DHI
   and GHI with a constant F_w per window; a bypass for the ISO suite would need a new Building
   input (§7.4, deferred).
 - Today the building is parametrised from a TABULA/EPISCOPE row; explicit parametrisation
-  is added in step 2 as a second parameter source (§5, §11, gap analysis D6).
+  is added in step 2 as a second parameter source (§5, §11).
 
 ### 3.2 Input-mapping rules (case description → 5R1C parameters)
 
@@ -400,14 +397,14 @@ register (§8.3).
     ISO: control on the operative temperature (7.2.2.1 [verify]), same setpoints and the same
     setback for 640 and 940 (7.2.2.15 [verify]). Operative temperature in the 5R1C model:
     θ_op = 0.3·θ_air + 0.7·θ_s (ISO 13790 Annex C, equation (C.12)). The thermostat is the
-    Building's C.4 step, not the heater's (gap analysis F2), so an operative-temperature option
+    Building's C.4 step, not the heater's, so an operative-temperature option
     would be a Building change. Decided 2026-11-02: air control in every suite, register entry
     `model` ("Thermostat acts on θ_air (ISO 13790, clause C.4 procedure); EN ISO 52016-1 controls
     on the operative temperature"). The 640/940 setback uses the existing `NightSetbackController`
     and `BuildingTemperatureModifierInKelvin` (heating setpoint only, 23:00 ≤ t < 07:00); capacity is
     unlimited. *[decided 2026-11-02]*
 11. **Warm-up.** HiSim lays exactly one calendar year and can neither prepend a month nor start
-    in December (gap analysis row 17). Decided 2026-11-02: two-pass run per (case, time step):
+    in December. Decided 2026-11-02: two-pass run per (case, time step):
     pass 1 the full year from `initial_internal_temperature_in_celsius`, pass 2 the full year
     from the mass temperature at the end of pass 1; results from pass 2 only. The method and the
     carried state are written to the parameters output; register entry `input_mapping`. The
@@ -423,9 +420,9 @@ register (§8.3).
 | ID | Requirement |
 |---|---|
 | FR1 | Test cases are defined declaratively in YAML files, one file per case, validated against a schema. A case may declare `derives_from: <case>` and override fields; the loader resolves the inheritance and writes the resolved case to the output. |
-| FR2 | The building can be created from an explicit description without a TABULA code: zone geometry (floor area, volume, internal surface area), opaque elements (area, U-value, κ), windows (orientation, area, U, g_n, frame fraction, F_w), infiltration in ACH, thermal-bridge allowance. Implemented as a second parameter source beside TABULA, not as overrides of a TABULA row (decided 2026-11-02: `building_code` optional, new field `explicit_description`, derivation pipeline in `hisim/components/building/explicit.py`; gap analysis D6, option C). |
+| FR2 | The building can be created from an explicit description without a TABULA code: zone geometry (floor area, volume, internal surface area), opaque elements (area, U-value, κ), windows (orientation, area, U, g_n, frame fraction, F_w), infiltration in ACH, thermal-bridge allowance. Implemented as a second parameter source beside TABULA, not as overrides of a TABULA row (decided 2026-11-02: `building_code` optional, new field `explicit_description`, derivation pipeline in `hisim/components/building/explicit.py`). |
 | FR3 | The 5R1C parameters (H_tr_op, H_tr_w, H_tr_em, H_tr_ms, H_tr_is, H_ve, C_m, A_m, A_tot, scaled ACH, F_w per window) are derived by the rules of §3.2 and written to `parameters/<case>.json`. |
-| FR4 | Ideal heating and cooling with setpoints (`BuildingConfig`), unlimited capacity, the 640/940 setback through `NightSetbackController` and `BuildingTemperatureModifierInKelvin`, control on the air temperature; the ideal heater and its L1 controller are used unchanged, wired Building → controller → heater → Building: the controller sets the heater's power to the Building's demand and the heater's output is the delivered thermal power (gap analysis §7.1). No power limit and no control-variable option in phase 1 (decided 2026-11-02). |
+| FR4 | Ideal heating and cooling with setpoints (`BuildingConfig`), unlimited capacity, the 640/940 setback through `NightSetbackController` and `BuildingTemperatureModifierInKelvin`, control on the air temperature; the ideal heater and its L1 controller are used unchanged, wired Building → controller → heater → Building: the controller sets the heater's power to the Building's demand and the heater's output is the delivered thermal power. No power limit and no control-variable option in phase 1 (decided 2026-11-02). |
 | FR5 | Free-floating mode (no heating/cooling). |
 | FR6 | Weather input from the file specified in the case. EPW is read natively (reader labelling the records in the station's fixed UTC offset from the file's LOCATION line). *Amendment (2026-11-03, step 2a):* `interpolate` pads the year in the zone the series' own index carries instead of a hard-coded one; the zone is derived from the series, not passed as a parameter, so the two cannot disagree, and the German sources keep the same padding instants. The ISO climate path of §7.4 is deferred with that suite. Sub-hourly values by a fixed, documented interpolation (default: linear, as in the weather component). No implicit default weather. |
 | FR7 | Constant internal gains in W through the existing `CSVLoader` (no new component); constant infiltration in ACH with the density scaling of §3.2.6. The node split is the model's (§3.2.7) and is documented. |
@@ -443,8 +440,7 @@ register (§8.3).
 
 ## 5. Step 1: Gap analysis (first deliverable)
 
-Complete this table in `docs/verification/gap_analysis.md` and link it in the PR
-description. The columns "Where in code" and "Status" were pre-filled from a reading of
+Complete this table in a working document for the review, outside the repository. The columns "Where in code" and "Status" were pre-filled from a reading of
 the code on 2026-11-02; confirm or correct every row and fill "Proposed change".
 
 | Capability | Where in code (pre-filled) | Status (pre-filled) | Proposed change |
@@ -469,10 +465,10 @@ the code on 2026-11-02; confirm or correct every row and fill "Proposed change".
 | Result directory and write guard for `BESTEST_output/` (§10) | `hisim/write_guard.py`, `hisim/calculation_scope.py`, `ResultPathProviderSingleton` | exists; the exporter must write inside the registered result directory | |
 | Golden-reference integration (FR17) | `golden_references/`, `scripts/golden_*.py`, `golden_ref_spec.md` | exists for system-setup KPIs; the verification results need their own entry point or a KPI export | |
 | Run time of an annual simulation at 60 s | – | to be measured | |
-| Existing test framework, markers, CI workflows | `pytest.ini` (markers `base`, `extendedbase`, `buildingtest`, …), `.github/workflows/` (`tests.yml`, `golden-*.yml`, …) | exists; every test carries exactly one job marker (`system_docs/testing.md` §2, `tests/job_markers.py`); the marker `verification` follows D14 (gap analysis §7.4); CI target is GitLab on JuGit later (§9.3) | |
+| Existing test framework, markers, CI workflows | `pytest.ini` (markers `base`, `extendedbase`, `buildingtest`, …), `.github/workflows/` (`tests.yml`, `golden-*.yml`, …) | exists; every test carries exactly one job marker (`system_docs/testing.md` §2, `tests/job_markers.py`); the marker `verification` follows D14 (§A); CI target is GitLab on JuGit later (§9.3) | |
 
-Done on 2026-11-02: the completed table, the findings and the decisions are in
-`docs/verification/gap_analysis.md`.
+Done on 2026-11-02: the completed table and the findings were reviewed as a working document
+outside the repository; the decisions are recorded in this spec.
 
 **Stop and wait for confirmation.** In particular, flag any item that needs changes to
 public interfaces of existing components, any sign that the 5R1C implementation is not
@@ -516,7 +512,6 @@ tests/verification/
   test_verification_suites.py   # slow: runs cases, job marker `verification` (D14); skips without HISIM_VERIFICATION_DATA
 docs/verification/
   README.md                # purpose, usage, input mapping, deviation register, limitations, data/licence notes
-  gap_analysis.md          # step 1
 ```
 
 The weather folder follows the existing catalogue layout (`hisim/inputs/weather/<source>/<location>/`)
@@ -645,7 +640,7 @@ Empty values → status `skipped` for that output.
 ### 7.4 ISO climate spreadsheet
 
 **Deferred with the `iso52016` suite (decision 2026-11-02).** The bypass below needs a new optional
-Building input for the solar gain through windows (gap analysis F3, D9), which rule 3 excludes for
+Building input for the solar gain through windows, which rule 3 excludes for
 phase 1; the analysis stays for a later phase.
 
 What the file contains (header read on 2026-11-02; the same facts are stated in
@@ -832,7 +827,7 @@ imported inside the scope (bead hisim-repo-cleanup-o6a.36); the verification run
 | Step | Content | Needs from §A |
 |---|---|---|
 | 1 | Gap analysis (§5) — **stop for review** | – |
-| 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge (gap analysis §7.2 row 9), the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: explicit building source as a second parameter source with the derivation of §3.2.4 and 3.2.5 from κ, areas and U-values, the explicit window list and explicit ACH and volume (FR2, FR3; gap analysis D6, option C; bead hisim-x6c7.6); the layer-to-κ rule of §3.2.3 belongs to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
+| 2 | Missing capabilities, each with unit tests, in two PRs. 2a: EPW reader labelling in the station's fixed UTC offset and Denver catalogue entry (FR6), the Denver EPW with licence and provenance, the relative-humidity column and the station-header entry the weather requires since the merge, the job marker `verification` per D14 in `pytest.ini`, `tests/job_markers.py` and `system_docs/testing.md` (bead hisim-x6c7.4). 2b: explicit building source as a second parameter source with the derivation of §3.2.4 and 3.2.5 from κ, areas and U-values, the explicit window list and explicit ACH and volume (FR2, FR3; bead hisim-x6c7.6); the layer-to-κ rule of §3.2.3 belongs to the system builder, step 3. Not in this step (decided 2026-11-02): heater changes, a constant-gain component (`CSVLoader` is used), an operative-temperature output (runner), the ISO items (deferred) | gap analysis confirmed 2026-11-02 |
 | 3 | Schema, case loader with inheritance, system builder, deviation register, two-pass warm-up; case 600 of the ASHRAE suite runs end to end at all three time steps; parameters output; EPW identity check documented in `PROVENANCE.md` | EPW and supplemental files in the private folder, Appendix B verified (§3.2.1/3.2.3/3.2.4 decided 2026-11-02) |
 | 4 | Aggregation, metrics, comparison, group accounting, fast tests (§9.2) | – |
 | 5 | Export (§10) and CLI (FR14) | – |

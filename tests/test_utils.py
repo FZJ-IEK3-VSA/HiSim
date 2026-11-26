@@ -57,10 +57,10 @@ def test_get_cache_entry_names_the_entry_after_its_key_material_alone(
     """Catches a lookup that adds the run to the key material, or that lets the environment beat the argument.
 
     The entry is named after the hash of the key material it is given, so two runs of different windows find
-    the same entry; the ``cache_dir_path`` argument outranks ``HISIM_CACHE_DIR``; an entry written through the
+    the same entry; the ``cache_dir_path`` argument outranks ``HISIM_CACHE_DIRECTORIES``; an entry written through the
     returned entry is found again and records that material.
     """
-    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path / "environment"))
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path / "environment"))
     week = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
     day = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
     directory = str(tmp_path / "argument")

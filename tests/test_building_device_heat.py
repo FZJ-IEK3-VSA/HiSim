@@ -195,7 +195,7 @@ class HeatedZoneDay:
 @pytest.fixture(name="redirected_solar_gain_cache")
 def fixture_redirected_solar_gain_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Send the building's solar-gain cache into a temporary directory, so the test writes nothing into the tree."""
-    monkeypatch.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path))
+    monkeypatch.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path))
 
 
 @pytest.mark.base

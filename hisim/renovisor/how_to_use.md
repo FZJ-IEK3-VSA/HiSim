@@ -49,7 +49,9 @@ path verification (below).
 | `translator_error.json` | only on exit 3: what the translator could not map |
 
 Nothing is written outside `--out` except the cache directories (`--cache-dir`, or the ordered
-list in `HISIM_CACHE_DIRECTORIES`), which are shared state rather than output. `run` and
+list in `HISIM_CACHE_DIRECTORIES`, which every HiSim run reads; `--cache-dir` outranks it), which are
+shared state rather than output. `HISIM_CACHE_DIR` and `HISIM_CACHE_SHARED_DIR` are retired: a run
+with either set fails and names `HISIM_CACHE_DIRECTORIES` instead. `run` and
 `translate` also take `--base-files`, the directory of recorded energy-system files to translate
 against; it defaults to `energy_systems/`.
 
@@ -337,6 +339,38 @@ world's payback year is the first year from which its cumulative discounted diff
 renovisorissues #102): a difference that rises above zero again moves the year to its last return,
 one that ends above zero gives `null`, so a world with a positive `npv_delta_in_euro` never states a
 year, and year 0 is a valid value for a plan no dearer than the reference from the start.
+
+A plan that buys a subject with no price -- a `by_subject` row with `unpriced: true` and a
+`measure_id`, such as an envelope measure without a cost block or the hot-water lagging -- has an
+unknown investment, not the sum of its priced rows, so the document states `null` in every figure
+that investment enters (schema version 11, renovisorissues #87, owner decisions of 2026-11-13 and
+2026-11-25): in `plan.totals` the investment, NPV, equivalent annual and monthly cost, year-1 monthly
+cost and levelized cost of heat (`sunk_cost_written_off_in_euro` stays); in `by_group` and every
+`annual[].by_group` each group but `Energy` and `CO2`; in `by_category` each category of the other
+groups; every `by_payer` entry; `annual[].total_*`; the money of `cumulative[]`; the loans' principal
+and debt service; and in `comparison` every difference but `lifecycle_co2_delta_in_kg` and
+`energy_bill_year1_delta_in_euro`, with every end
+of `discounted_payback_year` null. The top-level `unpriced_investment` says why, once for all of them:
+`{"code": "unpriced_subjects", "unpriced_subjects": [...], "measure_ids": [...], "note": "..."}`
+(version 10 had it as `comparison.discounted_payback_year_null_reason`, for the payback alone). There
+is no lower bound. The `by_subject` rows, `energy_year1`, `co2` and `subsidies` stay. A reader's quote
+for the measure prices it, and every figure is stated again. A kept envelope element
+(`envelope_<element>`, unpriced, no measure) is renewed alike in the reference and the plan and
+withholds nothing. Without such a subject `unpriced_investment` is `null`, and a `null` end of the
+payback year means that world does not stay repaid within the horizon.
+
+`plan.totals.investment_year0_in_euro` is the same money as its split: in each of `min`, `best` and
+`max` it equals the sum of the `investment_by_stage` entries of the stages that start in year 0, over
+every `by_subject` row of the plan, and it is `null` exactly when the plan buys a subject
+`unpriced_investment` names. The document is checked for both before it is written (renovisorissues
+#78); a document that breaks them is not written.
+
+`comparison.energy_bill_year1_delta_in_euro` (schema version 12, renovisorissues #95) is the plan's
+year-1 energy bill minus the reference's, over every carrier of `energy_year1`, charges minus feed-in
+revenue, as a band: each end pairs the same price world of the plan and the reference, and the three
+differences are then sorted into `min <= best <= max`, so a price uncertainty both share cancels
+instead of widening the band. Combining the two evaluations' own bands gives a wider, wrong range. No
+investment enters it, so it is stated when `unpriced_investment` withholds the other differences.
 
 `plan_start_year` (a calendar year, 1900–2100) is the year the plan starts in, the reader's own
 "now". Every `annual[].calendar_year` of the result is `plan_start_year + year`, and `null` when

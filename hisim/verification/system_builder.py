@@ -32,7 +32,7 @@ CARRIER_BUILDING_CODE: str = "DE.N.SFH.05.Gen.ReEx.001.002"
 
 #: Where the building's technical room is. Left unset, the field is sized from the carrier row's cellar
 #: code; no component of a case is placed by it, so it acts on nothing, and setting it keeps the row
-#: out (gap analysis §17).
+#: out.
 TECHNICAL_ROOM_LOCATION: lt.InstallationLocation = lt.InstallationLocation.HEATED_ZONE
 
 #: The set points a free-float case carries in its configuration, where the fields are mandatory;

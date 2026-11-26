@@ -16,7 +16,7 @@ from hisim.verification.suite import Suite
 
 @pytest.mark.base
 def test_a_pass_declares_the_demo_kind(cases: Dict[str, Case], tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The simulator of a pass is a test rig to the setup rules (gap analysis §17)."""
+    """The simulator of a pass is a test rig to the setup rules."""
     monkeypatch.setenv("HISIM_WRITE_GUARD", "collect")
     parameters = SimulationParameters.full_year(year=system_builder.DEFAULT_YEAR, seconds_per_timestep=3600)
     parameters.result_directory = str(tmp_path)

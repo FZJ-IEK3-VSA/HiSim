@@ -288,13 +288,13 @@ def get_cache_entry(
     The entry's filename is ``<component_key>_<sha256 of key_material>.cache``; the lookup itself -- filename,
     validation of an existing entry against its ``.meta`` file -- is :meth:`hisim.caching.CacheClient.lookup_across`.
     This function decides which directories are read. For example, a run whose parameters list no cache
-    directories and with no ``HISIM_CACHE_DIR`` set reads and writes its ``cache_dir_path``.
+    directories and with no ``HISIM_CACHE_DIRECTORIES`` set reads and writes its ``cache_dir_path``.
 
-    The locations are chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
-    ``my_simulation_parameters.cache_locations()`` -- the parameter list, read in order and written to the
-    first writable directory, which without a list is the single ``cache_dir_path`` (hisim-renovisor-translator-epc.22). The
-    argument wins over the environment so that a test pointing at its own directory keeps working on a
-    machine where the override or a directory list is set.
+    The locations are the ``cache_dir_path`` argument when it is given, else
+    ``my_simulation_parameters.cache_locations()`` -- the parameters' own list, else the list in
+    ``HISIM_CACHE_DIRECTORIES``, else the single ``cache_dir_path``, read in order and written to the first
+    writable directory (hisim-renovisor-translator-epc.22). The argument wins over the environment so that a
+    test pointing at its own directory keeps working on a machine where the variable is set.
 
     Args:
         component_key: filename prefix, today the component's instance name.
@@ -308,16 +308,10 @@ def get_cache_entry(
             :meth:`hisim.caching.CacheEntry.writing`, never to its path directly.
     """
     client = CacheClient.from_environment()
-    if cache_dir_path is not None:
-        # The explicit argument outranks the environment and the parameter list; the override is
-        # simply not consulted. A test pointing at its own directory keeps working on a machine
-        # where an override or a directory list is set.
-        locations = CacheLocations([cache_dir_path])
-    else:
-        locations = my_simulation_parameters.cache_locations()
-        if client.settings.local_directory is not None:
-            locations = CacheLocations([client.settings.local_directory])
-            client.announce_environment_override(locations.write_directory())
+    # The explicit argument outranks the parameter list and the environment, which are then not
+    # consulted. A test pointing at its own directory keeps working on a machine where
+    # HISIM_CACHE_DIRECTORIES is set.
+    locations = CacheLocations([cache_dir_path]) if cache_dir_path is not None else my_simulation_parameters.cache_locations()
     return client.lookup_across(component_key, key_material, locations)
 
 

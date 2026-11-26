@@ -2,7 +2,7 @@
 
 A run is two full-year passes of the same system: the first from the case's heating set point as
 the initial temperature, the second from the thermal-mass temperature the first ends with, so that
-the reported year starts in a settled state (decision D3). The system is the weather, the building,
+the reported year starts in a settled state (spec §3.2.11). The system is the weather, the building,
 a constant internal gain, the ideal heater with its controller (none in a free-float case) and the
 night-setback controller of the setback cases. Every quantity the reports need is written beside the
 HiSim result directories: the derived parameters, the time series of the second pass and a summary.
@@ -38,7 +38,7 @@ OPERATIVE_SURFACE_WEIGHT: float = 0.7
 PASSES: int = 2
 
 #: The kind every pass declares: a test rig, whose numbers are no statement about a house. It waives the
-#: setup rules AR-09, EP-06 and MT-02; the balance rules AR-04 and AR-05 still apply (gap analysis §17).
+#: setup rules AR-09, EP-06 and MT-02; the balance rules AR-04 and AR-05 still apply.
 SETUP_KIND: SetupKind = SetupKind.DEMO
 
 #: Instance names of the components, which the result columns are found by.

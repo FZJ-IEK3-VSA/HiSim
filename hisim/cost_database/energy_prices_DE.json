@@ -40,7 +40,7 @@
       "working_price_in_euro_per_kwh": 0.0664,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -48,9 +48,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -196,7 +197,7 @@
       "working_price_in_euro_per_kwh": 0.0728,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -204,9 +205,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -352,7 +354,7 @@
       "working_price_in_euro_per_kwh": 0.0699,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -360,9 +362,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -508,7 +511,7 @@
       "working_price_in_euro_per_kwh": 0.0745,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -516,9 +519,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -664,7 +668,7 @@
       "working_price_in_euro_per_kwh": 0.0951,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -672,9 +676,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -820,7 +825,7 @@
       "working_price_in_euro_per_kwh": 0.1141,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.247,
+      "emission_factor_in_kg_per_kwh": 0.2227,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -828,9 +833,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2227 kg CO2-eq per kWh of GCV: the legacy table states 0.247 kg CO2-eq per kWh without a source; taken per kWh of NCV like the table's other gas factors (GEG Anlage 9, 240 g per kWh of NCV), so 0.247 / 1.1093 = 0.2227, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -976,7 +982,7 @@
       "working_price_in_euro_per_kwh": 0.1166,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -984,9 +990,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -1132,7 +1139,7 @@
       "working_price_in_euro_per_kwh": 0.3,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.24,
+      "emission_factor_in_kg_per_kwh": 0.2163,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -1140,9 +1147,10 @@
       "source_ids": [
         "src_opex_4",
         "src_opex_6",
-        "src_opex_22"
+        "src_opex_22",
+        "src_de_geg_anlage9_2024"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.2163 kg CO2-eq per kWh of GCV: the GEG Anlage 9 factor for Erdgas, 240 g CO2-eq per kWh, is stated per kWh of NCV (the GEG states final energy on the Heizwert: Bekanntmachung der Regeln fuer Energieverbrauchswerte, BAnz AT 16.04.2021 B1, converts metered Brennwert consumption with DIN V 18599-1:2018-09 Table B.1), so 0.24 / 1.1093 = 0.2163, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -1304,15 +1312,16 @@
         "max": 240
       },
       "grid_exit_fee_in_euro": 250,
-      "emission_factor_in_kg_per_kwh": 0.2,
+      "emission_factor_in_kg_per_kwh": 0.1803,
       "co2_price_exposure": 1.0,
       "tax_and_levy_share": 0.25,
       "quantity_unit": "kWh",
       "calorific_basis": "GROSS",
       "source_ids": [
-        "src_ai_estimates"
+        "src_ai_estimates",
+        "src_ipcc_2006_stationary_combustion"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.1803 kg CO2 per kWh of GCV: the estimate's 0.20 kg per kWh is natural gas's combustion factor per kWh of NCV (IPCC 2006, Vol. 2, Ch. 2, Table 2.2: 56.1 t CO2/TJ NCV = 0.202 kg/kWh), so 0.20 / 1.1093 = 0.1803, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -1497,15 +1506,16 @@
         "max": 280
       },
       "grid_exit_fee_in_euro": 300,
-      "emission_factor_in_kg_per_kwh": 0.2,
+      "emission_factor_in_kg_per_kwh": 0.1803,
       "co2_price_exposure": 1.0,
       "tax_and_levy_share": 0.25,
       "quantity_unit": "kWh",
       "calorific_basis": "GROSS",
       "source_ids": [
-        "src_ai_estimates"
+        "src_ai_estimates",
+        "src_ipcc_2006_stationary_combustion"
       ],
-      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.1803 kg CO2 per kWh of GCV: the estimate's 0.20 kg per kWh is natural gas's combustion factor per kWh of NCV (IPCC 2006, Vol. 2, Ch. 2, Table 2.2: 56.1 t CO2/TJ NCV = 0.202 kg/kWh), so 0.20 / 1.1093 = 0.1803, with 1.1093 natural gas's GCV over NCV, 39.819 / 35.895 MJ/m3 (PhysicsConfig; BoilerEfficiencySources.gross_over_net) (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",

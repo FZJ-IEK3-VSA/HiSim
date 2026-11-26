@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Iterator, Optional, Sequence, Union
 
 from hisim import log
+from hisim.caching.settings import CacheSettings
 from hisim.result_path_provider import ResultPathProviderSingleton
 from hisim.write_guard import CalculationDirectories, GuardMode, WriteGuard
 
@@ -74,7 +75,13 @@ class CalculationScope:
         Raises:
             StrayWriteError: When the calculation wrote outside its directories.
             CalculationDirectoryError: When the run directory lies below ``hisim/inputs``.
+            CacheSettingsError: When the environment sets a retired cache variable (``HISIM_CACHE_DIR``,
+                ``HISIM_CACHE_SHARED_DIR``) or a cache variable holds a value that cannot be used.
         """
+        # The cache settings are read once before anything else, so a stale or malformed cache
+        # variable fails the calculation before it builds or simulates anything, not at the first
+        # cache lookup deep inside a component.
+        CacheSettings.from_environment()
         running = WriteGuard.active()
         if running is not None:
             # Already inside a calculation (an entry point calling another): this is the same

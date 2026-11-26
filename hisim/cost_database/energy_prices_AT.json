@@ -38,7 +38,7 @@
       "working_price_in_euro_per_kwh": 0.1065,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.249,
+      "emission_factor_in_kg_per_kwh": 0.225,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -48,7 +48,7 @@
         "src_opex_24",
         "src_opex_34"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.225 kg CO2-eq per kWh of GCV, read directly from the source's Brennwert row: Umweltbundesamt REP-0888 (2023), 'Harmonisierte oesterreichische THG-Emissionsfaktoren relevanter Energietraeger', states Erdgas (fossil) (Brennwert) 181 + 44 upstream = 225 g CO2-eq/kWh at 11.31 kWh/Nm3, beside the Heizwert row's 201 + 49 = 249 g/kWh at 10.18 kWh/Nm3 that the row stated before (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",
@@ -189,7 +189,7 @@
       "working_price_in_euro_per_kwh": 0.16,
       "standing_charge_in_euro_per_year": 0,
       "grid_exit_fee_in_euro": 0,
-      "emission_factor_in_kg_per_kwh": 0.249,
+      "emission_factor_in_kg_per_kwh": 0.225,
       "co2_price_exposure": 0.0,
       "tax_and_levy_share": 0.0,
       "quantity_unit": "kWh",
@@ -199,7 +199,7 @@
         "src_opex_24",
         "src_opex_34"
       ],
-      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2)."
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Stated per kWh of gross calorific value (calorific_basis GROSS), the basis gas is billed on and HiSim reports gas on (owner decision of 2026-11-13, hisim-boiler-fuel-one-basis-b7e2). Emission factor 0.225 kg CO2-eq per kWh of GCV, read directly from the source's Brennwert row: Umweltbundesamt REP-0888 (2023), 'Harmonisierte oesterreichische THG-Emissionsfaktoren relevanter Energietraeger', states Erdgas (fossil) (Brennwert) 181 + 44 upstream = 225 g CO2-eq/kWh at 11.31 kWh/Nm3, beside the Heizwert row's 201 + 49 = 249 g/kWh at 10.18 kWh/Nm3 that the row stated before (owner decision of 2026-11-25, hisim-gas-emission-factor-basis-3c9e)."
     },
     {
       "carrier": "HEATING_OIL",

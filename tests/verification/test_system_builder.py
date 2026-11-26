@@ -30,7 +30,7 @@ def test_the_building_of_case_600_takes_nothing_from_the_carrier_row(built_600: 
 
 
 def test_the_technical_room_is_set_rather_than_sized_from_the_carrier_row(built_600: system_builder.BuiltCase) -> None:
-    """The location main sizes from the row's cellar code is set, so the row does not decide it (gap analysis §17)."""
+    """The location main sizes from the row's cellar code is set, so the row does not decide it."""
     assert built_600.building.technical_room_location is lt.InstallationLocation.HEATED_ZONE
 
 

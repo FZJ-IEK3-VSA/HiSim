@@ -1,7 +1,7 @@
 # Spec: the hplib heat pump holds its outlet at the set point it is given, modulating down to a sourced minimum output, with sourced minimum running and idle times
 
-Status: decided (owner, 2026-11-26: D1 to D12 of §2), measured on throwaway prototypes of the chosen design and of
-the rejected one (§7), nothing built; §8 holds one new question (the tolerance of the 900 s starts estimate). Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (beads hisim-heat-pump-model-rework-fpqz.7
+Status: decided (owner, 2026-11-26: D1 to D13 of §2), measured on throwaway prototypes of the chosen design and of
+the rejected one (§7), nothing built; §8 is empty. Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (beads hisim-heat-pump-model-rework-fpqz.7
 and hisim-60i6, both P1; the alignment above 600 s is hisim-ef6u). Builds on: `roadmap/hydronic_part_load_spec.md`
 (decisions 11, 16, 21 to 23), `roadmap/two_mode_buffer_spec.md` (§1.1, Q2), `roadmap/heat_pump_model_rework_spec.md`
 (decisions 5 and 15, steps b and d), `hisim/part_load.py`, the backup rod of #1113 and the buffer-size study of
@@ -91,6 +91,18 @@ across steps in its state, so long cycles at 900 s count correctly (§4.7, which
 why). Consequence: the buffer gains an output, the controller an output and a state field; the 900 s starts KPI becomes
 this estimate (PR 3); §7.3 checks the formula against the prototype's 60 s cycles.
 
+*Amendment (owner, 2026-11-26):* the buffer's heat capacity is not a port quantity and principle B.2 of
+`component_design_principles.md` is not amended. The buffer hands it over at configuration time instead, as the
+sizing contribution principle B.1 already allows ("at configuration time, through the sizing contributions it
+declares"): the buffer's config class declares a `FactContribution` of a new sizing fact,
+`storage_heat_capacity_in_joule_per_kelvin` (its resolved water mass times `c`), and the space-heating controller's
+config reads it through a `sized_field`; a stated value wins (§4.7). The buffer publishes no output for it, and the
+bead that would have amended B.2 is not filed.
+
+**D13 — PR 4 asserts the yearly 900 s starts estimate within ±25 % of the 60 s count and records the monthly ratios**
+(owner, 2026-11-26; the old Q13, option (a)). The starts KPI is an order-of-magnitude figure for the cycling bead and
+the buffer study, not an energy.
+
 **D7 — The set point is the heating curve's supply plus the raise plus 2.5 K now; PR 4 measures supply + 5 K and the
 curve itself on design-day comfort and electricity; the curve itself once the stratified buffer exists** (owner,
 2026-11-26; the old Q8).
@@ -109,8 +121,8 @@ old Q10). 0.372 kg/s for the 7.78 kW twin.
 is switched off under C; the controller's release of case (1) is a bead, judged on PR 4's design-day comfort (its text
 is in §9).
 
-**D12 — The ratio keeps its name and meaning** (owner, 2026-11-26; the old Q6, moot under C). No question of the
-first draft is open; the one new question is §8's Q13.
+**D12 — The ratio keeps its name and meaning** (owner, 2026-11-26; the old Q6, moot under C). No question is open
+(§8).
 
 ## 3. Terms
 
@@ -137,8 +149,9 @@ first draft is open; the one new question is §8's Q13.
 - **Switch-on point, switch-off point**: supply − 5 K (never below the room set point) and supply + 5 K, with the
   raise (`heating_switch_temperatures_in_celsius`), on the buffer's start-of-step temperature; **band `ΔT_band`**:
   their difference, in K (10 K by default, less where the room set point floors the switch-on point).
-- **Buffer heat capacity `C_buf`**: the water mass of the buffer times `c`, in J/K, which the buffer publishes
-  (`HeatCapacityInJoulePerKelvin`, D6): 650 kJ/K for 155.6 l, 1.63 MJ/K for 389 l.
+- **Buffer heat capacity `C_buf`**: the water mass of the buffer times `c`, in J/K, a sizing fact the buffer's config
+  contributes and the controller's config reads at configuration time (`storage_heat_capacity_in_joule_per_kelvin`,
+  D6 as amended): 650 kJ/K for 155.6 l, 1.63 MJ/K for 389 l.
 - **Delivered mean power `P̄`**: the heat pump's space-heating heat averaged over the step, in W
   (`ThermalOutputPowerSH`; above the threshold `r · P`).
 
@@ -371,14 +384,30 @@ at `P_min − P̄` and the house drains it at `P̄`, so
 
 0 for a step at or above the minimum output or with no load. Who computes and publishes it:
 
-- **The buffer** publishes its heat capacity `C_buf` as an output (`HeatCapacityInJoulePerKelvin`), a constant of the
-  component read like a sensor. The owner decided on 2026-11-26 that it is a port quantity for this purpose; principle
-  B.2 of `component_design_principles.md` lists "heat capacity" among the model internals that may not cross a port,
-  so the principle gets an amendment naming this output (a bead; the coordinator files it) and the reason: the cycle
-  of a store's band is a property of the store the controller must know to count its own switching at a coarse step.
+- **The buffer** hands over its heat capacity `C_buf` at configuration time, not through a port (D6 as amended;
+  principle B.1: a component is seen "at configuration time, through the sizing contributions it declares").
+  `SimpleHotWaterStorageConfig` declares `FactContribution(facts=("storage_heat_capacity_in_joule_per_kelvin",))`
+  computed from its resolved `volume_heating_water_storage_in_liter` times the water density and `c`, as the heat
+  pump's config contributes `maximal_thermal_power_in_watt` from its resolved power
+  (`MoreAdvancedHeatPumpHPLibConfig.sizing_facts`); the stratified buffer's config declares the same fact when it
+  exists (the total water mass, since the band's layers are not known at configuration time). The fact is a new
+  `SizingContext` field with its `Size` term (`Size.STORAGE_HEAT_CAPACITY_IN_JOULE_PER_KELVIN`; one term per field,
+  `tests/test_sizing.py`), named like the existing `water_mass_flow_rate_in_kg_per_second`; the hot-water cylinder
+  does not declare it (nothing reads it there). The controller's config gets an optional sized field,
+  `storage_heat_capacity_in_joule_per_kelvin: Sizable[Optional[float]] = sized_field(rule=Size.STORAGE_HEAT_CAPACITY_IN_JOULE_PER_KELVIN)`;
+  a stated value wins. Binding (`hisim/config/engine.py`): a bare fact binds if and only if exactly one config in the
+  set declares it; in every heat-pump twin exactly one `SimpleHotWaterStorage` exists beside the `SimpleDHWStorage`
+  of another class, so the pairing resolves without a `sizing_sources` entry (the engine resolves the buffer's volume
+  from the heat pump's power first, then the controller's field, in its fixed-point sweep). A setup with two buffers
+  is refused with the paste-ready `sizing_sources` snippet the engine prints, and the author names the buffer the
+  controller charges. A setup without a buffer (the series and no-storage arrangements, no recorded twin) has no
+  provider, which the engine refuses for an `AUTO` field whatever its optionality; the author states the field
+  (`storage_heat_capacity_in_joule_per_kelvin: null`), and with `None` the controller computes no cycle estimate and
+  commands 0 starts above the threshold, which is right there: without a store the heat pump runs whole steps and
+  counts its own starts, as at and below the threshold.
 - **The controller** computes the estimate: it owns the band (its switch points), decides on/off, and reads `P̄`
   (`ThermalOutputPowerSH`) and `P_min` (the heat pump publishes its minimum thermal output as an output beside its
-  minimum-load electricity) from the heat pump, and `C_buf` from the buffer. It carries the fractional count in its
+  minimum-load electricity) from the heat pump, and holds `C_buf` from its resolved config. It carries the fractional count in its
   state (`cycle_starts_accumulated`, advanced in `i_save_state` like its other state) and publishes, per step, the
   whole starts the accumulator crosses (`CompressorStartsInStep`, 0 or more), so that a cycle of six hours at 900 s
   gives one start every 24 steps instead of a fraction nothing counts. At and below the threshold it publishes 0: the
@@ -418,9 +447,11 @@ comparison.
   not change.
 - **Public interfaces.** No output is renamed. The device's set-point input `SetHeatingTemperatureSH` exists in every
   arrangement and is wired by default from the controller's `TargetTemperatureShInCelsius` (today only the series and
-  no-storage arrangements have it, from the heating curve). New outputs: the buffer's `HeatCapacityInJoulePerKelvin`,
-  the heat pump's minimum thermal output in W and the controller's `CompressorStartsInStep`, which the heat pump reads
-  (D6, PR 3); the starts KPI reads `CounterOnOff`. New configuration field `compressor_control`; the fields
+  no-storage arrangements have it, from the heating curve). New outputs: the heat pump's minimum thermal output in W
+  and the controller's `CompressorStartsInStep`, which the heat pump reads (D6, PR 3); the starts KPI reads
+  `CounterOnOff`. New sizing fact `storage_heat_capacity_in_joule_per_kelvin` (a `SizingContext` field and `Size`
+  term), contributed by the buffer's config and read by the controller's new optional sized field of the same name
+  (D6 as amended); `describe` lists both. New configuration field `compressor_control`; the fields
   `minimum_thermal_output_power_in_watt` and `massflow_nominal_secondary_side_in_kg_per_s` become sizable (`AUTO` in
   the preset; a stated value still wins); the defaults of `minimum_running_time_in_seconds` and
   `minimum_idle_time_in_seconds` change; the constant `HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT` goes. The energy-system
@@ -475,9 +506,14 @@ comparison.
 - **The cycle estimate** (PR 3): a unit test of the formula at its edges (a step above the minimum output gives 0; the
   minimum times floor `t_on` and `t_off`; a 6 h cycle at 900 s gives one start every 24 steps through the accumulator;
   the accumulator survives `i_save_state` / `i_restore_state`); the heat pump adds the commanded starts to its counter
-  and the KPI reads it. PR 4 runs the twin's year at 60 s and 900 s and compares the 900 s estimate with the 60 s count
-  of real cycles, month by month and over the year; the tolerance is Q13 (§7.3 measured the formula at +18 to +36 % on
-  daily means).
+  and the KPI reads it. The sizing fact: the buffer's config contributes `storage_heat_capacity_in_joule_per_kelvin`
+  equal to its resolved volume times density and `c` (the stratified config too, when it exists); the controller's
+  field resolves to it in the grouped heat-pump twin, a stated value wins, two buffers are refused with the engine's
+  `sizing_sources` snippet, a setup without a buffer is refused on the `AUTO` field and resolves with a stated `null`,
+  with which the controller commands 0 starts; `tests/test_sizing.py`'s registry test covers the new term. PR 4 runs
+  the twin's year at 60 s and 900 s and asserts the yearly 900 s estimate within ±25 % of the 60 s count of real
+  cycles and records the monthly ratios in its description (D13; §7.3 measured the formula at +18 to +36 % on daily
+  means).
 - **The ramp**: a unit test of the law times `1 − e^(−t / 120 s)` at `t` = 0, 60, 120 and 600 s, and that a 900 s step
   books the full power.
 - **Starts**: the twin's yearly starts at 60 s and 900 s lie in the field range of §4.5 (a few hundred to 2,000, below
@@ -608,7 +644,7 @@ that varies over the day, and `dt / (t_on + t_off)` is convex in `P̄`, so the m
 the estimate at the mean; under C the on phase is longer than `C_buf · ΔT_band / (P_min − P̄)` because the law runs
 above the minimum output while the buffer lies below the set point and the ramp holds the power down after each
 start; hot-water charges interrupt and extend cycles. A per-step evaluation in the controller sees the load of each
-step and will lie nearer the 60 s count; PR 4 measures it over the year (§6, Q13).
+step and will lie nearer the 60 s count; PR 4 measures it over the year against D13's ±25 % (§6).
 
 Prototype A, in words: the 60 s machine followed the load (mean power when on 7.0 → 3.1 kW in January); starts fell
 from 299 to 15 and 232 to 5 in January, 168 to 109 and 140 to 57 in April; the 20 l/kW buffer no longer overshot
@@ -619,16 +655,9 @@ charged at a cooler mean, where A held it at the target like 900 s; A's 900 s ru
 
 ## 8. Open questions
 
-Q1 to Q12 of the earlier drafts are decided (D1 to D12, §2). One question is new:
-
-- **Q13. The tolerance for the 900 s starts estimate against the 60 s count.** D6's hysteresis-cycle formula
-  over-counts the prototypes' April cycles by 18 to 36 % when evaluated on daily means (§7.3); evaluated per step in
-  the controller it will lie nearer, by how much PR 4 measures over the year. (a) Assert the yearly 900 s estimate
-  within 25 % of the 60 s count and record the monthly ratios; the starts KPI is an order-of-magnitude figure for the
-  cycling bead (hisim-heat-pump-starts-plausible-100b) and the buffer study, not an energy. (b) Within 10 %, which
-  likely needs the controller to account for the ramp and for the law's power above the set point in `t_on` (a
-  second term in the on time), more model for a KPI. (c) Record only, no assertion. **Recommendation: (a)**, with the
-  monthly ratios in PR 4's description; the owner decides on the numbers. Bead hisim-ef6u (`owner-decision`).
+None. Q1 to Q13 of the earlier drafts are decided (D1 to D13, §2); the measurements PR 4 brings back (the full-year
+60 s / 900 s agreement, the set-point alternatives, the design-day comfort with the rod on its outlet limit) are
+decided on their numbers in that PR.
 
 ## 9. Beads and pull requests
 
@@ -638,13 +667,12 @@ Epic hisim-heat-pump-model-rework-fpqz.
 |---|---|---|
 | hisim-60i6 (P1) | PR 1: the sourced minimum times, 600 s and 600 s (D3), with the sources of §4.5 in the field comments; the two unit tests of the edges; `KNOWN_DIVERGENCES` of the hot-water chain test re-measured; goldens re-blessed; heads-up on renovisorissues | – |
 | hisim-heat-pump-model-rework-fpqz.7 (P1) | PR 2, design C (D1): the set-point input in every arrangement, wired by default from the controller's target (D7); the parallel arrangement routed through the outlet-control law with the lift uncapped; the capacity at the actual outlet and the cache keyed on it; the rod on its outlet limit only (D11); the ramp kept with its 120 s time constant and sources (D8); `compressor_control` and the sized minimum output (0.25, D2, sources of §4.4); the sized nominal flow (D9); the hot-water constant removed (D4), hot water on hplib's flow (D10); the tests of §6; goldens; heads-up. The smallest correct first PR; it needs neither step b nor step d, since the capacity cap takes hplib's `P_th` at the outlet until step d replaces it | – |
-| hisim-ef6u (P3 → P2) | PR 3: the bookkeeping above 600 s on the delivered mean power (continuous running at or above the minimum output, the cycling estimate of D6 below it): the buffer's heat-capacity output, the heat pump's minimum-output output, the controller's accumulator and `CompressorStartsInStep`, the heat pump's counter and the KPI on it, the published running time; its tests (§6); the 900 s goldens' KPI columns; heads-up | – |
-| hisim-ef6u, hisim-heat-pump-starts-plausible-100b (P1) | PR 4: the step-length test of §6 (60 / 900 / 3600 s, four weeks, 1 %, D5), the yearly starts against the field range and the 900 s estimate against the 60 s count (Q13), and the set-point measurement of D7 (supply + 2.5 K against supply + 5 K and the curve, at both step lengths, with comfort at the design day); whatever the measurement shows is fixed in it or brought to the owner | – |
+| hisim-ef6u (P3 → P2) | PR 3: the bookkeeping above 600 s on the delivered mean power (continuous running at or above the minimum output, the cycling estimate of D6 below it): the sizing fact `storage_heat_capacity_in_joule_per_kelvin` (context field, `Size` term, the buffer's contribution, the controller's optional sized field), the heat pump's minimum-output output, the controller's accumulator and `CompressorStartsInStep`, the heat pump's counter and the KPI on it, the published running time; its tests (§6); the 900 s goldens' KPI columns; heads-up | – |
+| hisim-ef6u, hisim-heat-pump-starts-plausible-100b (P1) | PR 4: the step-length test of §6 (60 / 900 / 3600 s, four weeks, 1 %, D5), the yearly starts against the field range and the 900 s estimate within ±25 % of the 60 s count with the monthly ratios (D13), and the set-point measurement of D7 (supply + 2.5 K against supply + 5 K and the curve, at both step lengths, with comfort at the design day); whatever the measurement shows is fixed in it or brought to the owner | – |
 | hisim-heat-pump-buffer-plan-7e58 (P2) | the buffer-size study rerun at 20 / 35 / 50 l/kW, full year, 60 s and 900 s, after PR 4 | – |
 | hisim-heat-pump-model-rework-fpqz.5 (P1) | step d, scope reduced: the capacity law `P_cap(T_source, T_out)` relative to the rated capacity, the hplib removal (the result cache and the 0.1 K grid with it), the cooling EER, and the hot-water charge on the nominal flow (D10); the minimum output share and the pump decision are D2 and D1 of this spec | – |
 | hisim-heat-pump-model-rework-fpqz.4 (P1) | step b: Cdh in the rating with D2's minimum output; the start-up loss per start derived from the whole Cdh deficit, beside the ramp (§4.6); reads `compressor_control` | – |
 | new bead (the coordinator files it): **the space-heating controller releases the backup rod for a house whose load exceeds the compressor's capacity** | Under design C the rod runs only above the compressor's maximal outlet (D11); a house whose heat load exceeds the capacity on a cold day, an undersized machine or a day colder than the design point, is under-supplied, and the room temperature shows it. Wanted: the L1 space-heating controller publishes a release signal (`BackupRodReleased`, 0 or 1) when the buffer's start-of-step temperature has stayed below the switch-on point for longer than the heat pump's minimum running time while the heat pump heats (the compressor at full output cannot keep up); the heat pump reads it and, while released, lets the rod add the shortfall between the law's request and the compressor's capacity up to its rated power (case (1) of rework decision 8, re-stated as a controller decision); the release ends when the buffer passes the switch-on point. The timer is state of the controller, saved and restored with it. Tests: the release fires only after the minimum running time below the switch-on point, never on a cold return after a hot-water charge, and the rod's heat and electricity are booked on their ports. Judged on PR 4's design-day comfort measurement: filed as P2 if the rooms fall below the set point on the design day at 60 s or 900 s with the rod on its outlet limit only, P3 otherwise | – |
-| new bead (the coordinator files it): **principle B.2 names the buffer's heat capacity as a port quantity** | `system_docs/component_design_principles.md` B.2 lists heat capacity among the model internals that may not cross a port; D6 lets the buffer publish `HeatCapacityInJoulePerKelvin` for its controller's cycle count. The principle gets an amendment naming this output and its reason (owner, 2026-11-26) | PR 3 |
 | hisim-component-physics-4g9.61 (P3) | RunTimeGuard; not a prerequisite | – |
 | hisim-agent-rules-h2ib.11 (P3) | the five values sourced here (the two times, the minimum output, the nominal flow, the ramp's time constant) leave its list | – |
 

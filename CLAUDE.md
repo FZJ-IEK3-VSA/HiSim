@@ -41,7 +41,8 @@ Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `assemblie
 `tests/assemblies/` but the nightly tier; needs the local LPG; its own CI job), `nightly` (the assembly
 Latin hypercube tier; run daily at 02:00 UTC by `.github/workflows/assemblies-nightly.yml`, not per PR), `renovisor_probes` (the
 tests that read RenoVisor's capability document or translation map; its own CI job, one process, so the
-document is built once)
+document is built once), `verification` (the building-model verification suite; skips unless
+`HISIM_VERIFICATION_DATA` names the private reference-data folder)
 
 ### Run an energy system (declarative YAML — the declarative input)
 ```bash

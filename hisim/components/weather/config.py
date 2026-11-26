@@ -340,6 +340,15 @@ class LocationEnum(Enum):
         "1267064_42.69_23.30_2019.csv",
         WeatherDataSourceEnum.NSRDB_15MIN,
     )
+    #: The Denver International Airport TMY3 of the ANSI/ASHRAE Standard 140 test cases, an EnergyPlus
+    #: weather file redistributed under its own licence (``EPW/Denver_Intl_AP/LICENSE.md``).
+    DENVER_INTL_AP = (
+        "Denver Intl AP",
+        "EPW",
+        "Denver_Intl_AP",
+        "725650TYCST.epw",
+        WeatherDataSourceEnum.EPW,
+    )
 
 
 @dataclass_json

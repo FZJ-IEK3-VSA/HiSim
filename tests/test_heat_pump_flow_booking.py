@@ -34,6 +34,7 @@ from hisim.components.more_advanced_heat_pump.controller_dhw import (
     MoreAdvancedHeatPumpHPLibControllerDHWConfig,
 )
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,
@@ -224,7 +225,7 @@ class SingleStep:
         """A 10 kW generic air/water heat pump with hot-water preparation, running for ten minutes already.
 
         Args:
-            position: Where its storage sits: ``PARALLEL`` (hplib's flow) or ``SERIES`` (the nominal flow).
+            position: Where its storage sits, ``PARALLEL`` or ``SERIES``; both heat the nominal flow of 0.333 kg/s.
             seconds_per_timestep: The step length of its simulation, in s; above 600 s it runs part-load ratios.
             cycling_mode: Whether it keeps a minimum running and idle time, 3600 s each; off by default, so a step
                 runs the mode the inputs command. 3600 s rather than the preset's 600 s, so that the times outlast a
@@ -233,6 +234,7 @@ class SingleStep:
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 10000.0
         config.heating_rod_rated_electrical_power_in_watt = 9000.0
+        config.compressor_control = CompressorControl.INVERTER
         config.heating_reference_temperature_in_celsius = -7.0
         config.flow_temperature_in_celsius = 52.0
         config.cycling_mode = cycling_mode
@@ -367,11 +369,12 @@ def test_active_cooling_without_a_positive_eer_is_refused(eer: float) -> None:
 
 
 @pytest.mark.base
-def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -> None:
-    """A return of 47.04 °C: hplib's results at 47.0 and 47.1 °C are interpolated, and the flow is booked from 47.04.
+def test_the_parallel_mode_books_the_heat_of_the_nominal_flow_at_an_unrounded_return() -> None:
+    """A return of 47.04 °C held at 49.04 °C: the nominal flow books ``m c (T_out - T_in)`` of its own outputs.
 
-    The interpolated outlet is 52.04 °C, the 5 K lift hplib holds; the booked heat is the interpolated flow's at
-    HiSim's 4180 J/(kg K), about 0.5 % below hplib's own heat at its 4200 J/(kg K).
+    Catches a booking that takes hplib's capacity or a return rounded to hplib's 0.1 K grid instead of the heat the
+    published flow carries. The machine has run for ten minutes, so it delivers 99.47 % of the 2783.9 W its outlet
+    control asks for, and draws that heat over its COP.
     """
     outputs = SingleStep.step(
         SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL),
@@ -380,10 +383,13 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
             MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: -7.0,
             MoreAdvancedHeatPumpHPLib.TemperatureAmbient: -7.0,
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 47.04,
+            MoreAdvancedHeatPumpHPLib.SetHeatingTemperatureSH: 49.04,
             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 50.0,
         },
     )
-    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == pytest.approx(52.04, abs=1e-9)
+    started_up_share = 1.0 - 2.0 * np.exp(-5.0) * (1.0 - np.exp(-0.5))
+    assert outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] == 0.333
+    assert outputs[MoreAdvancedHeatPumpHPLib.TemperatureOutputSH] == pytest.approx(47.04 + 2.0 * started_up_share, rel=1e-12)
     booked_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH]
     assert booked_power_in_watt == flow_thermal_power_in_watt(
         outputs,
@@ -391,8 +397,7 @@ def test_hplib_s_flow_is_booked_at_the_unrounded_return_in_the_parallel_mode() -
         MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSH,
     )
-    hplib_thermal_power_in_watt = outputs[MoreAdvancedHeatPumpHPLib.MassFlowOutputSH] * 4200.0 * 5.0
-    assert booked_power_in_watt == pytest.approx(hplib_thermal_power_in_watt * 4180.0 / 4200.0, rel=1e-9)
+    assert booked_power_in_watt == pytest.approx(0.333 * 4180.0 * 2.0 * started_up_share, rel=1e-9)
     assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH] == (
         booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
     )
@@ -438,14 +443,18 @@ def test_hplib_s_results_are_interpolated_linearly_between_its_grid_points() -> 
         ({MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW: 2}, "hot water"),
     ],
 )
-def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[str, float], circuit: str) -> None:
-    """A series storage: the pump runs at 0.333 kg/s, the power sets the outlet and the flow books the heat."""
+def test_the_series_mode_books_the_heat_of_the_nominal_flow(switches: Dict[str, float], circuit: str) -> None:
+    """A series storage: the pump runs at 0.333 kg/s, the power sets the outlet and the flow books the heat.
+
+    Space heating holds a set point 5 K above its 30.04 °C return, hot water its 5 K lift above 45.03 °C, so both ask
+    for 6959.7 W and deliver the started-up share of it after ten minutes of running.
+    """
     values = {
         MoreAdvancedHeatPumpHPLib.TemperatureInputPrimary: 2.0,
         MoreAdvancedHeatPumpHPLib.TemperatureAmbient: 2.0,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: 30.04,
         MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: 45.03,
-        MoreAdvancedHeatPumpHPLib.SetHeatingTemperatureSH: 40.0,
+        MoreAdvancedHeatPumpHPLib.SetHeatingTemperatureSH: 35.04,
         **switches,
     }
     outputs = SingleStep.step(SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.SERIES), values)
@@ -453,8 +462,8 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
     assert outputs[mass_flow] == 0.333
     booked_power_in_watt = outputs[thermal]
     assert booked_power_in_watt == flow_thermal_power_in_watt(outputs, mass_flow, t_out, t_in)
-    # 5 K at the nominal flow, ramped up after ten minutes of running: (1 - e^(-600/360)) of 6959.7 W.
-    assert booked_power_in_watt == pytest.approx(0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0)), rel=1e-12)
+    started_up_share = 1.0 - 2.0 * np.exp(-5.0) * (1.0 - np.exp(-0.5))
+    assert booked_power_in_watt == pytest.approx(0.333 * 4180.0 * 5.0 * started_up_share, rel=1e-9)
     assert outputs[electrical] == booked_power_in_watt / outputs[MoreAdvancedHeatPumpHPLib.COP]
 
 
@@ -463,26 +472,29 @@ def test_the_fixed_flow_mode_books_the_heat_of_the_nominal_flow(switches: Dict[s
     ("lift_in_kelvin", "time_on_heating_in_seconds", "expected_heat_power_in_watt"),
     [
         (5.0, 1e9, 0.333 * 4180.0 * 5.0),
-        (5.0, 600.0, 0.333 * 4180.0 * 5.0 * (1.0 - np.exp(-600.0 / 360.0))),
+        (5.0, 600.0, 0.333 * 4180.0 * 5.0 * (1.0 - 2.0 * np.exp(-5.0) * (1.0 - np.exp(-0.5)))),
         (0.5, 1e9, 1800.0),
-        (5.0, 0.0, 0.0),
+        (0.0, 1e9, 1800.0),
+        (5.0, 0.0, 0.333 * 4180.0 * 5.0 * (1.0 - 2.0 * (1.0 - np.exp(-0.5)))),
     ],
-    ids=["running at the lift", "starting up for ten minutes", "below the minimal power", "just switched on"],
+    ids=["running at the lift", "after ten minutes", "below the minimal power", "no lift", "just switched on"],
 )
-def test_the_fixed_flow_operating_point_runs_the_nominal_flow_and_the_outlet_follows_the_started_up_power(
+def test_the_nominal_flow_operating_point_runs_the_nominal_flow_and_the_outlet_follows_the_started_up_power(
     lift_in_kelvin: float, time_on_heating_in_seconds: float, expected_heat_power_in_watt: float
 ) -> None:
-    """A fixed-flow step that ignored the minimal power, the start-up ramp or the nominal flow would set a wrong outlet.
+    """A step that ignored the minimal power, the start-up ramp or the nominal flow would set a wrong outlet.
 
     At 0.333 kg/s the heat pump aims at the power that flow carries over the lift, 6959.7 W over 5 K, at least its
-    1800 W minimum, and delivers ``1 - e^(-t / 360 s)`` of it; the outlet is the return plus that power over ``m c``.
+    1800 W minimum, and a 60 s step delivers the step's mean of ``1 - e^(-t / 120 s)`` of it: 21.3 % in the first
+    minute, 99.5 % after ten. The outlet is the return plus that power over ``m c``.
     """
-    point = MoreAdvancedHeatPumpHPLib.fixed_flow_operating_point(
+    point = MoreAdvancedHeatPumpHPLib.nominal_flow_operating_point(
         pump=ConstantFlowPump(design_mass_flow_in_kg_per_second=0.333),
         return_temperature_in_celsius=40.0,
         lift_in_kelvin=lift_in_kelvin,
         minimal_thermal_power_in_watt=1800.0,
         time_on_heating_in_seconds=time_on_heating_in_seconds,
+        seconds_per_timestep=60,
     )
     assert point.mass_flow_in_kg_per_second == 0.333
     assert not point.flow_is_clamped
@@ -490,23 +502,42 @@ def test_the_fixed_flow_operating_point_runs_the_nominal_flow_and_the_outlet_fol
 
 
 @pytest.mark.base
+def test_a_negative_lift_is_refused_by_the_nominal_flow_operating_point() -> None:
+    """Catches a caller that passes a return above its set point unclipped, which would ask for a negative power."""
+    with pytest.raises(ValueError, match="lift of 0 K or more"):
+        MoreAdvancedHeatPumpHPLib.nominal_flow_operating_point(
+            pump=ConstantFlowPump(design_mass_flow_in_kg_per_second=0.333),
+            return_temperature_in_celsius=40.0,
+            lift_in_kelvin=-1.0,
+            minimal_thermal_power_in_watt=1800.0,
+            time_on_heating_in_seconds=600.0,
+            seconds_per_timestep=60,
+        )
+
+
+@pytest.mark.base
 @pytest.mark.parametrize(
     "position", [PositionHotWaterStorageInSystemSetup.SERIES, PositionHotWaterStorageInSystemSetup.PARALLEL]
 )
-@pytest.mark.parametrize("mass_flow_in_kg_per_s", [-0.333, float("nan")])
-def test_a_negative_nominal_mass_flow_is_refused_when_the_heat_pump_is_built(
+@pytest.mark.parametrize("mass_flow_in_kg_per_s", [-0.333, 0.0, float("nan")])
+def test_a_nominal_mass_flow_that_is_not_positive_is_refused_when_the_heat_pump_is_built(
     position: PositionHotWaterStorageInSystemSetup, mass_flow_in_kg_per_s: float
 ) -> None:
-    """Catches a negative nominal flow that would only fail at the first fixed-flow step, without naming the field."""
+    """Catches a flow of 0 that leaves the machine without a circuit, or a negative one that fails only in a step.
+
+    Every arrangement heats the nominal flow, so the parallel one refuses it as the series one does.
+    """
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
     config.heating_rod_rated_electrical_power_in_watt = 9000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.minimum_thermal_output_power_in_watt = 1800.0
     config.heating_reference_temperature_in_celsius = -7.0
     config.massflow_nominal_secondary_side_in_kg_per_s = mass_flow_in_kg_per_s
     config.position_hot_water_storage_in_system = position
     with pytest.raises(
         ValueError,
-        match=rf"massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least 0 kg/s, "
+        match=rf"massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow above 0 kg/s, "
         rf"got {mass_flow_in_kg_per_s!r} kg/s",
     ):
         MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60))
@@ -522,6 +553,9 @@ def test_a_minimum_time_that_is_negative_or_not_finite_is_refused_when_the_heat_
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
     config.heating_rod_rated_electrical_power_in_watt = 9000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.minimum_thermal_output_power_in_watt = 1800.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     config.heating_reference_temperature_in_celsius = -7.0
     setattr(config, field_name, seconds)
     with pytest.raises(ValueError, match=rf"{field_name} must be a finite time of at least 0 s, got"):
@@ -853,6 +887,7 @@ def test_passive_cooling_books_the_heat_its_flow_draws_and_only_the_brine_pump_s
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 10000.0
     config.heating_rod_rated_electrical_power_in_watt = 9000.0
+    config.compressor_control = CompressorControl.INVERTER
     config.heating_reference_temperature_in_celsius = -7.0
     config.flow_temperature_in_celsius = 35.0
     config.cycling_mode = False

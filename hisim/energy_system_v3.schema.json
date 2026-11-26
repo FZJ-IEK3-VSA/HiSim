@@ -4981,8 +4981,28 @@
                       }
                     ]
                   },
+                  "compressor_control": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "INVERTER",
+                          "ON_OFF"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
                   "minimum_thermal_output_power_in_watt": {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   },
                   "position_hot_water_storage_in_system": {
                     "enum": [
@@ -5008,7 +5028,14 @@
                     ]
                   },
                   "massflow_nominal_secondary_side_in_kg_per_s": {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   },
                   "specific_heat_capacity_of_primary_fluid": {
                     "anyOf": [

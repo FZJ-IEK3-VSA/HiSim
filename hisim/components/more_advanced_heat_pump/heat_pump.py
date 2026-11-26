@@ -45,7 +45,9 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
+    SizingLaw,
     concrete,
+    law,
     preset,
     sized_field,
 )
@@ -127,6 +129,27 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     NO_STORAGE = "NO_STORAGE"
 
 
+@unique
+class CompressorControl(str, Enum):
+    """How the heat pump's compressor follows a load below its capacity: by its speed, or by switching on and off.
+
+    INVERTER:
+    A speed-controlled compressor. It modulates its thermal power down to a minimum output, about a quarter of its
+    rated capacity, and cycles only below it. The default for an air/water machine.
+
+    ON_OFF:
+    A fixed-speed compressor. It has no modulation range: it runs at its capacity whenever it runs and cycles at every
+    load below it. The default for a brine/water and a water/water machine.
+
+    The defaults by source type follow the manufacturers' ranges: the residential air/water units of Bosch, Viessmann,
+    Vaillant and Daikin are inverter units, while brine/water units are commonly on/off (owner decision of 2026-10-21
+    for the heat-pump model rework). Every member carries its own name as its value, so a configuration spells it out.
+    """
+
+    INVERTER = "INVERTER"
+    ON_OFF = "ON_OFF"
+
+
 @dataclass_json
 @dataclass
 class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
@@ -143,12 +166,136 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             SizingContext(heating_load_in_watt=7780.75, heating_reference_temperature_in_celsius=-7.0)
         )
 
-    ``massflow_nominal_secondary_side_in_kg_per_s`` is deliberately *not* sizable: nothing
-    in the system contributes a nominal massflow, and the 0.333 kg/s the fleet uses is a
-    property of the secondary circuit, not of the building.
+    Three more fields follow from the machine's own fields when left ``AUTO``: the compressor control from the source
+    type (:meth:`compressor_control_of_group`), the minimum thermal output from the rated power and the compressor
+    control (:meth:`minimum_thermal_output_power_in_watt_of`) and the nominal secondary flow from the rated power
+    (:meth:`nominal_mass_flow_in_kg_per_second_of`). For the 7780.75 W machine above they are ``INVERTER``,
+    1945.19 W and 0.3723 kg/s.
     """
 
     MAIN_CLASS = "hisim.components.more_advanced_heat_pump.heat_pump.MoreAdvancedHeatPumpHPLib"
+
+    #: The minimum thermal output as a share of the rated thermal power, dimensionless, by compressor control. An
+    #: inverter: 0.25, the low edge of the Bosch Compress 7000i AW range at A-7/W35 (installation manual 6721830633,
+    #: 2021/02: AW 7 1.5 of 5.9 kW, AW 9 2.0 of 8.3 kW, AW 5 to AW 17 0.24 to 0.35); the Viessmann Vitocal 250-A
+    #: (datasheet 2023-07, "Leistungsregelung") lies at 0.27 to 0.32 and the Vaillant aroTHERM plus VWL 75/6 at 0.43,
+    #: nine of ten units between 0.24 and 0.43. Owner decision of 2026-11-26. An on/off machine: 1.0, it has no
+    #: modulation range.
+    MINIMUM_OUTPUT_SHARE_OF_RATED_POWER: ClassVar[Dict[CompressorControl, float]] = {
+        CompressorControl.INVERTER: 0.25,
+        CompressorControl.ON_OFF: 1.0,
+    }
+
+    #: The hplib group whose compressor is speed-controlled by default: 1, air/water. Every other group (2 brine/water,
+    #: 3 water/water and hplib's on/off groups 4 to 6) is on/off by default (:class:`CompressorControl`).
+    INVERTER_HPLIB_GROUP: ClassVar[int] = 1
+
+    #: The lift across the machine at its rated point, in K, which sizes the nominal secondary flow: the 5 K spread
+    #: between the 30 °C inlet and the 35 °C outlet of the EN 14511 W35 rating condition ("Spreizung 5 K" in the
+    #: Viessmann Vitocal 250-A datasheet, 2023-07).
+    RATED_LIFT_IN_KELVIN: ClassVar[float] = 5.0
+
+    @staticmethod
+    def compressor_control_of_group(group_id: int) -> CompressorControl:
+        """Return the compressor control a machine of an hplib group has by default.
+
+        Air/water machines (group 1) are inverter units; brine/water (2), water/water (3) and hplib's on/off groups
+        (4 to 6) are on/off. For example, group 1 gives ``INVERTER`` and group 2 ``ON_OFF``.
+
+        Args:
+            group_id: The machine's hplib group, 1 to 6.
+
+        Returns:
+            The compressor control.
+
+        Raises:
+            ValueError: If the group is not 1 to 6.
+        """
+        if group_id not in range(1, 7):
+            raise ValueError(f"An hplib heat pump's group is 1 to 6, got {group_id!r}.")
+        if group_id == MoreAdvancedHeatPumpHPLibConfig.INVERTER_HPLIB_GROUP:
+            return CompressorControl.INVERTER
+        return CompressorControl.ON_OFF
+
+    @staticmethod
+    def minimum_thermal_output_power_in_watt_of(*, rated_thermal_power_in_watt: float, share_of_rated_power: float) -> float:
+        """Return the lowest thermal power the compressor holds before it has to cycle, in W.
+
+        The minimum output is a share of the rated thermal power, by compressor control
+        (:attr:`MINIMUM_OUTPUT_SHARE_OF_RATED_POWER`): 0.25 for an inverter, 1.0 for an on/off machine. For example, a
+        7780.75 W inverter machine holds down to 1945.19 W, an on/off one runs its whole 7780.75 W.
+
+        Args:
+            rated_thermal_power_in_watt: The machine's rated thermal power, in W.
+            share_of_rated_power: The minimum output's share of the rated power, dimensionless, in (0, 1].
+
+        Returns:
+            The minimum thermal output, in W.
+
+        Raises:
+            ValueError: If the share is not in (0, 1] or the rated power is not finite and positive.
+        """
+        if not 0.0 < share_of_rated_power <= 1.0:
+            raise ValueError(f"A minimum output's share of the rated power lies in (0, 1], got {share_of_rated_power!r}.")
+        if not (math.isfinite(rated_thermal_power_in_watt) and rated_thermal_power_in_watt > 0.0):
+            raise ValueError(f"A rated thermal power is a finite power above 0 W, got {rated_thermal_power_in_watt!r} W.")
+        return share_of_rated_power * rated_thermal_power_in_watt
+
+    @staticmethod
+    def nominal_mass_flow_in_kg_per_second_of(rated_thermal_power_in_watt: float) -> float:
+        """Return the secondary pump's nominal flow, the flow that carries the rated power over the rated lift, in kg/s.
+
+        The flow is ``P_rated / (c * 5 K)`` (:attr:`RATED_LIFT_IN_KELVIN`), with water's specific heat. For example,
+        7780.75 W gives 0.3723 kg/s.
+
+        Args:
+            rated_thermal_power_in_watt: The machine's rated thermal power, in W.
+
+        Returns:
+            The nominal flow, in kg/s.
+
+        Raises:
+            ValueError: If the rated power is not finite and positive.
+        """
+        if not (math.isfinite(rated_thermal_power_in_watt) and rated_thermal_power_in_watt > 0.0):
+            raise ValueError(f"A rated thermal power is a finite power above 0 W, got {rated_thermal_power_in_watt!r} W.")
+        return rated_thermal_power_in_watt / (
+            hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K * MoreAdvancedHeatPumpHPLibConfig.RATED_LIFT_IN_KELVIN
+        )
+
+    #: Sizing law of the compressor control: :meth:`compressor_control_of_group` of the sibling ``group_id``.
+    COMPRESSOR_CONTROL_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx, own: MoreAdvancedHeatPumpHPLibConfig.compressor_control_of_group(own.value_of("group_id")),
+        reads=(),
+        fields=("group_id",),
+        description='INVERTER for hplib group 1 (air/water) in Self("group_id"), ON_OFF for every other group',
+    )
+
+    #: Sizing law of the minimum thermal output: :meth:`minimum_thermal_output_power_in_watt_of` of the siblings.
+    MINIMUM_THERMAL_OUTPUT_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx, own: MoreAdvancedHeatPumpHPLibConfig.minimum_thermal_output_power_in_watt_of(
+            rated_thermal_power_in_watt=float(own.value_of("set_thermal_output_power_in_watt")),
+            share_of_rated_power=MoreAdvancedHeatPumpHPLibConfig.MINIMUM_OUTPUT_SHARE_OF_RATED_POWER[
+                CompressorControl(own.value_of("compressor_control"))
+            ],
+        ),
+        reads=(),
+        fields=("set_thermal_output_power_in_watt", "compressor_control"),
+        description=(
+            'Self("set_thermal_output_power_in_watt") times 0.25 for an INVERTER Self("compressor_control"), '
+            "times 1.0 for an ON_OFF one"
+        ),
+    )
+
+    #: Sizing law of the nominal secondary flow: :meth:`nominal_mass_flow_in_kg_per_second_of` of the rated power.
+    NOMINAL_MASS_FLOW_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx, own: MoreAdvancedHeatPumpHPLibConfig.nominal_mass_flow_in_kg_per_second_of(
+            float(own.value_of("set_thermal_output_power_in_watt"))
+        ),
+        reads=(),
+        fields=("set_thermal_output_power_in_watt",),
+        description='Self("set_thermal_output_power_in_watt") / (4180 J/(kg K) * 5 K), the flow of the rated power at the rated lift',
+    )
 
     component_id: ComponentID
     #: hplib parameter set to evaluate. ``"Generic"`` is the curve fit hplib derives from the
@@ -195,8 +342,29 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: Stiebel Eltron's 20 min default idle time (parameter STILLSTANDSZEIT, WPF 04-16 and WPW 10-22 Trend installation
     #: manuals) belongs to an on/off brine/water machine, not to this air/water default. Owner decision of 2026-11-26.
     minimum_idle_time_in_seconds: Optional[int] = 600
-    #: Lowest thermal power the machine modulates down to before it has to cycle.
-    minimum_thermal_output_power_in_watt: float = 1800.0
+    #: How the compressor follows a load below its capacity: by its speed (``INVERTER``) or by switching on and off
+    #: (``ON_OFF``). Sizable: left ``AUTO`` it follows the source type, inverter for air/water (hplib group 1) and
+    #: on/off for every other group (:meth:`compressor_control_of_group`).
+    compressor_control: Sizable[CompressorControl] = sized_field(
+        rule=COMPRESSOR_CONTROL_LAW,
+        value_type=CompressorControl,
+        note=(
+            "air/water inverter, brine/water on/off: owner decision of 2026-10-21 (heat-pump model rework, decision 5); "
+            "the residential air/water units of Bosch, Viessmann, Vaillant and Daikin are inverter units"
+        ),
+    )
+    #: Lowest thermal power the compressor holds before it has to cycle, in W, a stated value or a share of the rated
+    #: thermal power (:attr:`MINIMUM_OUTPUT_SHARE_OF_RATED_POWER`). Sizable: left ``AUTO`` it is 0.25 of
+    #: ``set_thermal_output_power_in_watt`` for an inverter and the whole of it for an on/off machine.
+    minimum_thermal_output_power_in_watt: Sizable[float] = sized_field(
+        rule=MINIMUM_THERMAL_OUTPUT_LAW,
+        unit=Units.WATT,
+        note=(
+            "0.25 of the rated power for an inverter: low edge of the Bosch Compress 7000i AW range at A-7/W35 "
+            "(installation manual 6721830633, 2021/02), Viessmann Vitocal 250-A 0.27 to 0.32 (datasheet 2023-07), "
+            "owner decision of 2026-11-26; 1.0 for an on/off machine, which has no modulation range"
+        ),
+    )
     #: Where the space-heating buffer vessel sits relative to the machine, which decides
     #: whether the secondary massflow is the machine's own or the distribution system's.
     position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
@@ -210,9 +378,17 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     passive_cooling_with_brine: bool = False
     #: Electrical power the brine pump draws, for a machine with a primary circuit of its own.
     electrical_input_power_brine_pump_in_watt: Optional[float] = None
-    #: Nominal massflow on the secondary side. A plain field, not a sizable one: no component
-    #: contributes it, and it describes the circuit the machine is plumbed into.
-    massflow_nominal_secondary_side_in_kg_per_s: float = 0.333
+    #: The secondary pump's constant flow, in kg/s: the machine heats this flow in every arrangement and lifts it by
+    #: as much as its outlet control needs. Sizable: left ``AUTO`` it carries the rated thermal power over the 5 K lift
+    #: of the EN 14511 W35 rating (:meth:`nominal_mass_flow_in_kg_per_second_of`), 0.3723 kg/s for 7780.75 W.
+    massflow_nominal_secondary_side_in_kg_per_s: Sizable[float] = sized_field(
+        rule=NOMINAL_MASS_FLOW_LAW,
+        unit=Units.KG_PER_SEC,
+        note=(
+            "the rated power over water's specific heat times the 5 K spread of the EN 14511 W35 rating condition "
+            "(30/35 °C; 'Spreizung 5 K', Viessmann Vitocal 250-A datasheet 2023-07); owner decision of 2026-11-26"
+        ),
+    )
     #: Specific heat capacity of the primary fluid, needed only where that fluid is not air.
     specific_heat_capacity_of_primary_fluid: Optional[float] = 0.0
     #: CO2 footprint of investment in kg. Unset throughout the repository, which is what makes
@@ -292,12 +468,15 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
 
         The field defaults are that machine: hplib's generic air/water parameter set
         (``model="Generic"``, ``group_id=1``), cycling with ten minutes of minimum running and
-        idle time each, modulating down to 1800 W, flowing at 52 °C into a buffer vessel parallel
-        to it, and heating space only. What the preset does not fix is how large the machine
-        is and what design condition it is rated at: ``set_thermal_output_power_in_watt`` and
+        idle time each, flowing at 52 °C into a buffer vessel parallel to it, and heating space
+        only. What the preset does not fix is how large the machine is and what design condition
+        it is rated at: ``set_thermal_output_power_in_watt`` and
         ``heating_reference_temperature_in_celsius`` stay ``AUTO`` so that both are copied
         from the building's facts, and ``heating_rod_rated_electrical_power_in_watt`` stays
         ``AUTO`` so that the backup rod is 9 kW or the machine's thermal power, the smaller.
+        The fields that follow from the machine's own stay ``AUTO`` as well: an inverter compressor
+        (group 1), modulating down to a quarter of the rated power, at a nominal secondary flow
+        that carries the rated power over a 5 K lift.
 
         The default parameters of hplib's air/water fit are documented at
         https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py under ``fit_p_th_ref``.
@@ -321,21 +500,27 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
 
-    The machine is a compressor (:class:`CarnotCopHeatPump`: hplib's thermal power, outlet and flow, the
-    Carnot-efficiency COP) and a backup heating rod inside it (:class:`BackupHeatingRod`, decision 8 of
-    ``roadmap/heat_pump_model_rework_spec.md``). The rod runs only where the compressor falls short, the requested heat
-    above the compressor's capacity or the required outlet above its maximal outlet, and adds the missing heat at a
-    COP of 1, up to its rated power (``heating_rod_rated_electrical_power_in_watt``), into the same circuit
-    (:meth:`rod_assisted_heating`). Its electricity is the output ``ElectricalInputPowerHeatingRod`` with its own energy
-    port and is part of ``ElectricalInputPowerTotalHeatpump``; ``ElectricalInputPowerSH`` and ``ElectricalInputPowerDHW``
-    are the compressor's.
+    The machine is a compressor (:class:`CarnotCopHeatPump`: hplib's thermal capacity, the Carnot-efficiency COP) and a
+    backup heating rod inside it (:class:`BackupHeatingRod`). The rod runs only where the required outlet lies above the
+    compressor's maximal outlet, and adds the lift beyond it at a COP of 1, up to its rated power
+    (``heating_rod_rated_electrical_power_in_watt``), into the same circuit (:meth:`rod_assisted_heating`). Its
+    electricity is the output ``ElectricalInputPowerHeatingRod`` with its own energy port and is part of
+    ``ElectricalInputPowerTotalHeatpump``; ``ElectricalInputPowerSH`` and ``ElectricalInputPowerDHW`` are the compressor's.
+
+    In space heating the machine controls its own outlet (:meth:`space_heating`): its secondary pump runs the nominal
+    flow ``m`` (``massflow_nominal_secondary_side_in_kg_per_s``), and the compressor modulates its power so that the
+    outlet reaches the set point its space-heating controller sends (``SetHeatingTemperatureSH``, the controller's
+    target), ``P = max(m c (T_set - T_ret), P_min)``, down to its minimum output ``P_min``
+    (``minimum_thermal_output_power_in_watt``) and up to its capacity at that outlet. Below the minimum output the
+    buffer rises past the set point until the controller's hysteresis stops the machine, so it cycles only there. A
+    machine that has just started delivers less while its refrigerant cycle warms up (:meth:`nominal_flow_operating_point`).
 
     A space-heating charge its space-heating controller commands runs the requested part-load ratio the controller
     sends (``RequestedPartLoadRatioSh``): 1, the whole step, at and below the part-load threshold, and above it the
     fraction of the step that ends the space-heating buffer at the controller's target. Below 1 the heat pump publishes
-    the averaged flow at its full-load outlet and books ``P_th = m c (T_out - T_ret)`` from that flow; the compressor
-    delivers it for as much of the step as it needs at full output, and the rod only what the compressor cannot deliver
-    in the whole step (:meth:`BackupHeatingRod.heating`); the brine pump draws the compressor's share of its
+    the averaged flow at the outlet of its power and books ``P_th = m c (T_out - T_ret)`` from that flow; the
+    compressor delivers it for as much of the step as it needs, and the rod only the heat beyond the compressor's maximal
+    outlet (:meth:`BackupHeatingRod.heating`); the brine pump draws the compressor's share of its
     electricity. A space-heating step the
     heat pump keeps running against its controller (its minimum running time) runs the whole step. It reports the actual
     ratio it ran with (``ActualPartLoadRatioSh``): the requested ratio, 1 for a step it keeps running on its own, 0 in
@@ -372,6 +557,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: The hot-water supply temperature the hot-water controller aims at: the hot-water supply never exceeds it.
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     TemperatureAmbient = "TemperatureAmbient"  # °C
+    #: The space-heating set point, in °C: the outlet the machine holds while it heats the building, its space-heating
+    #: controller's target; passive cooling cools towards it.
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
     #: The requested part-load ratio: the fraction of the step the space-heating controller commands a space-heating
     #: charge to run.
@@ -390,10 +577,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: in W.
     ElectricalPowerAtMinimumLoadSpaceHeatingInWatt = "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt"
 
-    #: The key under which hplib's answers for the published space-heating power range are cached. It is a key of its
-    #: own, apart from the space-heating step's ``heating_building``, because the range is always taken at the nominal
-    #: lift, while the fixed-flow modes call hplib for the same circuit at other lifts and the cache key has no lift.
-    POWER_RANGE_OPERATION_MODE: ClassVar[str] = "space_heating_power_range"
+    #: The key under which hplib's space-heating answers are cached: the published power range's and the
+    #: space-heating step's capacity (:meth:`capacity_at_outlet`). Both ask hplib at its 5 K lift, where its answer is a
+    #: function of the outlet, so they share one key.
+    SPACE_HEATING_OPERATION_MODE: ClassVar[str] = "heating_building"
     ThermalOutputPowerSH = "ThermalOutputPowerSH"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
@@ -462,9 +649,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         Raises:
             ValueError: If the set thermal output power is not a finite power of at least 1 W
-                (:meth:`refuse_an_impossible_thermal_power`), if the nominal secondary mass flow is negative or not
-                finite, or if it is unset or 0 in a setup whose water pump runs at that fixed flow (hot-water storage
-                in series or no storage).
+                (:meth:`refuse_an_impossible_thermal_power`), if the nominal secondary mass flow is not a finite flow
+                above 0 kg/s, or if the minimum thermal output is negative or not finite.
         """
 
         self.my_simulation_parameters = my_simulation_parameters
@@ -508,31 +694,18 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
-        self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
+        self.m_dot_ref = float(concrete(config.massflow_nominal_secondary_side_in_kg_per_s))
 
-        # A negative nominal flow would only fail at the first fixed-flow step (NegativeMassFlowError), so it is
-        # refused here, where the field that is wrong can still be named.
-        if self.m_dot_ref is not None and not (math.isfinite(self.m_dot_ref) and self.m_dot_ref >= 0.0):
+        # Every arrangement heats the nominal flow, so a flow of 0 would leave the machine without a circuit and a
+        # negative one would only fail at the first step (NegativeMassFlowError); both are refused here, where the
+        # field that is wrong can still be named.
+        if not (math.isfinite(self.m_dot_ref) and self.m_dot_ref > 0.0):
             raise ValueError(
-                "The heat pump's massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow of at least "
-                f"0 kg/s, got {self.m_dot_ref!r} kg/s: the water pump circulates this flow through the secondary side."
+                "The heat pump's massflow_nominal_secondary_side_in_kg_per_s must be a finite mass flow above 0 kg/s, "
+                f"got {self.m_dot_ref!r} kg/s: the water pump circulates this flow through the secondary side."
             )
-
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIES,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-        ]:
-            if self.m_dot_ref is None or self.m_dot_ref == 0:
-                raise ValueError(
-                    """If system setup is without parallel hot water storage, nominal massflow and minimum
-                    thermal power of the heat pump must be given an integer value due to constant massflow
-                    of water pump."""
-                )
-        #: The secondary side's pump in the fixed-flow modes (a storage in series, or none): a constant pump at the
-        #: nominal flow; None for a machine without a nominal flow, which runs hplib's flow only.
-        self.fixed_flow_pump: Optional[ConstantFlowPump] = (
-            ConstantFlowPump(design_mass_flow_in_kg_per_second=self.m_dot_ref) if self.m_dot_ref else None
-        )
+        #: The secondary side's pump: a constant pump at the nominal flow, in every arrangement.
+        self.secondary_pump = ConstantFlowPump(design_mass_flow_in_kg_per_second=self.m_dot_ref)
 
         self.fluid_primary_side = config.fluid_primary_side
 
@@ -552,7 +725,21 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
-        self.minimum_thermal_output_power_in_watt = config.minimum_thermal_output_power_in_watt
+        self.minimum_thermal_output_power_in_watt = float(concrete(config.minimum_thermal_output_power_in_watt))
+        if not (math.isfinite(self.minimum_thermal_output_power_in_watt) and self.minimum_thermal_output_power_in_watt >= 0.0):
+            raise ValueError(
+                "The heat pump's minimum_thermal_output_power_in_watt must be a finite power of at least 0 W, got "
+                f"{self.minimum_thermal_output_power_in_watt!r} W: it is the lowest power the compressor holds."
+            )
+        #: The minimal thermal power hplib's own rule raises the compressor's capacity to, in W
+        #: (:meth:`CarnotCopHeatPump.simulate`): the minimum output for an inverter, whose compressor can speed up to
+        #: reach it, none for an on/off machine, whose compressor has one speed and whose minimum output is its
+        #: whole rated power.
+        self.hplib_minimal_thermal_power_in_watt: float = (
+            self.minimum_thermal_output_power_in_watt
+            if CompressorControl(concrete(config.compressor_control)) == CompressorControl.INVERTER
+            else 0.0
+        )
 
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(
@@ -759,21 +946,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 mandatory=True,
             )
 
-        if (
-            self.position_hot_water_storage_in_system
-            in [
-                PositionHotWaterStorageInSystemSetup.SERIES,
-                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-            ]
-            or self.passive_cooling_with_brine
-        ):
-            self.set_temperature_hp_space_heating: ComponentInput = self.add_input(
-                self.component_name,
-                self.SetHeatingTemperatureSH,
-                LoadTypes.TEMPERATURE,
-                Units.CELSIUS,
-                True,
-            )
+        # The outlet its space-heating controller tells the machine to hold, in every arrangement; passive cooling
+        # cools towards it.
+        self.set_temperature_hp_space_heating: ComponentInput = self.add_input(
+            self.component_name,
+            self.SetHeatingTemperatureSH,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
 
         # Define component outputs
         self.p_th_space_heating: ComponentOutput = self.add_output(
@@ -1236,6 +1417,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.RequestedPartLoadRatioSh,
             )
         )
+        # the controller's target is the outlet the machine holds while it heats the building
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.SetHeatingTemperatureSH,
+                hpc_classname,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius,
+            )
+        )
         return connections
 
     def get_default_connections_from_heat_pump_controller_dhw(
@@ -1468,7 +1657,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         Args:
             conditions: The step's temperatures, whose source and ambient set the compressor's maximal outlet.
-            results: The machine's answer at the circuit's return: its thermal power and its COP.
+            results: The machine's answer for the step, at the required outlet: its thermal capacity and its COP.
             part_load_ratio: The fraction of the step the request asks for at full load, from 0 to 1.
             mass_flow_in_kg_per_second: The circuit's flow at full load, in kg/s.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
@@ -1541,61 +1730,75 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             )
         return -thermal_power_in_watt / eer
 
-    #: The time constant of the heat pump's start-up in the fixed-flow mode, in s: a machine that has run for ``t``
-    #: seconds delivers ``1 - e^(-t / 360 s)`` of its target power, so it reaches 63 % after six minutes.
-    START_UP_TIME_CONSTANT_IN_SECONDS: ClassVar[float] = 360.0
+    #: The time constant of the compressor's start-up, in s: a machine that has heated for ``t`` seconds delivers
+    #: ``1 - e^(-t / 120 s)`` of the power its outlet control asks for, the thermal inertia of the refrigerant cycle and
+    #: the condenser. 120 s is the single time constant Riederer et al. fitted to a split unit's start-up (CLIMA 2000,
+    #: 1997, arXiv:1212.5665), who also cite 0.32 to 0.47 min (Murphy) and more than 2 min (O'Neal) for cooling units;
+    #: Uhlmann and Bertsch measured a 16 kW air/water unit whose thermal output "takes nearly a minute to reach its
+    #: steady state value" (reported by Baster, PhD thesis, University of Strathclyde, 2017, section 2.3,
+    #: doi:10.48730/ndz6-0r38). The 10 to 20 min an inverter's frequency ramp takes to full output is a manufacturer's
+    #: compressor-protection setting, not thermal inertia, and is not modelled. Owner decision of 2026-11-26.
+    START_UP_TIME_CONSTANT_IN_SECONDS: ClassVar[float] = 120.0
 
-    #: The lift hplib holds between return and outlet in the parallel mode and on the hot-water side, in K.
-    NOMINAL_LIFT_IN_KELVIN: ClassVar[float] = 5.0
+    #: The lift hplib holds between return and outlet in every call, in K: hplib's own flow model, at the spread of the
+    #: EN 14511 W35 rating. Hot water runs hplib's flow at it, and the space-heating capacity at an outlet is hplib's
+    #: answer at a return this lift below that outlet (:meth:`capacity_at_outlet`).
+    NOMINAL_LIFT_IN_KELVIN: ClassVar[float] = MoreAdvancedHeatPumpHPLibConfig.RATED_LIFT_IN_KELVIN
 
-    #: The lift that stands for zero in the fixed-flow modes, in K: hplib divides by the lift, so a set temperature
-    #: equal to the return is answered with this vanishing lift instead of zero.
+    #: The lift that stands for zero in passive cooling, in K: a set temperature equal to the return is answered with
+    #: this vanishing lift instead of zero.
     VANISHING_LIFT_IN_KELVIN: ClassVar[float] = 0.00000001
 
-    #: The lowest thermal power a hot-water step modulates down to, in W: none, so a hot-water charge follows the
-    #: tank's need. Space heating and cooling keep the configured ``minimum_thermal_output_power_in_watt``.
-    HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[float] = 0.0
-
     @staticmethod
-    def fixed_flow_operating_point(
+    def nominal_flow_operating_point(
         *,
         pump: ConstantFlowPump,
         return_temperature_in_celsius: float,
         lift_in_kelvin: float,
         minimal_thermal_power_in_watt: float,
         time_on_heating_in_seconds: float,
+        seconds_per_timestep: float,
     ) -> PumpOperatingPoint:
-        """Return the flow and the outlet temperature of a circuit the heat pump runs at a fixed flow.
+        """Return the flow and the outlet temperature the heat pump aims at over its nominal flow in one step.
 
-        In the fixed-flow mode (a storage in series, or none) the constant pump runs the nominal flow and the heat pump
-        aims at the power that flow carries over the lift, at least its minimal thermal power. While the machine
-        starts, it delivers ``1 - e^(-t / START_UP_TIME_CONSTANT_IN_SECONDS)`` of that power, ``t`` being how long it
-        has been heating. The outlet is the return plus that power over ``m c``
-        (:meth:`ConstantFlowPump.operating_point`). For example, 0.333 kg/s over a 5 K lift aims at 6959.7 W; after ten
-        minutes of running it delivers 81 % of it and supplies 4.05 K above the return.
+        The constant pump runs the nominal flow ``m``, and the heat pump aims at the power that flow carries over the
+        lift, ``m c lift``, at least its minimal thermal power. While the machine starts it delivers less: a machine
+        that has heated for ``t`` seconds delivers ``1 - e^(-t / tau)`` of that power
+        (:attr:`START_UP_TIME_CONSTANT_IN_SECONDS`), and the step books the mean of that share over the step,
+        ``1 - (tau / dt) e^(-t0 / tau) (1 - e^(-dt / tau))`` with ``t0`` the time heated before the step. The outlet is
+        the return plus the delivered power over ``m c`` (:meth:`ConstantFlowPump.operating_point`).
+
+        For example, 0.3723 kg/s over a 2 K lift aims at 3112 W, above a 1945 W minimum. The first 60 s step of a run
+        delivers 21.3 % of it, a step after 600 s of heating 99.5 %; a first 900 s step delivers 86.7 % and the next
+        one 99.99 %. Why the step mean: fifteen 60 s steps then deliver exactly the heat of one 900 s step, so the
+        start-up does not depend on the step length.
 
         Args:
             pump: The heat pump's constant secondary-side pump, at the nominal flow.
             return_temperature_in_celsius: The circuit's return temperature, in °C.
-            lift_in_kelvin: The lift the heat pump aims at, in K.
-            minimal_thermal_power_in_watt: The lowest thermal power the machine modulates down to, in W.
+            lift_in_kelvin: The lift the heat pump aims at, in K, 0 or more.
+            minimal_thermal_power_in_watt: The lowest thermal power the machine holds, in W.
             time_on_heating_in_seconds: How long the machine has been heating before this step, in s.
+            seconds_per_timestep: The step length, in s.
 
         Returns:
             The nominal flow and the outlet temperature.
+
+        Raises:
+            ValueError: If the lift is negative.
         """
+        if lift_in_kelvin < 0.0:
+            raise ValueError(f"The heat pump aims at a lift of 0 K or more, got {lift_in_kelvin!r} K.")
         thermal_power_at_lift_in_watt = (
             pump.design_mass_flow_in_kg_per_second * PumpedWater.SPECIFIC_HEAT_IN_JOULE_PER_KG_PER_KELVIN * lift_in_kelvin
         )
-        if thermal_power_at_lift_in_watt <= minimal_thermal_power_in_watt:
-            target_power_in_watt = minimal_thermal_power_in_watt
-        else:
-            target_power_in_watt = thermal_power_at_lift_in_watt
-        target_power_in_watt = target_power_in_watt * (
-            1 - np.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
-        )
+        time_constant_in_seconds = MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS
+        started_up_share = 1.0 - (time_constant_in_seconds / seconds_per_timestep) * math.exp(
+            -time_on_heating_in_seconds / time_constant_in_seconds
+        ) * (1.0 - math.exp(-seconds_per_timestep / time_constant_in_seconds))
         return pump.operating_point(
-            heat_power_in_watt=float(target_power_in_watt), return_temperature_in_celsius=return_temperature_in_celsius
+            heat_power_in_watt=max(thermal_power_at_lift_in_watt, minimal_thermal_power_in_watt) * started_up_share,
+            return_temperature_in_celsius=return_temperature_in_celsius,
         )
 
     @staticmethod
@@ -1791,15 +1994,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         memo = self.space_heating_power_range_memo
         if memo is not None and memo[0] == key:
             return memo[1]
-        # hplib reads the lift from its own object; the step's operation sets it again before its own call
+        # hplib_result sets hplib's lift to its 5 K; the lift published for the step is the operation's, and an idle
+        # step keeps the one published before
         lift_of_the_step_in_kelvin = self.heatpump.delta_t
-        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         results = self.hplib_result(
             conditions,
             return_temperature_in_celsius=start_temperature_in_celsius,
             mode=1,
-            operation_mode=self.POWER_RANGE_OPERATION_MODE,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
+            operation_mode=self.SPACE_HEATING_OPERATION_MODE,
         )
         self.heatpump.delta_t = lift_of_the_step_in_kelvin
         full_load = self.rod_assisted_heating(
@@ -1827,8 +2029,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     ) -> float:
         """Return the electricity a compressor draws at its minimum thermal power, at its full-load COP, in W.
 
-        The heat pump modulates by running a fraction of the step at full load (:meth:`BackupHeatingRod.heating`), so
-        its minimum load is the minimum thermal power over the full-load COP: the full-load electricity times the share
+        The minimum load is the minimum thermal power over the full-load COP: the full-load electricity times the share
         of the minimum in the full-load heat, at most 1. For example, 6,000 W of heat for 1,500 W of electricity and a
         minimum of 1,800 W give 450 W; a minimum of 8,000 W, above the full load, gives the full 1,500 W. A machine
         that gives no heat at full load has no smaller load either, and its full-load electricity is returned.
@@ -1909,18 +2110,9 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     def step_conditions(self, stsv: SingleTimeStepValues) -> "HeatPumpStepConditions":
         """Return the temperatures the heat pump reads in this step: source, ambient, returns and set points.
 
-        A set point that this configuration does not read, such as the space-heating set temperature in the
-        parallel mode, is None; without hot-water preparation the hot-water return is 0 °C, the value its idle
-        outputs have always carried.
+        Without hot-water preparation the hot-water return is 0 °C, the value its idle outputs have always carried,
+        and the hot-water set temperature is None.
         """
-        reads_space_heating_set_temperature = (
-            self.position_hot_water_storage_in_system
-            in [
-                PositionHotWaterStorageInSystemSetup.SERIES,
-                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-            ]
-            or self.passive_cooling_with_brine
-        )
         return HeatPumpStepConditions(
             source_temperature_in_celsius=stsv.get_input_value(self.t_in_primary),
             ambient_temperature_in_celsius=stsv.get_input_value(self.t_amb),
@@ -1928,9 +2120,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             hot_water_return_temperature_in_celsius=(
                 stsv.get_input_value(self.t_in_secondary_dhw) if self.with_domestic_hot_water_preparation else 0
             ),
-            space_heating_set_temperature_in_celsius=(
-                stsv.get_input_value(self.set_temperature_hp_space_heating) if reads_space_heating_set_temperature else None
-            ),
+            space_heating_set_temperature_in_celsius=stsv.get_input_value(self.set_temperature_hp_space_heating),
             hot_water_supply_set_temperature_in_celsius=(
                 stsv.get_input_value(self.supply_temperature_set_for_dhw_in_celsius_channel)
                 if self.with_domestic_hot_water_preparation
@@ -1948,8 +2138,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     ) -> "HeatPumpOperation":
         """Return the heat pump's powers, outlets and flows for one step in the mode ``on_off`` selects.
 
-        1 heats the building, for the part-load ratio's share of the step at full load, 2 the hot water for the whole
-        step, -1 cools the building (passively through the brine, or actively), 0 is off.
+        1 heats the building, holding the space-heating set point for the part-load ratio's share of the step, 2 the
+        hot water for the whole step, -1 cools the building (passively through the brine, or actively), 0 is off.
 
         Raises:
             ValueError: If ``on_off`` is no known mode.
@@ -1967,21 +2157,68 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     def space_heating(
         self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers", *, part_load_ratio: float
     ) -> "HeatPumpOperation":
-        """Return a space-heating step at a part-load ratio: at hplib's flow with a parallel storage, at the nominal flow otherwise."""
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
-            return self.space_heating_at_hplib_flow(conditions, part_load_ratio=part_load_ratio)
-        return self.space_heating_at_fixed_flow(conditions, timers, part_load_ratio=part_load_ratio)
+        """Return a space-heating step at a part-load ratio: the outlet held at the set point over the nominal flow.
+
+        The machine controls its own outlet, in every arrangement: from the return ``T_ret`` it reads, its set point
+        ``T_set``, its nominal flow ``m`` and its minimum output ``P_min``, it aims at ``P = max(m c (T_set - T_ret),
+        P_min)``, times its start-up share (:meth:`nominal_flow_operating_point`). The outlet that power gives over the
+        nominal flow is the required one. The compressor delivers it up to the smaller of its capacity at that outlet
+        (:meth:`capacity_at_outlet`) and the heat the flow carries up to the compressor's maximal outlet; the backup rod
+        adds only the lift above that maximal outlet (:meth:`rod_assisted_heating`). So the outlet is the set point
+        while the power lies between the minimum output and the capacity, above it while the minimum output overheats
+        the return, and below it where the capacity caps the compressor. The step runs the part-load ratio's share of
+        that power, at the averaged flow ``r m``, and books the heat the flow carries.
+
+        For example, 0.3723 kg/s, a 33 °C set point and a 31 °C return of a machine that has run for ten minutes ask
+        for 3112 W at full start-up and run at 99.5 % of it, an outlet of 32.99 °C.
+
+        Why the set point and not hplib's 5 K lift: an inverter unit modulates its compressor so that its outlet
+        reaches the supply its controller asks for, down to its minimum output, and cycles only below it.
+
+        Args:
+            conditions: The step's temperatures, with the return and the set point.
+            timers: How long the machine has been heating before this step.
+            part_load_ratio: The fraction of the step the space-heating charge runs, from 0 to 1.
+
+        Returns:
+            The step's powers, outlet and flow.
+        """
+        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
+        aimed = self.nominal_flow_operating_point(
+            pump=self.secondary_pump,
+            return_temperature_in_celsius=return_in_celsius,
+            lift_in_kelvin=max(conditions.space_heating_set_temperature_in_celsius - return_in_celsius, 0.0),
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
+            time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+        )
+        results = self.capacity_at_outlet(conditions, outlet_temperature_in_celsius=aimed.supply_temperature_in_celsius)
+        heating = self.rod_assisted_heating(
+            conditions,
+            results,
+            part_load_ratio=part_load_ratio,
+            mass_flow_in_kg_per_second=aimed.mass_flow_in_kg_per_second,
+            return_temperature_in_celsius=return_in_celsius,
+            required_outlet_temperature_in_celsius=aimed.supply_temperature_in_celsius,
+        )
+        self.heatpump.delta_t = heating.outlet_temperature_in_celsius - return_in_celsius
+        return HeatPumpOperation.space_heating(
+            conditions,
+            heating=heating,
+            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
+            eer=results.eer,
+        )
 
     def hot_water(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
-        """Return a hot-water step: at hplib's flow with a parallel storage, at the nominal flow otherwise.
+        """Return a hot-water step at full load: at hplib's flow with a parallel storage, at the nominal flow otherwise.
 
-        A hot-water step holds the nominal 5 K lift and modulates down to no minimal power
-        (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`); the configured minimum stays in force for space heating.
+        A hot-water charge holds the nominal 5 K lift at the machine's one minimum output: it runs at full load and its
+        controller ends it on the tank's temperature.
         """
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             return self.hot_water_at_hplib_flow(conditions)
-        return self.hot_water_at_fixed_flow(conditions, timers)
+        return self.hot_water_at_nominal_flow(conditions, timers)
 
     def hplib_result(
         self,
@@ -1990,110 +2227,53 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         return_temperature_in_celsius: float,
         mode: int,
         operation_mode: str,
-        minimal_thermal_power_in_watt: float,
     ) -> "HplibResult":
-        """Return hplib's answer at the step's source and ambient temperatures and one circuit's return.
+        """Return hplib's answer at the step's source and ambient temperatures and one circuit's return, at its 5 K lift.
 
-        The minimal thermal power is the caller's: the configured minimum for space heating and cooling, none for
-        hot water (:attr:`HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT`). The cache keys on ``operation_mode``, so each
-        circuit's cached answers are computed with that circuit's minimum only.
+        hplib is always asked at :attr:`NOMINAL_LIFT_IN_KELVIN`, so its outlet is the return plus 5 K and its answer is
+        a function of the source, the ambient and that outlet; its minimal thermal power is the machine's
+        (:attr:`hplib_minimal_thermal_power_in_watt`). The cache keys on ``operation_mode``.
 
         Args:
             conditions: The step's temperatures.
-            return_temperature_in_celsius: The return temperature of the circuit hplib is asked for, in °C.
+            return_temperature_in_celsius: The return temperature hplib is asked at, in °C.
             mode: hplib's mode, 1 heating, 2 cooling.
             operation_mode: The circuit hplib is evaluated for, part of the cache key.
-            minimal_thermal_power_in_watt: The lowest thermal power hplib modulates down to in this step, in W.
+
+        Returns:
+            hplib's answer.
         """
+        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         return self.get_cached_results_or_run_hplib_simulation(
             source_temperature_in_celsius=conditions.source_temperature_in_celsius,
             return_temperature_in_celsius=return_temperature_in_celsius,
             ambient_temperature_in_celsius=conditions.ambient_temperature_in_celsius,
             mode=mode,
             operation_mode=operation_mode,
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=self.hplib_minimal_thermal_power_in_watt,
         )
 
-    def space_heating_at_hplib_flow(
-        self, conditions: "HeatPumpStepConditions", *, part_load_ratio: float
-    ) -> "HeatPumpOperation":
-        """Return a space-heating step with a parallel storage: hplib's flow and outlet, the heat that flow carries.
+    def capacity_at_outlet(self, conditions: "HeatPumpStepConditions", *, outlet_temperature_in_celsius: float) -> "HplibResult":
+        """Return the compressor's thermal capacity and COP at the step's source and a space-heating outlet.
 
-        hplib holds a 5 K lift and answers the buffer's return with an outlet, a flow and a capacity; the request is the
-        part-load ratio's share of the heat that flow carries up to that outlet, which the compressor and, above its
-        maximal outlet, the backup rod deliver (:meth:`rod_assisted_heating`). For example, at a ratio of 0.5 a step
-        asks for half the heat of 0.4 kg/s from 30 to 35 °C, 4180 W, published as 0.2 kg/s at 35 °C.
+        hplib's capacity and the Carnot-efficiency COP depend on the source, the ambient and the outlet only, not on
+        the return: hplib is asked at a return :attr:`NOMINAL_LIFT_IN_KELVIN` below the outlet (:meth:`hplib_result`),
+        so its cache, on a 0.1 K grid of that return, is a cache over the outlet. Two lifts at one return are two
+        outlets and get two capacities. For example, at 2 °C outside an outlet of 35 °C is hplib's answer at a 30 °C
+        return. Only the capacity and the COP of the answer are read; its flow belongs to hplib's 5 K lift.
+
+        Args:
+            conditions: The step's temperatures.
+            outlet_temperature_in_celsius: The outlet the compressor is asked for, in °C.
+
+        Returns:
+            hplib's answer at that outlet.
         """
-        self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
-        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
-        results = self.hplib_result(
+        return self.hplib_result(
             conditions,
-            return_temperature_in_celsius=return_in_celsius,
+            return_temperature_in_celsius=outlet_temperature_in_celsius - self.NOMINAL_LIFT_IN_KELVIN,
             mode=1,
-            operation_mode="heating_building",
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
-        )
-        heating = self.rod_assisted_heating(
-            conditions,
-            results,
-            part_load_ratio=part_load_ratio,
-            mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
-            return_temperature_in_celsius=return_in_celsius,
-            required_outlet_temperature_in_celsius=results.outlet_temperature_in_celsius,
-        )
-        return HeatPumpOperation.space_heating(
-            conditions,
-            heating=heating,
-            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
-            eer=results.eer,
-        )
-
-    def space_heating_at_fixed_flow(
-        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers", *, part_load_ratio: float
-    ) -> "HeatPumpOperation":
-        """Return a space-heating step in the fixed-flow mode: the nominal flow, the outlet from the target power.
-
-        The heat pump aims at the lift to its space-heating set temperature, at most 5 K, and the outlet that target
-        power gives at the nominal flow (:meth:`fixed_flow_operating_point`) is the required one; the compressor
-        delivers it as far as its capacity and maximal outlet allow and the backup rod adds the rest
-        (:meth:`rod_assisted_heating`). The heat pump books the heat the flow carries.
-        """
-        assert conditions.space_heating_set_temperature_in_celsius is not None
-        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
-        return_in_celsius = conditions.space_heating_return_temperature_in_celsius
-        self.heatpump.delta_t = min(
-            conditions.space_heating_set_temperature_in_celsius - return_in_celsius, self.NOMINAL_LIFT_IN_KELVIN
-        )
-        if self.heatpump.delta_t == 0:
-            self.heatpump.delta_t = self.VANISHING_LIFT_IN_KELVIN
-        results = self.hplib_result(
-            conditions,
-            return_temperature_in_celsius=return_in_celsius,
-            mode=1,
-            operation_mode="heating_building",
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
-        )
-        pumped = self.fixed_flow_operating_point(
-            pump=self.fixed_flow_pump,
-            return_temperature_in_celsius=return_in_celsius,
-            lift_in_kelvin=self.heatpump.delta_t,
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
-            time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
-        )
-        heating = self.rod_assisted_heating(
-            conditions,
-            results,
-            part_load_ratio=part_load_ratio,
-            mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
-            return_temperature_in_celsius=return_in_celsius,
-            required_outlet_temperature_in_celsius=pumped.supply_temperature_in_celsius,
-        )
-        self.heatpump.delta_t = heating.outlet_temperature_in_celsius - return_in_celsius
-        return HeatPumpOperation.space_heating(
-            conditions,
-            heating=heating,
-            electrical_power_brine_pump_in_watt=self.electrical_input_power_brine_pump_in_watt,
-            eer=results.eer,
+            operation_mode=self.SPACE_HEATING_OPERATION_MODE,
         )
 
     def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
@@ -2111,7 +2291,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             return_temperature_in_celsius=return_in_celsius,
             mode=1,
             operation_mode="heating_dhw",
-            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
         assert conditions.hot_water_supply_set_temperature_in_celsius is not None
         outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
@@ -2135,31 +2314,30 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             eer=results.eer,
         )
 
-    def hot_water_at_fixed_flow(
+    def hot_water_at_nominal_flow(
         self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers"
     ) -> "HeatPumpOperation":
-        """Return a hot-water step in the fixed-flow mode: the nominal flow, a 5 K target lift, the outlet capped.
+        """Return a hot-water step without a parallel storage: the nominal flow, a 5 K target lift, the outlet capped.
 
-        The outlet follows from the target power at the nominal flow (:meth:`fixed_flow_operating_point`) and is
+        The outlet follows from the target power at the nominal flow (:meth:`nominal_flow_operating_point`) and is
         capped at the lower of the maximal hot-water supply and the controller's set temperature, as in
         :meth:`hot_water_at_hplib_flow`; that outlet is the required one, which the compressor and the backup rod
         deliver (:meth:`rod_assisted_heating`), and the heat pump books the heat the flow carries.
         """
-        assert self.fixed_flow_pump is not None, "the fixed-flow modes require a nominal flow, checked when built"
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
             conditions,
             return_temperature_in_celsius=return_in_celsius,
             mode=1,
             operation_mode="heating_dhw",
-            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
         )
-        pumped = self.fixed_flow_operating_point(
-            pump=self.fixed_flow_pump,
+        pumped = self.nominal_flow_operating_point(
+            pump=self.secondary_pump,
             return_temperature_in_celsius=return_in_celsius,
-            lift_in_kelvin=self.heatpump.delta_t,
-            minimal_thermal_power_in_watt=self.HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT,
+            lift_in_kelvin=self.NOMINAL_LIFT_IN_KELVIN,
+            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
             time_on_heating_in_seconds=timers.time_on_heating_in_seconds,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
         )
         assert conditions.hot_water_supply_set_temperature_in_celsius is not None
         outlet_in_celsius = hydronics.capped_hot_water_supply_temperature_c(
@@ -2189,7 +2367,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         The circuit is cooled towards the space-heating set temperature, by at most 5 K; only the brine pump draws
         electricity, so the COP is 0 and the EER is reported as 1.
         """
-        assert conditions.space_heating_set_temperature_in_celsius is not None
         return_in_celsius = conditions.space_heating_return_temperature_in_celsius
         mass_flow_in_kg_per_second = self.m_dot_ref
         self.heatpump.delta_t = min(
@@ -2226,7 +2403,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             return_temperature_in_celsius=return_in_celsius,
             mode=2,
             operation_mode="cooling_building",
-            minimal_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
         )
         thermal_power_in_watt = hydronics.circuit_power_w(
             mass_flow_kg_per_s=results.mass_flow_in_kg_per_second,

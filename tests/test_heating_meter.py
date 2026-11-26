@@ -21,6 +21,7 @@ from hisim.components import (
     generic_pv_system,
 )
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )
@@ -183,6 +184,9 @@ def test_house(
     # because the buffer volume asserted below is the one an 8 kW machine gets.
     my_heatpump_config.set_thermal_output_power_in_watt = 8000.0
     my_heatpump_config.heating_rod_rated_electrical_power_in_watt = 8000.0
+    my_heatpump_config.compressor_control = CompressorControl.INVERTER
+    my_heatpump_config.minimum_thermal_output_power_in_watt = 1800.0
+    my_heatpump_config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     my_heatpump_config.heating_reference_temperature_in_celsius = -7.0
     my_heatpump_config.with_domestic_hot_water_preparation = True
 

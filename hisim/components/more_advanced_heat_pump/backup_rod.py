@@ -1,8 +1,7 @@
-"""The electric backup heating rod inside the hplib heat pump, which adds the heat the compressor cannot deliver.
+"""The electric backup heating rod inside the hplib heat pump, which lifts the water beyond the compressor's maximal outlet.
 
 :class:`BackupHeatingRod` holds the rod's rated electrical power and decides, per step, how much heat it adds at a COP
-of 1: only where the requested heat exceeds the compressor's capacity, or the required outlet exceeds the compressor's
-maximal outlet (decision 8 of ``roadmap/heat_pump_model_rework_spec.md``). :class:`RodAssistedHeating` is one heating
+of 1: only where the required outlet exceeds the compressor's maximal outlet. :class:`RodAssistedHeating` is one heating
 circuit's step shared between the compressor and the rod: the heat and electricity of each, the averaged flow and the
 outlet the circuit publishes.
 """
@@ -67,21 +66,23 @@ class RodAssistedHeating:
 class BackupHeatingRod(Subcomponent):
     """The electric backup heating rod inside the heat pump: it adds the heat the compressor cannot, at a COP of 1.
 
-    Real air/water and brine/water units ship with an electric heating element for the coldest days (decision 8 of
-    ``roadmap/heat_pump_model_rework_spec.md``). The rod heats the same water as the compressor and runs only where the
-    compressor falls short, in one of two cases:
+    Real air/water and brine/water units ship with an electric heating element for the coldest days. The rod heats the
+    same water as the compressor and runs only where the required outlet exceeds the compressor's maximal outlet
+    (:meth:`CarnotCopHeatPump.maximal_outlet_temperature_in_celsius`): the compressor lifts the circuit's flow to its
+    maximal outlet, and the rod lifts it on to the required outlet, ``m c (T_required - T_max)``.
 
-    1. the heat requested in the step exceeds the compressor's thermal capacity at the current source and outlet
-       temperature (hplib's thermal power until step d of the spec replaces the capacity surface);
-    2. the required outlet exceeds the compressor's maximal outlet
-       (:meth:`CarnotCopHeatPump.maximal_outlet_temperature_in_celsius`): the compressor lifts the circuit's flow to
-       its maximal outlet, and the rod lifts it on to the required outlet, ``m c (T_required - T_max)``.
+    The rod does not fill a request above the compressor's capacity (owner decision of 2026-11-26). The heat pump holds
+    its outlet at a set point, so its request is a control target, not a demand: a cold return after a hot-water charge
+    asks for far more than the house needs, and a rod filling that gap would run where no real unit's rod runs. A real
+    unit's controller releases its backup on a sustained shortfall instead (bead hisim-heat-pump-model-rework-fpqz.8).
+    What the compressor cannot deliver below its maximal outlet is not delivered, and the circuit's outlet falls short.
 
     The decision is one of energy over the whole step (:meth:`heating`): the compressor runs at its full output for as
-    much of the step as the request needs, and the rod covers only what the compressor cannot deliver in the whole step,
-    ``E_rod = min(Q_requested - Q_compressor,max, P_rod * dt)``. What the rod cannot cover either is not delivered. Where
-    the compressor copes, the rod does not run. Its electricity is the heat pump's output ``ElectricalInputPowerHeatingRod``
-    with its own energy port; the rod is no part of the EN 14825 rating or the SCOP calibration.
+    much of the step as the request needs, and the rod covers only the part of the request the compressor could not
+    deliver even at unlimited capacity, the heat beyond its maximal outlet, ``E_rod = min(Q_requested - m c (T_max -
+    T_return) dt, P_rod dt)``. What the rod cannot cover either is not delivered. Its electricity is the heat pump's
+    output ``ElectricalInputPowerHeatingRod`` with its own energy port; the rod is no part of the EN 14825 rating or the
+    SCOP calibration.
 
     Source of the default rating (:attr:`DEFAULT_LARGEST_RATED_ELECTRICAL_POWER_IN_WATT`, spec §3.1): the residential
     indoor units of the main manufacturers carry one element class of 6 or 9 kW, switchable in 3 kW stages by the
@@ -126,18 +127,20 @@ class BackupHeatingRod(Subcomponent):
         """Return a heating circuit's step shared between the compressor and the rod.
 
         All powers are averages over the step. The request is the part-load ratio's share of the full-load heat at the
-        required outlet, ``P_req = r m c (T_required - T_return)``. The compressor's most over the whole step is the
-        smaller of its capacity and what its flow carries up to its maximal outlet, ``P_cmax = min(P_cap, m c
-        (min(T_max, T_required) - T_return))``, at least 0. The compressor delivers ``min(P_req, P_cmax)`` and runs that
-        share of the step at full output; the rod adds ``min(P_req - P_compressor, P_rod)``. The circuit publishes the
-        averaged flow ``r m`` at the required outlet, or, where the rod cannot cover the rest, at the lower outlet that
-        flow reaches with the delivered heat.
+        required outlet, ``P_req = r m c (T_required - T_return)``. What the flow carries up to the compressor's maximal
+        outlet is ``P_outlet = m c (min(T_max, T_required) - T_return)``, at least 0, and the compressor's most over the
+        whole step is the smaller of that and its capacity, ``P_cmax = min(P_cap, P_outlet)``. The compressor delivers
+        ``min(P_req, P_cmax)`` and runs that share of the step at full output; the rod adds the heat beyond the maximal
+        outlet, ``min(max(P_req - P_outlet, 0), P_rod)``, and nothing for a request above the capacity. The circuit
+        publishes the averaged flow ``r m`` at the required outlet, or, where the compressor and the rod together fall
+        short, at the lower outlet that flow reaches with the delivered heat.
 
         For example, 0.4 kg/s from a 60 °C return to a 65 °C required outlet (8360 W), a compressor of 8 kW capacity
         whose maximal outlet is 62 °C at a COP of 2.5, and a 9 kW rod: at ratio 1 the compressor delivers 3344 W for
         1337.6 W and the rod 5016 W; at ratio 0.4 the request of 3344 W is what the compressor delivers over the whole
         step at its smaller lift, so the rod stays off, at 0.16 kg/s and 65 °C. With a 2 kW rod at ratio 1 the circuit
-        gets 5344 W and an outlet of 63.2 °C.
+        gets 5344 W and an outlet of 63.2 °C. A compressor of 6 kW capacity below a 75 °C maximal outlet delivers its
+        6000 W of the 8360 W, the rod stays off and the outlet is 63.59 °C.
 
         Args:
             part_load_ratio: The fraction of the step the request asks for at full load, from 0 to 1.
@@ -172,19 +175,19 @@ class BackupHeatingRod(Subcomponent):
                 mass_flow_in_kg_per_second=mass_flow_averaged_in_kg_per_second,
                 outlet_temperature_in_celsius=return_temperature_in_celsius,
             )
-        compressor_maximal_heat_in_watt = max(
-            min(
-                compressor_thermal_capacity_in_watt,
-                heat_per_kelvin_in_watt_per_kelvin
-                * (
-                    min(compressor_maximal_outlet_temperature_in_celsius, required_outlet_temperature_in_celsius)
-                    - return_temperature_in_celsius
-                ),
+        heat_up_to_maximal_outlet_in_watt = max(
+            heat_per_kelvin_in_watt_per_kelvin
+            * (
+                min(compressor_maximal_outlet_temperature_in_celsius, required_outlet_temperature_in_celsius)
+                - return_temperature_in_celsius
             ),
             0.0,
         )
+        compressor_maximal_heat_in_watt = max(min(compressor_thermal_capacity_in_watt, heat_up_to_maximal_outlet_in_watt), 0.0)
         compressor_heat_in_watt = min(requested_heat_in_watt, compressor_maximal_heat_in_watt)
-        rod_heat_in_watt = min(requested_heat_in_watt - compressor_heat_in_watt, self.rated_electrical_power_in_watt)
+        rod_heat_in_watt = min(
+            max(requested_heat_in_watt - heat_up_to_maximal_outlet_in_watt, 0.0), self.rated_electrical_power_in_watt
+        )
         if compressor_heat_in_watt + rod_heat_in_watt < requested_heat_in_watt:
             outlet_in_celsius = return_temperature_in_celsius + (compressor_heat_in_watt + rod_heat_in_watt) / (
                 mass_flow_averaged_in_kg_per_second * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K

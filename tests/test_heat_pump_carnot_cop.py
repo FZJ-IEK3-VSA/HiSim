@@ -14,6 +14,7 @@ import pytest
 from hplib import hplib as hpl
 
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )
@@ -217,6 +218,9 @@ def heat_pump_component(
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_rod_rated_electrical_power_in_watt = 8000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.minimum_thermal_output_power_in_watt = 1800.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     config.heating_reference_temperature_in_celsius = -7.0
     config.standardized_scop_en14825_w35 = scop_w35
     config.standardized_scop_en14825_w55 = scop_w55

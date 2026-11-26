@@ -1,8 +1,9 @@
-"""The hplib heat pump keeps its configured minimal thermal power for space heating after a hot-water step.
+"""The hplib heat pump has one minimum thermal output, for space heating and hot water alike.
 
-A hot-water step modulates down to no minimal power, a space-heating step to the configured
-``minimum_thermal_output_power_in_watt``. The heat pump used to set its minimum to 0 W in its first hot-water step and
-never back, so from then on every space-heating step modulated below the configured minimum as well.
+Every circuit asks hplib with the configured ``minimum_thermal_output_power_in_watt``, and space heating holds it
+before and after a hot-water step. The heat pump once set its minimum to 0 W in its first hot-water step and never
+back, so from then on every space-heating step modulated below the configured minimum as well; later, hot water had a
+minimum of 0 W of its own.
 """
 
 from typing import Dict, List
@@ -11,6 +12,7 @@ import numpy as np
 import pytest
 
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
     PositionHotWaterStorageInSystemSetup,
@@ -59,7 +61,7 @@ def heat_pump_with_hot_water(position: PositionHotWaterStorageInSystemSetup) -> 
     """Build an 8 kW air-water heat pump with hot-water preparation and a 1800 W minimum, at 60 s steps.
 
     Args:
-        position: Where its space-heating buffer sits, which selects the parallel or the fixed-flow mode.
+        position: Where its space-heating buffer sits.
 
     Returns:
         The heat pump, recording the minimum of every hplib request.
@@ -67,6 +69,8 @@ def heat_pump_with_hot_water(position: PositionHotWaterStorageInSystemSetup) -> 
     config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_rod_rated_electrical_power_in_watt = 8000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = True
     config.minimum_thermal_output_power_in_watt = 1800.0
@@ -79,7 +83,7 @@ def heat_pump_with_hot_water(position: PositionHotWaterStorageInSystemSetup) -> 
 def mild_day_conditions() -> HeatPumpStepConditions:
     """Return a mild day's step: 10 °C outside and at the source, a space-heating return 0.5 K below its set point.
 
-    At the fixed flow of the 8 kW machine the 0.5 K lift carries about 800 W, well below the 1800 W minimum.
+    At the nominal flow of the 8 kW machine the 0.5 K lift carries about 700 W, well below the 1800 W minimum.
     """
     return HeatPumpStepConditions(
         source_temperature_in_celsius=10.0,
@@ -97,10 +101,10 @@ def running_for_an_hour() -> HeatPumpRunTimers:
 
 
 @pytest.mark.parametrize("position", list(PositionHotWaterStorageInSystemSetup))
-def test_space_heating_after_hot_water_asks_hplib_with_the_configured_minimum(
+def test_every_circuit_asks_hplib_with_the_machine_s_one_minimum(
     position: PositionHotWaterStorageInSystemSetup,
 ) -> None:
-    """Catches a hot-water step that leaves its 0 W minimum behind for the space-heating steps after it."""
+    """Catches a circuit with a minimum of its own, or a hot-water step that changes the minimum of the steps after it."""
     heat_pump = heat_pump_with_hot_water(position)
     conditions = mild_day_conditions()
 
@@ -110,20 +114,22 @@ def test_space_heating_after_hot_water_asks_hplib_with_the_configured_minimum(
 
     recorded = heat_pump.minimal_thermal_powers_in_watt
     assert set(recorded["heating_building"]) == {1800.0}
-    assert set(recorded["heating_dhw"]) == {0.0}
+    assert set(recorded["heating_dhw"]) == {1800.0}
 
 
-def test_fixed_flow_space_heating_after_hot_water_delivers_the_configured_minimum() -> None:
+@pytest.mark.parametrize("position", list(PositionHotWaterStorageInSystemSetup))
+def test_space_heating_after_hot_water_delivers_the_configured_minimum(position: PositionHotWaterStorageInSystemSetup) -> None:
     """Catches space heating that modulates below its minimum once the machine has heated hot water.
 
-    In the fixed-flow mode the target power is the heat the nominal flow carries over the lift, at least the
-    minimum; the 0.5 K lift carries about 800 W, so a machine that has run for an hour delivers
-    ``1800 W * (1 - e^(-3600 / 360))``, about 1799.9 W, before and after a hot-water step alike.
+    The space-heating power is the heat the nominal flow carries up to the set point, at least the minimum; the 0.5 K
+    lift carries about 700 W, so a machine that has run for an hour delivers the 1800 W minimum times its started-up
+    share of a 60 s step, ``1 - 2 e^(-30) (1 - e^(-0.5))``, before and after a hot-water step alike.
     """
-    heat_pump = heat_pump_with_hot_water(PositionHotWaterStorageInSystemSetup.SERIES)
+    heat_pump = heat_pump_with_hot_water(position)
     conditions = mild_day_conditions()
+    time_constant_in_seconds = MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS
     expected_thermal_power_in_watt = 1800.0 * (
-        1 - np.exp(-3600 / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
+        1 - (time_constant_in_seconds / 60) * np.exp(-3600 / time_constant_in_seconds) * (1 - np.exp(-60 / time_constant_in_seconds))
     )
 
     before_hot_water = heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)

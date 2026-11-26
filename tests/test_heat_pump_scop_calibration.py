@@ -15,6 +15,7 @@ import pytest
 from hplib import hplib as hpl
 
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )
@@ -183,6 +184,9 @@ class TestTheComponent:
         config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         config.set_thermal_output_power_in_watt = 8000.0
         config.heating_rod_rated_electrical_power_in_watt = 8000.0
+        config.compressor_control = CompressorControl.INVERTER
+        config.minimum_thermal_output_power_in_watt = 1800.0
+        config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
         config.heating_reference_temperature_in_celsius = -7.0
         for name, value in fields.items():
             setattr(config, name, value)

@@ -37,6 +37,7 @@ import pytest
 
 from hisim.component import Component
 from hisim.components.heat_distribution_system import HeatDistributionConfig, HeatDistributionSystemType
+from hisim.components.more_advanced_heat_pump.heat_pump import CompressorControl
 from hisim.components.solar_thermal_system import SolarThermalSystemConfig
 from hisim.config import auto_fields, presets_of
 from hisim.dynamic_component import DynamicComponent
@@ -145,6 +146,11 @@ class AdapterContractScan:
         "MoreAdvancedHeatPumpHPLibConfig.heating_reference_temperature_in_celsius": -7.0,
         # The backup heating rod's rating (#1113): the rated thermal power above, capped at 9 kW.
         "MoreAdvancedHeatPumpHPLibConfig.heating_rod_rated_electrical_power_in_watt": 7780.75,
+        # What the heat pump's own laws give that machine: an inverter compressor (air/water), a minimum output of a
+        # quarter of the rated power and the flow that carries the rated power over 5 K. The extractor reads none.
+        "MoreAdvancedHeatPumpHPLibConfig.compressor_control": CompressorControl.INVERTER,
+        "MoreAdvancedHeatPumpHPLibConfig.minimum_thermal_output_power_in_watt": 1945.19,
+        "MoreAdvancedHeatPumpHPLibConfig.massflow_nominal_secondary_side_in_kg_per_s": 0.3723,
         # The two heat generators the copy law sizes to the archetype's heating load exactly.
         # The extractor reads both as the kilowatts it prices.
         "ElectricHeatingConfig.maximum_electric_power_w": 7780.75,

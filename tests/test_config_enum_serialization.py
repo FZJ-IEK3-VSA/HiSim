@@ -33,6 +33,7 @@ from hisim.components import generic_boiler
 from hisim.components import generic_pv_system
 from hisim.components import heat_distribution_system
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLibConfig,
     PositionHotWaterStorageInSystemSetup,
 )
@@ -57,6 +58,9 @@ def _air_water_heat_pump_config() -> MoreAdvancedHeatPumpHPLibConfig:
     )
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_rod_rated_electrical_power_in_watt = 8000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.minimum_thermal_output_power_in_watt = 1800.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     config.heating_reference_temperature_in_celsius = -7.0
     return config
 

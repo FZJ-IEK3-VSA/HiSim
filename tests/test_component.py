@@ -189,8 +189,10 @@ def test_single_time_step_values() -> None:
 
 @pytest.mark.base
 def test_single_time_step_values_hold_only_floats() -> None:
-    """An int, a bool or a numpy scalar a component publishes is stored as a float, and an unconnected input reads
-    0.0; otherwise a result column's type would depend on which value a component published last."""
+    """An int, a bool or a numpy scalar a component publishes is stored as a float, and an unconnected input reads 0.0.
+
+    Otherwise a result column's type would depend on which value a component published last.
+    """
     stsv = cp.SingleTimeStepValues(3)
     outputs = []
     for index in range(3):

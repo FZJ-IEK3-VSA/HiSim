@@ -1,9 +1,9 @@
-"""The heat pump's backup heating rod: it runs only where the compressor falls short and adds only the missing heat.
+"""The heat pump's backup heating rod: it runs only on the compressor's outlet limit and adds only the lift beyond it.
 
-Decision 8 of ``roadmap/heat_pump_model_rework_spec.md``: the rod sits inside the heat pump, its rated power is the
-sized field ``heating_rod_rated_electrical_power_in_watt`` (9 kW, at most the machine's rated thermal power), and it
-heats at a COP of 1 where the requested heat exceeds the compressor's capacity or the required outlet exceeds the
-compressor's maximal outlet, hplib's COP-1 line until bead hisim-heat-pump-outlet-limit-2vq7. Its electricity is the
+The rod sits inside the heat pump, its rated power is the sized field ``heating_rod_rated_electrical_power_in_watt``
+(9 kW, at most the machine's rated thermal power), and it heats at a COP of 1 where the required outlet exceeds the
+compressor's maximal outlet, hplib's COP-1 line until bead hisim-heat-pump-outlet-limit-2vq7; a request above the
+compressor's capacity is not filled by it (owner decision of 2026-11-26). Its electricity is the
 output ``ElectricalInputPowerHeatingRod`` with its own energy port and part of the heat pump's total. The tests check the
 pure share between compressor and rod (:meth:`BackupHeatingRod.heating`), the compressor's maximal outlet, the heat pump
 in one step at 60 s and at 900 s, the sizing law, the KPI split and that the SCOP rating knows no rod.
@@ -94,13 +94,17 @@ class TestTheShareBetweenCompressorAndRod:
         assert heating.outlet_temperature_in_celsius == 65.0
         assert heating.compressor_running_share == pytest.approx(1.0)
 
-    def test_a_request_above_the_capacity_gets_only_the_missing_heat_from_the_rod(self) -> None:
-        """Case 1: 8360 W asked of a 6 kW compressor, so the rod adds 2360 W at a COP of 1, not more."""
+    def test_a_request_above_the_capacity_below_the_maximal_outlet_runs_no_rod(self) -> None:
+        """8360 W asked of a 6 kW compressor that reaches 75 °C: the rod stays off and the outlet falls short.
+
+        Catches a rod that fills a request above the capacity, which under outlet control is a control target: a cold
+        return after a hot-water charge would run the rod where no real unit's rod runs.
+        """
         heating = RodCase.heating(capacity_in_watt=6000.0)
         assert heating.compressor_thermal_power_in_watt == pytest.approx(6000.0)
-        assert heating.heating_rod_electrical_power_in_watt == pytest.approx(2360.0)
-        assert heating.electrical_power_in_watt == pytest.approx(6000.0 / 2.5 + 2360.0)
-        assert heating.outlet_temperature_in_celsius == 65.0
+        assert heating.heating_rod_electrical_power_in_watt == 0.0
+        assert heating.electrical_power_in_watt == pytest.approx(6000.0 / 2.5)
+        assert heating.outlet_temperature_in_celsius == pytest.approx(60.0 + 6000.0 / 1672.0)
 
     def test_an_outlet_above_the_compressors_maximum_gets_the_lift_beyond_it_from_the_rod(self) -> None:
         """Case 2: the compressor stops at 62 °C, the rod lifts on to 65 °C, ``m c (T_required - T_max)`` = 5016 W."""
@@ -122,12 +126,19 @@ class TestTheShareBetweenCompressorAndRod:
         assert heating.cop == pytest.approx(1.0)
 
     def test_what_the_rod_cannot_cover_is_not_delivered(self) -> None:
-        """A 2 kW rod beside a 6 kW compressor delivers 8000 W of the 8360 W, at a lower outlet of 64.78 °C."""
-        heating = RodCase.heating(rated_electrical_power_in_watt=2000.0, capacity_in_watt=6000.0)
+        """A 2 kW rod beside a compressor that stops at 62 °C delivers 5344 W of the 8360 W, at an outlet of 63.20 °C."""
+        heating = RodCase.heating(rated_electrical_power_in_watt=2000.0, maximal_outlet_in_celsius=62.0)
         assert heating.heating_rod_electrical_power_in_watt == 2000.0
-        assert heating.thermal_power_in_watt == pytest.approx(8000.0)
+        assert heating.thermal_power_in_watt == pytest.approx(3344.0 + 2000.0)
         assert heating.mass_flow_in_kg_per_second == RodCase.MASS_FLOW_IN_KG_PER_SECOND
-        assert heating.outlet_temperature_in_celsius == pytest.approx(60.0 + 8000.0 / 1672.0)
+        assert heating.outlet_temperature_in_celsius == pytest.approx(60.0 + 5344.0 / 1672.0)
+
+    def test_a_capacity_below_the_request_beside_an_outlet_limit_gets_only_the_lift_beyond_the_limit(self) -> None:
+        """A 2 kW compressor that stops at 62 °C: the rod adds the 5016 W above 62 °C, not the capacity's shortfall."""
+        heating = RodCase.heating(capacity_in_watt=2000.0, maximal_outlet_in_celsius=62.0)
+        assert heating.compressor_thermal_power_in_watt == pytest.approx(2000.0)
+        assert heating.heating_rod_electrical_power_in_watt == pytest.approx(RodCase.HEAT_PER_KELVIN_IN_WATT_PER_KELVIN * 3.0)
+        assert heating.outlet_temperature_in_celsius == pytest.approx(60.0 + (2000.0 + 5016.0) / 1672.0)
 
     def test_a_heat_pump_without_a_rod_delivers_only_the_compressors_heat(self) -> None:
         """A rated power of 0: the 6 kW compressor's heat and nothing else."""
@@ -161,8 +172,8 @@ class TestTheShareBetweenCompressorAndRod:
         assert heating.outlet_temperature_in_celsius == 65.0
 
     def test_a_rod_rated_above_the_shortfall_adds_no_more_than_the_shortfall(self) -> None:
-        """The rod is capped by the shortfall, not run at its rating: 9 kW rated, 2360 W missing, 2360 W drawn."""
-        assert RodCase.heating(capacity_in_watt=6000.0).heating_rod_electrical_power_in_watt < 9000.0
+        """The rod is capped by the lift beyond the maximal outlet, not run at its rating: 9 kW rated, 5016 W drawn."""
+        assert RodCase.heating(maximal_outlet_in_celsius=62.0).heating_rod_electrical_power_in_watt == pytest.approx(5016.0)
 
     def test_a_step_at_ratio_zero_books_nothing(self) -> None:
         """No flow, heat or electricity, the outlet at the return and a COP of 0."""

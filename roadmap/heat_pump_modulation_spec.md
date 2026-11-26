@@ -1,8 +1,7 @@
 # Spec: the hplib heat pump holds its outlet at the set point it is given, modulating down to a sourced minimum output, with sourced minimum running and idle times
 
-Status: decided in part (owner, 2026-11-26: D1 to D4 of §2, the design C of §4 and the defaults of §4.4 and §4.5),
-measured on throwaway prototypes of the chosen design and of the rejected one (§7), nothing built; the questions of
-§8 are open. Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (beads hisim-heat-pump-model-rework-fpqz.7
+Status: decided (owner, 2026-11-26: D1 to D12 of §2), measured on throwaway prototypes of the chosen design and of
+the rejected one (§7), nothing built; §8 holds one new question (the tolerance of the 900 s starts estimate). Owner: Noah Pflugradt. Epic: hisim-heat-pump-model-rework-fpqz (beads hisim-heat-pump-model-rework-fpqz.7
 and hisim-60i6, both P1; the alignment above 600 s is hisim-ef6u). Builds on: `roadmap/hydronic_part_load_spec.md`
 (decisions 11, 16, 21 to 23), `roadmap/two_mode_buffer_spec.md` (§1.1, Q2), `roadmap/heat_pump_model_rework_spec.md`
 (decisions 5 and 15, steps b and d), `hisim/part_load.py`, the backup rod of #1113 and the buffer-size study of
@@ -77,9 +76,41 @@ where the 3600 s times bound (the hot-water chain's waits) do results move.
 Consequence: the hot-water constant `HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT` (0 W) goes; the hot-water controller
 and the parked hot-water part load (#916) are not touched; a modulated hot-water charge is a bead for after #916.
 
-Proposed, not yet decided (§8): the set point the controller sends (Q8), the start-up ramp (Q9), the sized nominal
-flow (Q10), the hot-water flow until step d (Q11), the backup rod's trigger under C (Q12), the 60 s / 900 s tolerance
-in the cycling range (Q5) and the 900 s starts estimate (Q7).
+**D5 — The 60 s / 900 s tolerance stays the guide's 1 %; PR 4 measures the full year and the owner decides on it**
+(owner, 2026-11-26; the old Q5). The prototype's cycling range lies 1.5 to 3.9 % apart (§7.1); a wider tolerance
+before the year is measured would let the step length decide the result.
+
+**D6 — Above the threshold the starts are the hysteresis cycle, computed in the space-heating L1 controller** (owner,
+2026-11-26; the old Q7). The agent's estimate from the minimum times, `dt / max(t_run,min / tau, t_idle,min /
+(1 − tau))`, is the most starts the minimum times allow, an upper bound, not the expected count, and is withdrawn. Below
+the minimum output the machine cycles on the buffer's hysteresis band: `t_on = C_buf · ΔT_band / (P_min − P̄)`,
+`t_off = C_buf · ΔT_band / P̄`, each at least its minimum time, starts per step `dt / (t_on + t_off)`. The buffer
+publishes its heat capacity `C_buf` (J/K) as a port quantity; the controller owns the band, reads the delivered mean
+power `P̄` and the minimum output `P_min` from the heat pump's published outputs, and carries a fractional start count
+across steps in its state, so long cycles at 900 s count correctly (§4.7, which also says who publishes the starts and
+why). Consequence: the buffer gains an output, the controller an output and a state field; the 900 s starts KPI becomes
+this estimate (PR 3); §7.3 checks the formula against the prototype's 60 s cycles.
+
+**D7 — The set point is the heating curve's supply plus the raise plus 2.5 K now; PR 4 measures supply + 5 K and the
+curve itself on design-day comfort and electricity; the curve itself once the stratified buffer exists** (owner,
+2026-11-26; the old Q8).
+
+**D8 — The start-up ramp stays and is sourced** (owner, 2026-11-26; the old Q9, against the agent's recommendation to
+drop it). §4.3 gives the sources and the time constant, and §4.6 reconciles the ramp with rework step b's start-up loss
+so that a start is not priced twice.
+
+**D9 — The nominal flow is sized from the rated capacity over `c` × 5 K; a stated value wins** (owner, 2026-11-26; the
+old Q10). 0.372 kg/s for the 7.78 kW twin.
+
+**D10 — Hot water keeps hplib's flow at a 5 K lift until rework step d** (owner, 2026-11-26; the old Q11).
+
+**D11 — The backup rod runs only on the compressor's outlet limit in PR 2** (owner, 2026-11-26; the old Q12, option
+(a)). Case (1) of rework decision 8, the rod filling a request above the capacity, does not fit a control target and
+is switched off under C; the controller's release of case (1) is a bead, judged on PR 4's design-day comfort (its text
+is in §9).
+
+**D12 — The ratio keeps its name and meaning** (owner, 2026-11-26; the old Q6, moot under C). No question of the
+first draft is open; the one new question is §8's Q13.
 
 ## 3. Terms
 
@@ -91,7 +122,7 @@ in the cycling range (Q5) and the 900 s starts estimate (Q7).
   distribution's return in the series and no-storage arrangements. Read at the device's port in every pass; the
   simulator's passes settle it, the device iterates nothing.
 - **Nominal flow `m_nom`**: the secondary pump's constant flow, in kg/s (`massflow_nominal_secondary_side_in_kg_per_s`;
-  Q10 sizes it from the rated capacity over the 5 K design lift, 0.372 kg/s for the twin).
+  D9 sizes it from the rated capacity over the 5 K design lift, 0.372 kg/s for the twin).
 - **Required lift**: `T_set − T_ret`, in K; **requested power**: `m_nom · c · (T_set − T_ret)`, in W.
 - **Capacity `P_cap(T_source, T_out)`**: the compressor's largest thermal power at the step's source and outlet, in W:
   hplib's `P_th` evaluated at that outlet until rework step d replaces it by the sourced capacity law.
@@ -104,7 +135,12 @@ in the cycling range (Q5) and the 900 s starts estimate (Q7).
   stop, in s; device protection (`component_design_principles.md` §A).
 - **Start**: a step in which the machine runs after a step in which it did not (`get_heatpump_cycles`, `TimeOff`).
 - **Switch-on point, switch-off point**: supply − 5 K (never below the room set point) and supply + 5 K, with the
-  raise (`heating_switch_temperatures_in_celsius`), on the buffer's start-of-step temperature.
+  raise (`heating_switch_temperatures_in_celsius`), on the buffer's start-of-step temperature; **band `ΔT_band`**:
+  their difference, in K (10 K by default, less where the room set point floors the switch-on point).
+- **Buffer heat capacity `C_buf`**: the water mass of the buffer times `c`, in J/K, which the buffer publishes
+  (`HeatCapacityInJoulePerKelvin`, D6): 650 kJ/K for 155.6 l, 1.63 MJ/K for 389 l.
+- **Delivered mean power `P̄`**: the heat pump's space-heating heat averaged over the step, in W
+  (`ThermalOutputPowerSH`; above the threshold `r · P`).
 
 ## 4. Design
 
@@ -112,10 +148,10 @@ in the cycling range (Q5) and the 900 s starts estimate (Q7).
 
 | Part | Kind | Today | After this spec |
 |---|---|---|---|
-| `MoreAdvancedHeatPumpHPLibControllerSpaceHeating` | L1 controller | on/off hysteresis on the buffer's start temperature; publishes its target (`TargetTemperatureShInCelsius`) and the requested ratio (1 at ≤ 600 s, the exact rule above) | the same decisions and outputs; its target is wired to the device's set-point input by default (today that input exists only in the series and no-storage arrangements and is fed by the heating curve there). Which offset the set point carries is Q8. PV mode unchanged |
-| `MoreAdvancedHeatPumpHPLib` | physics | parallel arrangement: hplib's capacity at a 5 K lift and hplib's flow; series: the lift to the set point capped at 5 K over the nominal flow, with a start-up ramp | every arrangement: the outlet-control law of §4.2 over the nominal flow, the lift uncapped, the power within `[P_min, P_cap]`, the rod only where the compressor cannot reach the set point; the capacity evaluated at the actual outlet and cached per outlet; the ramp per Q9 |
+| `MoreAdvancedHeatPumpHPLibControllerSpaceHeating` | L1 controller | on/off hysteresis on the buffer's start temperature; publishes its target (`TargetTemperatureShInCelsius`) and the requested ratio (1 at ≤ 600 s, the exact rule above) | the same decisions and outputs; its target is wired to the device's set-point input by default (today that input exists only in the series and no-storage arrangements and is fed by the heating curve there). Which offset the set point carries is D7. PV mode unchanged |
+| `MoreAdvancedHeatPumpHPLib` | physics | parallel arrangement: hplib's capacity at a 5 K lift and hplib's flow; series: the lift to the set point capped at 5 K over the nominal flow, with a start-up ramp | every arrangement: the outlet-control law of §4.2 over the nominal flow, the lift uncapped, the power within `[P_min, P_cap]`, the rod only where the compressor cannot reach the set point; the capacity evaluated at the actual outlet and cached per outlet; the ramp per D8 |
 | `SimpleHotWaterStorage` (buffer) | physics | iterated mixed node at ≤ 600 s, start-of-step node above | unchanged |
-| `MoreAdvancedHeatPumpHPLibConfig` | config | `minimum_thermal_output_power_in_watt = 1800`, flow 0.333 kg/s plain, times 3600 s | the minimum output a sized field (D2), `compressor_control`, the nominal flow sized (Q10), times 600 s (D3), every default with its source |
+| `MoreAdvancedHeatPumpHPLibConfig` | config | `minimum_thermal_output_power_in_watt = 1800`, flow 0.333 kg/s plain, times 3600 s | the minimum output a sized field (D2), `compressor_control`, the nominal flow sized (D9), times 600 s (D3), every default with its source |
 
 Nothing crosses a port that is not a port quantity (a set point, a return, a flow, an outlet, powers, a ratio), no
 component reads another's model constant, and nothing iterates inside a component: the law below is closed-form in
@@ -136,7 +172,8 @@ While its controller runs it in space heating, from the return `T_ret` it reads,
    minimum output gives) instead of the capped 5 K lift. Its case (1), the rod filling the gap between the request
    and the capacity, is a demand rule and does not fit a control target: a cold return after a hot-water charge
    requests `m_nom · c · 10 K` and the rod would fill it (measured, §7.1). Under C the rod runs on case (2) only, above
-   the compressor's maximal outlet, unless the owner wants a controller release (Q12).
+   the compressor's maximal outlet (D11); the controller's release of case (1) for a house whose load exceeds the
+   capacity is a bead (§9).
 3. **Outlet**: `T_out = T_ret + P / (m_nom · c)`: the set point while `P_req` lies in the modulation range; above it
    while the minimum output overheats; below it while the capacity or the maximal outlet caps the compressor, where
    the rod adds `min(P_req − P, P_rod)` and lifts the outlet on towards the set point.
@@ -172,9 +209,26 @@ power by `m_nom · c` per kelvin, and the 389 l buffer's step mean by `m_nom · 
   (`P_th / (c · 5 K)`) is no longer used for space heating.
 - **Series and no storage**: the same law, which the arrangement had in `space_heating_at_fixed_flow` with the lift
   capped at 5 K; the cap goes, so the machine delivers up to its capacity at a cold return instead of 5 K over the
-  nominal flow. The start-up ramp (`fixed_flow_operating_point`, `1 − e^(−t/360 s)`) is unsourced and books less heat
-  for proportionally less electricity in the first minutes of a run; rework step b's start-up loss is the sourced cost
-  of a start, so the ramp is dropped unless the owner keeps it (Q9).
+  nominal flow.
+- **The start-up ramp** (`fixed_flow_operating_point`: the law's power times `1 − e^(−t / τ)`, `t` the time the
+  machine has been heating) stays in every arrangement (D8) with a sourced time constant. What the literature gives:
+  Uhlmann and Bertsch's measurement of a 16 kW air/water unit after ten hours off, reported by Baster (2017, PhD
+  thesis, Strathclyde, §2.3, doi:10.48730/ndz6-0r38): the electrical power settles within 5 s, the thermal output
+  "takes nearly a minute to reach its steady state value", the pressure difference is re-established within 15 s and
+  the delay is the thermal inertia of the condenser; Riederer et al. (CLIMA 2000, 1997, arXiv:1212.5665) fitted a
+  single time constant of 2 min to their own split unit and cite Murphy (0.32 to 0.47 min, cooling) and O'Neal (more
+  than 2 min, cooling), with the power "relatively constant during start-up"; AixLib's `ModularReversible` models the
+  same inertia as a critically damped delay of order 3 whose cut-off frequency is calibrated per unit (Wüllhorst et al.
+  2021, doi:10.3384/ecp21181561; no published default); field and modelling studies of inverter units report 10 to
+  20 min to full output, which is the inverter's frequency ramp, a compressor-protection setting of the manufacturer,
+  not thermal inertia (Eze et al. 2026, air/water heat pumps in alpine regions, "up to about 20 min, depending on the
+  inverter's steady-state frequency"; an AWHP control study of 2023, doi:10.3390/su15118664, "steady state in less
+  than 10 min"). No manufacturer document states a ramp rate, and the EN 14825 Cdh test reports only the cyclic COP.
+  The time constant is set to 120 s, the measured thermal inertia of the refrigerant cycle (Riederer's 2 min; Baster's
+  "nearly a minute" to the plateau is a 95 % rise, about 20 s of time constant, on a unit twice the twin's size): a
+  60 s step delivers 39 % of the law's power in the first minute, 63 % after two, 92 % after five; at 900 s the ramp is
+  spent within the first step. The inverter's frequency ramp is not modelled; an owner who wants it states a longer
+  constant. The 360 s of today was unsourced and lay between the two effects.
 - **The flow model**: a constant nominal flow with a variable lift, in every arrangement, instead of hplib's constant
   5 K lift with a variable flow. Why: outlet control needs a handle on the power at a given return, and at a fixed
   flow that handle is the lift; a pump that held a constant lift would fix the outlet at `T_ret + 5 K` whatever the
@@ -182,11 +236,11 @@ power by `m_nom · c` per kelvin, and the 389 l buffer's step mean by `m_nom · 
   only at high load and fall to the pump's minimum speed at part load, where the lift shrinks as modelled here; the
   constant flow is the simpler of the two and the one the series arrangement already has. The flow is sized from the
   rated capacity over the 5 K design lift of the EN 14511 W35 rating condition ("Spreizung 5 K" in the Vitocal datasheet
-  of §4.4): 0.372 kg/s for the 7.78 kW twin instead of the plain 0.333 kg/s (Q10). A stated value wins. The secondary
+  of §4.4): 0.372 kg/s for the 7.78 kW twin instead of the plain 0.333 kg/s (D9). A stated value wins. The secondary
   pump's electricity is not modelled today and stays unmodelled (a bead if wanted).
 - **Hot water** (D4): a real unit charges its cylinder at high compressor speed and ends the charge on the cylinder's
   sensor; the charge is short and at a high lift. The mode keeps the full-load charge, at hplib's flow and 5 K lift
-  until step d (Q11), capped at the maximal hot-water supply as today. The 0 W hot-water constant only switched
+  until step d (D10), capped at the maximal hot-water supply as today. The 0 W hot-water constant only switched
   hplib's floor off for this mode; with one minimum output per machine the floor applies in every mode, which changes
   nothing while the capacity at the cylinder's return lies above it (it does for the twin at every return hplib
   accepts).
@@ -273,8 +327,18 @@ Cycling losses, without double counting (rework decision 5):
   so the calibration factor stops absorbing it.
 - **In the simulation**: no Cdh. The machine's own cycles are explicit (this spec at ≤ 600 s; the ratio's bookkeeping
   above, hisim-ef6u), and each start books the start-up loss of step b (`E_start = P_el,nominal · t_start_loss`, derived
-  from the Cdh test cycles, rework decision 15). This spec reduces the number of starts (§7); step b prices them; the
-  unsourced ramp goes so that a start is not priced twice (Q9).
+  from the Cdh test cycles, rework decision 15). This spec reduces the number of starts (§7); step b prices them.
+- **The ramp and step b's loss do not count the same thing twice.** The ramp books less heat in the first minutes of a
+  run at proportionally less electricity (the law's power times `1 − e^(−t/τ)`, over the same COP), so it moves heat
+  later in the run and changes neither the electricity per kWh of heat nor the run's total: the buffer is lower by
+  what the ramp withheld and the law delivers it in the next minutes. It is a capacity delay, not a loss. The
+  measured deficit of a start, electricity drawn without heat while the compressor builds its pressure difference
+  and the condenser warms (Baster: "additional energy input at start up", partly reclaimed at shutdown; Uhlmann and
+  Bertsch: at most 2 % of COP for runs above 15 min), is what the Cdh test cycles contain and what step b books as
+  `E_start`. Step b therefore derives `t_start_loss` from the whole Cdh deficit, without subtracting anything for the
+  ramp, and the ramp stays a timing effect. Under design C the ramp also lengthens the on phase of a cycle below the
+  minimum output, which the controller's cycle estimate of §4.7 ignores (one of the reasons the estimate over-counts
+  in §7.3).
 - **The rating's own minimum output** is D2's share, so the rating and the simulation cycle at the same load.
 
 The air/water fit of step a has no humidity or defrost term; those are step c and do not interact with the law beyond
@@ -286,7 +350,7 @@ Above 600 s the start-of-step buffer and the controller's exact rule stay as dec
 computes its power `P` and outlet from the buffer's start-of-step temperature `T0` by the law of §4.2 and runs the
 requested fraction `r` of the step at it: averaged flow `r · m_nom` at the outlet, heat `r · m_nom · c · (T_out − T0)`
 (`rod_assisted_heating` takes `r` as today), electricity `r · P / COP(T_source, T_out)`. The rule lands the buffer's end
-temperature on the controller's target, which is also the set point (Q8). Since the inflow is at the set point, the
+temperature on the controller's target, which is also the set point (D7). Since the inflow is at the set point, the
 buffer cannot end above it; the rule saturates at 1 when the step's draw takes more than a whole step brings, as it does
 for the boiler today.
 
@@ -294,15 +358,40 @@ Why the 900 s totals stay near the 60 s ones: the outlet is the set point in bot
 in the modulation range, so the COP is the same; the delivered heat is the house's. What differs is the buffer: at 60 s
 it sits at `T_set − L / (m_nom · c)` continuously, at 900 s it ends each step at the set point and starts it the draw
 lower, so its mean lies between; for the 389 l buffer at 3 kW the difference is about 1.3 K, for 156 l about 0.1 K. The
-prototype measures what that costs (§7, Q5).
+prototype measures what that costs (§7, D5).
 
 hisim-ef6u's split becomes bookkeeping on the delivered mean power `P̄ = r · P`: a step whose `P̄` lies at or above the
 minimum output is continuous running at the power share `P̄ / P_cap`, no start, running time `dt`; a step with
-`P̄ < P_min` cycles, running `tau = P̄ / P_min` of the step at `P_min`, with the starts per step estimated from the minimum
-times, `dt / max(t_run,min / tau, t_idle,min / (1 − tau))`, which makes the starts KPI at 900 s an estimate of the 60 s
-count instead of today's count of steps with ratio 0 (the artefact the buffer study named: a larger buffer more often
-needs no charge in a step, each such step ends a "run"). Energies, flows and outlets do not move; the running time, the
-starts and the brine pump's share do. That is PR 3 (§9).
+`P̄ < P_min` cycles, running `tau = P̄ / P_min` of the step at `P_min`. The starts of such a step are the hysteresis
+cycle (D6), not a bound from the minimum times: below the minimum output the machine heats the buffer through its band
+at `P_min − P̄` and the house drains it at `P̄`, so
+
+    t_on = max(C_buf · ΔT_band / (P_min − P̄), t_run,min),  t_off = max(C_buf · ΔT_band / P̄, t_idle,min),
+    starts per step = dt / (t_on + t_off),
+
+0 for a step at or above the minimum output or with no load. Who computes and publishes it:
+
+- **The buffer** publishes its heat capacity `C_buf` as an output (`HeatCapacityInJoulePerKelvin`), a constant of the
+  component read like a sensor. The owner decided on 2026-11-26 that it is a port quantity for this purpose; principle
+  B.2 of `component_design_principles.md` lists "heat capacity" among the model internals that may not cross a port,
+  so the principle gets an amendment naming this output (a bead; the coordinator files it) and the reason: the cycle
+  of a store's band is a property of the store the controller must know to count its own switching at a coarse step.
+- **The controller** computes the estimate: it owns the band (its switch points), decides on/off, and reads `P̄`
+  (`ThermalOutputPowerSH`) and `P_min` (the heat pump publishes its minimum thermal output as an output beside its
+  minimum-load electricity) from the heat pump, and `C_buf` from the buffer. It carries the fractional count in its
+  state (`cycle_starts_accumulated`, advanced in `i_save_state` like its other state) and publishes, per step, the
+  whole starts the accumulator crosses (`CompressorStartsInStep`, 0 or more), so that a cycle of six hours at 900 s
+  gives one start every 24 steps instead of a fraction nothing counts. At and below the threshold it publishes 0: the
+  heat pump counts its real starts from its own state there.
+- **The heat pump** reads `CompressorStartsInStep` as a command-like input of its controller and adds it to its
+  `CounterOnOff` (and to `CounterSwitchToSH`), and the starts KPI (`get_heatpump_cycles`) reads that counter instead of
+  the `TimeOff` transitions. Why the device publishes the count and not the controller: the KPI stays one KPI from one
+  component's own outputs at every step length (principle B.11), the counter is what a real unit's board shows, and
+  the controller tells its device what it switched, as it tells it on/off; the estimate itself stays the controller's
+  decision. The published running time grows by `tau · dt` on such a step.
+
+The 60 s count is the reference: at 60 s the controller's own hysteresis produces the cycles step by step. Energies,
+flows and outlets do not move with PR 3; the running time, the starts and the brine pump's share do.
 
 ### 4.8 The alternatives, and the owner's choice
 
@@ -310,7 +399,7 @@ Three designs were compared for the ≤ 600 s step. The agent recommended A; the
 
 | Design | Mechanism | Pros | Cons |
 |---|---|---|---|
-| **C, chosen**: outlet control inside the device (§4.2) | the controller sends a set point; the device holds its outlet at it over the nominal flow, `P = clamp(m_nom · c · (T_set − T_ret), P_min, P_cap)` | how an inverter unit's own control works; closed form per pass, no rule iteration, no extra node step; one law for every arrangement (the series arrangement already had it, capped); the outlet falls with the load, so the COP gains the physics of a smaller lift; above 600 s the existing rule applies unchanged | a proportional law: the return settles `L / (m_nom · c)` below the set point, so the mixed buffer feeds the emitters below the set point at high load (5 K at the design load with the set point at supply + 2.5 K: 2.5 K below the curve, Q8); replaces hplib's constant-lift flow model, which was the assumption the 900 s mode rested on; the 60 s and 900 s buffers differ by up to about 1.3 K at 50 l/kW (§4.7) |
+| **C, chosen**: outlet control inside the device (§4.2) | the controller sends a set point; the device holds its outlet at it over the nominal flow, `P = clamp(m_nom · c · (T_set − T_ret), P_min, P_cap)` | how an inverter unit's own control works; closed form per pass, no rule iteration, no extra node step; one law for every arrangement (the series arrangement already had it, capped); the outlet falls with the load, so the COP gains the physics of a smaller lift; above 600 s the existing rule applies unchanged | a proportional law: the return settles `L / (m_nom · c)` below the set point, so the mixed buffer feeds the emitters below the set point at high load (5 K at the design load with the set point at supply + 2.5 K: 2.5 K below the curve, D7); replaces hplib's constant-lift flow model, which was the assumption the 900 s mode rested on; the 60 s and 900 s buffers differ by up to about 1.3 K at 50 l/kW (§4.7) |
 | A, rejected: the exact rule at every step length with the ratio as a power share | the buffer publishes its end temperature without the heat pump's circuit from a second node step at ≤ 600 s; the controller applies `StartOfStepPartLoadRule.raising_ratio` at every step length; the device floors at `p_min` and runs the whole step at `max(r, p_min)` | one mechanism at every step length; lands the buffer on the controller's target each step, so 60 s and 900 s charge to the same temperature (measured within 1 % in three of four cases, §7); the controller decides the power, the device only its limits | the power is decided in the controller through a rule iterated over the simulator's passes rather than by the machine's own control; one more node step per pass at ≤ 600 s (+3 to 17 % wall time); the ratio's meaning changes (an energy share); hplib's 5 K lift stays, so the outlet at part load is 5 K above the buffer, which no inverter at a fixed pump speed shows; the power follows the draw minute by minute |
 | B, rejected: a proportional law in the controller on `T0` | `r = (T_target − T0) / band`, like the boiler's modulating controller | no pass cost, trivially stable | the same offset as C but on the buffer's start temperature and with a gain to source; a second rule beside the exact one; hplib's lift stays |
 
@@ -329,7 +418,9 @@ comparison.
   not change.
 - **Public interfaces.** No output is renamed. The device's set-point input `SetHeatingTemperatureSH` exists in every
   arrangement and is wired by default from the controller's `TargetTemperatureShInCelsius` (today only the series and
-  no-storage arrangements have it, from the heating curve). New configuration field `compressor_control`; the fields
+  no-storage arrangements have it, from the heating curve). New outputs: the buffer's `HeatCapacityInJoulePerKelvin`,
+  the heat pump's minimum thermal output in W and the controller's `CompressorStartsInStep`, which the heat pump reads
+  (D6, PR 3); the starts KPI reads `CounterOnOff`. New configuration field `compressor_control`; the fields
   `minimum_thermal_output_power_in_watt` and `massflow_nominal_secondary_side_in_kg_per_s` become sizable (`AUTO` in
   the preset; a stated value still wins); the defaults of `minimum_running_time_in_seconds` and
   `minimum_idle_time_in_seconds` change; the constant `HOT_WATER_MINIMAL_THERMAL_POWER_IN_WATT` goes. The energy-system
@@ -368,7 +459,7 @@ comparison.
   outlet and the cache keyed on it (two lifts at one return give two capacities); the sized fields (0.25 × rated, a
   stated value wins, `ON_OFF` gives the rated power; the flow from the rated capacity over 5 K); the default
   connection of the set point in the parallel arrangement; the rod silent on a cold return within the compressor's
-  outlet (Q12); the refusals (negative or non-finite times, a share outside (0, 1], a non-positive flow).
+  outlet (D11); the refusals (negative or non-finite times, a share outside (0, 1], a non-positive flow).
 - **The state machine**: the minimum-time transitions of `on_off_after_minimum_times` keep their table test at the new
   defaults (10 min on, 10 min off, exactly at the edge).
 - **Energy balance**: `tests/test_heat_pump_flow_booking.py` (the heat pump books `m c (T_out − T_in)` of its own
@@ -377,10 +468,18 @@ comparison.
   runs the grouped heat-pump twin for four January weeks at 60, 900 and 3600 s and asserts the space-heating heat
   delivered and the heat pump's space-heating and hot-water electricity within 1 % at 900 s (the tolerance of the
   guide and of rework decision 14); 3600 s is recorded. The prototype's months (§7) say where the cycling range lies
-  against that band; PR 4 measures the year and either fixes what lies outside or brings the owner a decision (Q5); a
+  against that band; PR 4 measures the year and either fixes what lies outside or brings the owner a decision (D5); a
   wider tolerance is not an option (guide §3).
 - **Comfort at the design load**: the same test records the lowest room temperature and the degree-hours at 60 s and
-  900 s, since under C the mixed buffer feeds the emitters below the set point at high load (Q8).
+  900 s, since under C the mixed buffer feeds the emitters below the set point at high load (D7).
+- **The cycle estimate** (PR 3): a unit test of the formula at its edges (a step above the minimum output gives 0; the
+  minimum times floor `t_on` and `t_off`; a 6 h cycle at 900 s gives one start every 24 steps through the accumulator;
+  the accumulator survives `i_save_state` / `i_restore_state`); the heat pump adds the commanded starts to its counter
+  and the KPI reads it. PR 4 runs the twin's year at 60 s and 900 s and compares the 900 s estimate with the 60 s count
+  of real cycles, month by month and over the year; the tolerance is Q13 (§7.3 measured the formula at +18 to +36 % on
+  daily means).
+- **The ramp**: a unit test of the law times `1 − e^(−t / 120 s)` at `t` = 0, 60, 120 and 600 s, and that a 900 s step
+  books the full power.
 - **Starts**: the twin's yearly starts at 60 s and 900 s lie in the field range of §4.5 (a few hundred to 2,000, below
   5,500); PR 4 asserts the upper bound.
 - **Golden gate** per PR, with the deltas in the PR description.
@@ -400,8 +499,8 @@ month's mean and maximum of the step mean. Both prototypes set the minimum times
 - **Prototype C** (15 lines in `heat_pump.py` plus two values in the energy-system copies): the parallel arrangement
   routed through the fixed-flow law with the set-point input in every arrangement, wired by default from the
   controller's target (supply + raise + 2.5 K), the lift uncapped, hplib's capacity cached per lift; the nominal flow
-  0.3723 kg/s (7780.75 W over `c` × 5 K, Q10) and the minimum output 1945 W (D2) set in the energy-system copies; the
-  start-up ramp kept (the series arrangement's, Q9); hot water unchanged (D4).
+  0.3723 kg/s (7780.75 W over `c` × 5 K, D9) and the minimum output 1945 W (D2) set in the energy-system copies; the
+  start-up ramp kept (the series arrangement's, D8); hot water unchanged (D4).
 - **Prototype A** (34 lines): the buffer's exact `T_wo` at ≤ 600 s, the exact rule at every step length, the device's
   floor at `p_min`; the minimum output left at the study's 1800 W.
 
@@ -452,7 +551,7 @@ What the numbers say:
   compressor would have drawn for it): +1.9 %, +0.2 %, +3.0 % and +5.0 %. Delivered heat agrees to 0.1 % (the heat pump's
   own space-heating heat to 0.8 %), hot-water electricity within 1 %. So C's two step lengths agree in January at
   50 l/kW and lie 2 to 5 % apart in the cycling range, outside the guide's 1 %; A's agreed within 1 % in three of four
-  cases. Candidates for the gap, to be separated in PR 4 (Q5): the rod's firing (next point); the start-up ramp, which
+  cases. Candidates for the gap, to be separated in PR 4 (D5): the rod's firing (next point); the start-up ramp, which
   the prototype kept and which holds the power below the minimum output for the first minutes of each of the 107 and
   51 April starts; the hplib capacity and COP cached per 0.1 K of lift in the prototype; and the buffer held
   differently in the two modes (§4.7).
@@ -461,7 +560,7 @@ What the numbers say:
   charge or a restart the request exceeds the capacity, and the rod fills the gap up to its 9 kW: 15.4 kWh in January
   at 60 s (2.9 % of the compressor's electricity) against 5.4 kWh at 900 s, where fewer steps start cold, and 8.2 against
   1.1 kWh in April at 50 l/kW. A real unit's backup is released by its controller (a bivalence temperature or a
-  shortfall timer), not by a cold return after a hot-water charge. The rod's trigger under C is Q12.
+  shortfall timer), not by a cold return after a hot-water charge. The rod's trigger under C is D11.
 - **Cost.** The 60 s months took 2 % less to 4 % more wall time, with fewer passes per step (6.4 against 8.3 in
   January at 20 l/kW) and the largest pass count unchanged or lower; the 900 s runs took the same.
 
@@ -487,6 +586,30 @@ to 3.9 %), since A kept hplib's lift and the same charge target at both step len
 | Apr, 60 s, 50, A | 57 | 6.76 | 2.52 | 4.69 | 177.7 | 93.3 | 54.8 | 784.6 | 0.0 | 19.5 | 29.8 | 27.5 / 35.0 | 4.3 / 9 | 39 |
 | Apr, 900 s, 50 (before = A) | 149 | 4.34 | 1.43 | 4.65 | 180.9 | 93.1 | 59.2 | 784.3 | 0.0 | 18.9 | 32.6 | 28.5 / 35.0 | – / 23 | 5 |
 
+### 7.3 The hysteresis-cycle formula of D6 against the prototypes' 60 s cycles
+
+Computed on the existing 60 s results (`raw/*.columns.csv.gz`) with daily means, since the formula is meant for a
+step: per day, `P̄` is the day's mean space-heating heat of the heat pump, the day is a cycling day where `0 < P̄ <
+P_min`, `C_buf` is the buffer's water mass times `c`, `ΔT_band` 10 K (the default band; the daily swing of the buffer's
+step mean, 9 to 10 K, gives the same numbers), the minimum times 600 s, and the day's starts `86400 / (t_on + t_off)`;
+"actual" are the space-heating starts (`OnOffStateHeatpump` 0 → 1) on those days. January has one cycling day per
+case (its starts are hot-water switches) and is left out.
+
+| Prototype, month, l/kW | `P_min`, W | Cycling days | Actual starts on them | Formula | Formula / actual |
+|---|---|---|---|---|---|
+| A, April, 20 | 1800 | 24 | 79 | 93.5 | 1.18 |
+| A, April, 50 | 1800 | 21 | 31 | 36.6 | 1.18 |
+| C, April, 20 | 1945 | 26 | 83 | 113.2 | 1.36 |
+| C, April, 50 | 1945 | 25 | 34 | 43.3 | 1.27 |
+
+The formula follows the buffer size (a 2.5 times larger buffer gives 2.5 times fewer starts, as measured) and the
+order of magnitude, and over-counts by 18 % (A) to 27 to 36 % (C). Known reasons: the daily mean `P̄` blurs a load
+that varies over the day, and `dt / (t_on + t_off)` is convex in `P̄`, so the mean of the estimate over the day exceeds
+the estimate at the mean; under C the on phase is longer than `C_buf · ΔT_band / (P_min − P̄)` because the law runs
+above the minimum output while the buffer lies below the set point and the ramp holds the power down after each
+start; hot-water charges interrupt and extend cycles. A per-step evaluation in the controller sees the load of each
+step and will lie nearer the 60 s count; PR 4 measures it over the year (§6, Q13).
+
 Prototype A, in words: the 60 s machine followed the load (mean power when on 7.0 → 3.1 kW in January); starts fell
 from 299 to 15 and 232 to 5 in January, 168 to 109 and 140 to 57 in April; the 20 l/kW buffer no longer overshot
 (36.0 °C instead of 62.1 °C) and the rooms stayed above 19.9 °C; the 60 s space-heating electricity against 900 s went
@@ -496,61 +619,16 @@ charged at a cooler mean, where A held it at the target like 900 s; A's 900 s ru
 
 ## 8. Open questions
 
-Q1 to Q4 were decided on 2026-11-26 (D1 to D4). Q6 (the ratio's name) is moot under C: the ratio keeps its meaning.
+Q1 to Q12 of the earlier drafts are decided (D1 to D12, §2). One question is new:
 
-- **Q5. The 60 s / 900 s tolerance for the heat pump's electricity.** Under C the 60 s buffer sits `L / (m_nom · c)`
-  below the set point while the 900 s buffer ends each step at it (§4.7); §7.1 gives what that costs against the
-  guide's 1 %. (a) Keep 1 % and have PR 4 measure the full year; where the band is missed, decide between a 900 s rule
-  target below the set point (the set point less the lift the law gives at the start-of-step return, `(T_set − T0) / 2`,
-  which puts the 900 s buffer's end where the 60 s buffer sits on average) and a stated wider tolerance. (b) State 2 %
-  for the heat pump's space-heating electricity now, with the reason, as the hot-water chain's 1.5 % at 3600 s was
-  stated. **Recommendation: (a)**; a widened tolerance before the year is measured lets the step length decide the
-  result (guide §3). Bead hisim-ef6u.
-- **Q7. The 900 s starts KPI after PR 3.** (a) The estimate of §4.7 from the delivered mean power and the minimum
-  times. (b) Keep today's count of ratio-0 steps and name it in the KPI's description. **Recommendation: (a)**; a count
-  of empty steps is not a count of starts, and the buffer study read it as one. Bead hisim-ef6u.
-- **Q8. The set point the controller sends.** Under C the return settles `L / (m_nom · c)` below the set point: 5 K at
-  the design load (the design lift), 2 K at 3 kW. The mixed buffer feeds the emitters at the return, so the emitters
-  see the set point less that lift. (a) Supply + raise + 2.5 K, today's target: measured (§7.1); at the design load the
-  emitters get 2.5 K below the heating curve, at 3 kW 0.5 K above it. (b) Supply + raise + 5 K, the switch-off point and
-  the design lift: the emitters get the curve at the design load and up to 5 K above it at low load; the outlet is
-  2.5 K higher than (a) throughout (about 4 % more electricity at the twin's lifts), and the hysteresis band's upper
-  half vanishes, so the machine at minimum output switches off as soon as the buffer passes the set point. (c) Supply
-  + raise, the curve itself: physically the right outlet for a stratified buffer, whose top the emitters draw from
-  (the stratified buffer of `roadmap/stratified_water_storage_spec.md`, P2), 2.5 K less outlet than (a), but the mixed
-  buffer then feeds the emitters up to 5 K below the curve at the design load. **Recommendation: (a) now, measured
-  against (b) and (c) in PR 4 on comfort at the design day and electricity**; once the stratified buffer exists, (c).
-  Bead hisim-heat-pump-model-rework-fpqz.7 (`owner-decision`).
-- **Q9. The start-up ramp.** `fixed_flow_operating_point` scales the target power by `1 − e^(−t / 360 s)` in the first
-  minutes of a run; the 360 s is unsourced (hisim-agent-rules-h2ib.11), and under C it applies to every arrangement.
-  (a) Drop it in PR 2: the law delivers its power from the first step, and the cost of a start is rework step b's
-  sourced start-up loss (decision 15), so a start is priced once. (b) Keep it until step b, then drop it. (c) Keep it
-  and source it (manufacturer ramp rates). **Recommendation: (a)**; a ramp that books less heat for less electricity
-  is not a loss, and it is unsourced. Bead hisim-heat-pump-model-rework-fpqz.7.
-- **Q10. The nominal flow.** (a) A sized field, the rated capacity over `c` × 5 K (the W35 rating's design lift):
-  0.372 kg/s for the twin; a stated value wins. (b) Keep the plain 0.333 kg/s ("a property of the circuit"): then an
-  11 kW machine could not deliver its capacity below a 7.9 K lift, and a 4 kW machine would run 2.9 K lifts at full
-  load. **Recommendation: (a)**; under C the flow decides how much the machine can deliver at a given return, so it
-  belongs to the machine's rating. Bead hisim-heat-pump-model-rework-fpqz.7 (or a bead of its own, §9).
-- **Q11. The hot-water flow until step d.** (a) Keep hplib's flow at a 5 K lift for the cylinder charge (D4: full load,
-  unmodulated), and let step d give the charge the nominal flow with the capacity law. (b) Run the cylinder charge at
-  the nominal flow now (`hot_water_at_fixed_flow`, which exists): one flow model for the machine, but the charge's
-  outlet then follows from the capacity at a high return (3 to 4 K lifts), which changes the hot-water electricity and
-  the step-length divergence of the hot-water chain before step d. **Recommendation: (a)**; the smaller PR, and D4 holds
-  either way. Bead hisim-heat-pump-model-rework-fpqz.5.
-- **Q12. The backup rod's trigger under C.** Rework decision 8 lets the rod run in two cases: (1) the heat requested in
-  the step exceeds the compressor's capacity, (2) the required outlet exceeds the compressor's maximal outlet. Under C
-  the device's request is a control target (the set point over the nominal flow), not the house's demand, and case (1)
-  makes the rod fill every cold return: 15.4 kWh in January at 60 s on the twin, 5.4 kWh at 900 s, where the machine is
-  sized to the design load and needs no backup (§7.1). (a) Case (2) only: the rod lifts the flow from the compressor's
-  maximal outlet to the set point and runs nowhere else; a house whose load exceeds the capacity on a cold day is
-  under-supplied, visible in the room temperature, until a release exists. (b) Case (1) released by the L1 controller:
-  a signal that the buffer's start-of-step temperature has stayed below the switch-on point for longer than the minimum
-  running time (the compressor at full capacity cannot keep up), on which the device fills the shortfall; one more
-  output and a timer in the controller's state. (c) Case (1) released below a bivalence outdoor temperature, a
-  configuration field with a source. **Recommendation: (a) in PR 2, (b) as a bead** judged on PR 4's design-day
-  comfort; (a) is what a correctly sized machine needs and keeps PR 2 small. Bead hisim-heat-pump-model-rework-fpqz.7
-  (`owner-decision`).
+- **Q13. The tolerance for the 900 s starts estimate against the 60 s count.** D6's hysteresis-cycle formula
+  over-counts the prototypes' April cycles by 18 to 36 % when evaluated on daily means (§7.3); evaluated per step in
+  the controller it will lie nearer, by how much PR 4 measures over the year. (a) Assert the yearly 900 s estimate
+  within 25 % of the 60 s count and record the monthly ratios; the starts KPI is an order-of-magnitude figure for the
+  cycling bead (hisim-heat-pump-starts-plausible-100b) and the buffer study, not an energy. (b) Within 10 %, which
+  likely needs the controller to account for the ramp and for the law's power above the set point in `t_on` (a
+  second term in the on time), more model for a KPI. (c) Record only, no assertion. **Recommendation: (a)**, with the
+  monthly ratios in PR 4's description; the owner decides on the numbers. Bead hisim-ef6u (`owner-decision`).
 
 ## 9. Beads and pull requests
 
@@ -559,15 +637,16 @@ Epic hisim-heat-pump-model-rework-fpqz.
 | Bead | Content | PR |
 |---|---|---|
 | hisim-60i6 (P1) | PR 1: the sourced minimum times, 600 s and 600 s (D3), with the sources of §4.5 in the field comments; the two unit tests of the edges; `KNOWN_DIVERGENCES` of the hot-water chain test re-measured; goldens re-blessed; heads-up on renovisorissues | – |
-| hisim-heat-pump-model-rework-fpqz.7 (P1) | PR 2, design C (D1): the set-point input in every arrangement, wired by default from the controller's target; the parallel arrangement routed through the outlet-control law with the lift uncapped; the capacity at the actual outlet and the cache keyed on it; the rod on its outlet limit only (Q12); the ramp per Q9; `compressor_control` and the sized minimum output (0.25, D2, sources of §4.4); the sized nominal flow (Q10); the hot-water constant removed (D4); the tests of §6; goldens; heads-up. The smallest correct first PR; it needs neither step b nor step d, since the capacity cap takes hplib's `P_th` at the outlet until step d replaces it | – |
-| hisim-ef6u (P3 → P2) | PR 3: the bookkeeping above 600 s on the delivered mean power (continuous running at or above the minimum output, the cycling estimate below it), the published running time and the starts estimate; its tests; the 900 s goldens' KPI columns; heads-up | – |
-| hisim-ef6u, hisim-heat-pump-starts-plausible-100b (P1) | PR 4: the step-length test of §6 (60 / 900 / 3600 s, four weeks, 1 %), the yearly starts against the field range, and the set-point measurement of Q8 (a / b / c at both step lengths with comfort at the design day); whatever the measurement shows is fixed in it or brought to the owner (Q5, Q8) | – |
+| hisim-heat-pump-model-rework-fpqz.7 (P1) | PR 2, design C (D1): the set-point input in every arrangement, wired by default from the controller's target (D7); the parallel arrangement routed through the outlet-control law with the lift uncapped; the capacity at the actual outlet and the cache keyed on it; the rod on its outlet limit only (D11); the ramp kept with its 120 s time constant and sources (D8); `compressor_control` and the sized minimum output (0.25, D2, sources of §4.4); the sized nominal flow (D9); the hot-water constant removed (D4), hot water on hplib's flow (D10); the tests of §6; goldens; heads-up. The smallest correct first PR; it needs neither step b nor step d, since the capacity cap takes hplib's `P_th` at the outlet until step d replaces it | – |
+| hisim-ef6u (P3 → P2) | PR 3: the bookkeeping above 600 s on the delivered mean power (continuous running at or above the minimum output, the cycling estimate of D6 below it): the buffer's heat-capacity output, the heat pump's minimum-output output, the controller's accumulator and `CompressorStartsInStep`, the heat pump's counter and the KPI on it, the published running time; its tests (§6); the 900 s goldens' KPI columns; heads-up | – |
+| hisim-ef6u, hisim-heat-pump-starts-plausible-100b (P1) | PR 4: the step-length test of §6 (60 / 900 / 3600 s, four weeks, 1 %, D5), the yearly starts against the field range and the 900 s estimate against the 60 s count (Q13), and the set-point measurement of D7 (supply + 2.5 K against supply + 5 K and the curve, at both step lengths, with comfort at the design day); whatever the measurement shows is fixed in it or brought to the owner | – |
 | hisim-heat-pump-buffer-plan-7e58 (P2) | the buffer-size study rerun at 20 / 35 / 50 l/kW, full year, 60 s and 900 s, after PR 4 | – |
-| hisim-heat-pump-model-rework-fpqz.5 (P1) | step d, scope reduced: the capacity law `P_cap(T_source, T_out)` relative to the rated capacity, the hplib removal (the result cache and the 0.1 K grid with it), the cooling EER, and the hot-water charge on the nominal flow (Q11); the minimum output share and the pump decision are D2 and D1 of this spec | – |
-| hisim-heat-pump-model-rework-fpqz.4 (P1) | step b: Cdh in the rating with D2's minimum output, the start-up loss per start (replacing the ramp, Q9); reads `compressor_control` | – |
-| new bead, if the owner wants it tracked apart from fpqz.7: the heat pump's nominal secondary flow is sized from its rated capacity over the design lift (Q10) | part of PR 2 otherwise | – |
+| hisim-heat-pump-model-rework-fpqz.5 (P1) | step d, scope reduced: the capacity law `P_cap(T_source, T_out)` relative to the rated capacity, the hplib removal (the result cache and the 0.1 K grid with it), the cooling EER, and the hot-water charge on the nominal flow (D10); the minimum output share and the pump decision are D2 and D1 of this spec | – |
+| hisim-heat-pump-model-rework-fpqz.4 (P1) | step b: Cdh in the rating with D2's minimum output; the start-up loss per start derived from the whole Cdh deficit, beside the ramp (§4.6); reads `compressor_control` | – |
+| new bead (the coordinator files it): **the space-heating controller releases the backup rod for a house whose load exceeds the compressor's capacity** | Under design C the rod runs only above the compressor's maximal outlet (D11); a house whose heat load exceeds the capacity on a cold day, an undersized machine or a day colder than the design point, is under-supplied, and the room temperature shows it. Wanted: the L1 space-heating controller publishes a release signal (`BackupRodReleased`, 0 or 1) when the buffer's start-of-step temperature has stayed below the switch-on point for longer than the heat pump's minimum running time while the heat pump heats (the compressor at full output cannot keep up); the heat pump reads it and, while released, lets the rod add the shortfall between the law's request and the compressor's capacity up to its rated power (case (1) of rework decision 8, re-stated as a controller decision); the release ends when the buffer passes the switch-on point. The timer is state of the controller, saved and restored with it. Tests: the release fires only after the minimum running time below the switch-on point, never on a cold return after a hot-water charge, and the rod's heat and electricity are booked on their ports. Judged on PR 4's design-day comfort measurement: filed as P2 if the rooms fall below the set point on the design day at 60 s or 900 s with the rod on its outlet limit only, P3 otherwise | – |
+| new bead (the coordinator files it): **principle B.2 names the buffer's heat capacity as a port quantity** | `system_docs/component_design_principles.md` B.2 lists heat capacity among the model internals that may not cross a port; D6 lets the buffer publish `HeatCapacityInJoulePerKelvin` for its controller's cycle count. The principle gets an amendment naming this output and its reason (owner, 2026-11-26) | PR 3 |
 | hisim-component-physics-4g9.61 (P3) | RunTimeGuard; not a prerequisite | – |
-| hisim-agent-rules-h2ib.11 (P3) | the four fields sourced here leave its list | – |
+| hisim-agent-rules-h2ib.11 (P3) | the five values sourced here (the two times, the minimum output, the nominal flow, the ramp's time constant) leave its list | – |
 
 Each PR is small, stacked on the one before, opened as soon as it is ready, with its goldens re-blessed on current
 main and a Problem / What was done / Result description; the tests per PR are listed in §6.

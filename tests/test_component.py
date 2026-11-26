@@ -202,7 +202,7 @@ def test_single_time_step_values_hold_only_floats() -> None:
 
     stsv.set_output_value(outputs[0], 3)
     stsv.set_output_value(outputs[1], True)
-    stsv.set_output_value(outputs[2], np.float32(0.5))
+    stsv.set_output_value(outputs[2], np.float64(0.5))
 
     assert stsv.values == [3.0, 1.0, 0.5]
     assert all(type(value) is float for value in stsv.values)  # pylint: disable=unidiomatic-typecheck

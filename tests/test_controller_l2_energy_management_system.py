@@ -27,6 +27,7 @@ from hisim.components import (
     simple_water_storage,
 )
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )
@@ -842,6 +843,9 @@ def _heat_pump(
     # stated here: an 8 kW machine rated at the German design outside temperature.
     config.set_thermal_output_power_in_watt = 8000.0
     config.heating_rod_rated_electrical_power_in_watt = 8000.0
+    config.compressor_control = CompressorControl.INVERTER
+    config.minimum_thermal_output_power_in_watt = 1800.0
+    config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
     config.heating_reference_temperature_in_celsius = -7.0
     config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
     heat_pump: MoreAdvancedHeatPumpHPLib = (

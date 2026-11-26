@@ -9,6 +9,7 @@ import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     PositionHotWaterStorageInSystemSetup,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
@@ -67,6 +68,9 @@ def test_heat_pump_hplib_new() -> None:
     t_amb = cp.ComponentOutput(
         "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_t_amb")
     )
+    set_point_space_heating = cp.ComponentOutput(
+        "Fake_set_point", "Fake_set_point", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_set_point")
+    )
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
@@ -81,6 +85,7 @@ def test_heat_pump_hplib_new() -> None:
         cycling_mode=True,
         minimum_idle_time_in_seconds=600,
         minimum_running_time_in_seconds=600,
+        compressor_control=CompressorControl.INVERTER,
         minimum_thermal_output_power_in_watt=1500,
         position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
@@ -97,11 +102,11 @@ def test_heat_pump_hplib_new() -> None:
 
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     heatpump.state = MoreAdvancedHeatPumpHPLibState(
-        time_on_heating=0,
+        time_on_heating=3600,
         time_off=0,
         time_on_cooling=0,
         on_off_previous=1,
-        published_time_on_heating=0,
+        published_time_on_heating=3600,
         published_time_off=0,
         published_on_off_previous=1,
         cumulative_electrical_energy_tot_in_watt_hour=0,
@@ -123,6 +128,7 @@ def test_heat_pump_hplib_new() -> None:
             t_in_primary,
             t_in_secondary_space_heating,
             t_amb,
+            set_point_space_heating,
             heatpump,
         ]
     )
@@ -132,6 +138,7 @@ def test_heat_pump_hplib_new() -> None:
     heatpump.t_in_primary.source_output = t_in_primary
     heatpump.t_in_secondary_space_heating.source_output = t_in_secondary_space_heating
     heatpump.t_amb.source_output = t_amb
+    heatpump.set_temperature_hp_space_heating.source_output = set_point_space_heating
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
@@ -140,6 +147,7 @@ def test_heat_pump_hplib_new() -> None:
             t_in_primary,
             t_in_secondary_space_heating,
             t_amb,
+            set_point_space_heating,
             heatpump,
         ]
     )
@@ -147,17 +155,18 @@ def test_heat_pump_hplib_new() -> None:
     stsv.values[t_in_primary.global_index] = -7
     stsv.values[t_in_secondary_space_heating.global_index] = 47.0
     stsv.values[t_amb.global_index] = -7
+    stsv.values[set_point_space_heating.global_index] = 52.0
 
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     # Check
-    # The booked heat is what hplib's flow carries at 4180 J/(kg K), not its 10 kW: the flow is
-    # 10 kW / (4200 * 5) = 0.47619 kg/s, so 0.47619 * 4180 * 5 = 9952.38 W (10 kW * 4180 / 4200). The COP is the
-    # Carnot-efficiency law at A-7/W52, 0.451 * 325.15 / (59 + 4.45) = 2.3112 (hplib's own COP plane gave 1.41).
-    assert stsv.values[heatpump.p_th_space_heating.global_index] == pytest.approx(9952.380952380952)
-    assert stsv.values[heatpump.p_el_space_heating.global_index] == pytest.approx(4306.24086122674)
+    # The machine, started up an hour ago, holds its outlet at the 52 °C set point over its nominal 0.333 kg/s: the
+    # 5 K from the 47 °C return carry 0.333 * 4180 * 5 = 6959.7 W. The COP is the Carnot-efficiency law at A-7/W52,
+    # 0.451 * 325.15 / (59 + 4.45) = 2.3112.
+    assert stsv.values[heatpump.p_th_space_heating.global_index] == pytest.approx(6959.7, rel=1e-9)
+    assert stsv.values[heatpump.p_el_space_heating.global_index] == pytest.approx(6959.7 / 2.311152876280536, rel=1e-9)
     assert stsv.values[heatpump.cop.global_index] == pytest.approx(2.311152876280536)
-    assert t_out == stsv.values[heatpump.t_out_space_heating.global_index]
-    assert stsv.values[heatpump.m_dot_space_heating.global_index] == pytest.approx(0.47619047619047616)
-    assert 60 == stsv.values[heatpump.time_on_heating.global_index]
+    assert stsv.values[heatpump.t_out_space_heating.global_index] == pytest.approx(t_out, abs=1e-9)
+    assert stsv.values[heatpump.m_dot_space_heating.global_index] == 0.333
+    assert 3660 == stsv.values[heatpump.time_on_heating.global_index]
     assert 0 == stsv.values[heatpump.time_off.global_index]

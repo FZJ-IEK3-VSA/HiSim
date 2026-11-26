@@ -27,6 +27,7 @@ from hisim.components.more_advanced_heat_pump.heat_pump import (
     MoreAdvancedHeatPumpHPLib,
     PositionHotWaterStorageInSystemSetup,
 )
+from hisim.components.more_advanced_heat_pump.hplib_operation import HeatPumpStepConditions
 from hisim.config import ComponentID, SizingContext
 from hisim.part_load import StartOfStepPartLoadRule
 from hisim.simulationparameters import SimulationParameters
@@ -112,14 +113,15 @@ def test_the_power_range_follows_the_buffer_s_start_temperature_not_the_return_o
 
 
 @pytest.mark.parametrize(("return_temperature_in_celsius", "rod_runs"), [(35.0, False), (66.0, True)])
-def test_the_full_load_is_the_compressor_s_draw_of_a_full_load_step_without_the_rod(
+def test_the_full_load_is_the_compressor_s_draw_at_its_capacity_without_the_rod(
     return_temperature_in_celsius: float, rod_runs: bool
 ) -> None:
-    """Catches a full load that counts the backup heating rod, or one that differs from what a full-load step books.
+    """Catches a full load that counts the backup heating rod, or one taken at another operating point.
 
-    A parallel-buffer heat pump runs a whole space-heating step with the buffer's start temperature as its return. At
-    0 °C outside its compressor stops at about 69 °C, so a 66 °C return asking for 71 °C needs the rod; the published
-    full load is then still the compressor's ``ElectricalInputPowerSH`` alone, the part the controller's ratio scales.
+    The full load is a whole step at the compressor's capacity at hplib's 5 K lift above the buffer's start
+    temperature, at hplib's flow. At 0 °C outside the compressor stops at about 69 °C, so a 66 °C start asking for
+    71 °C needs the rod; the published full load is then still the compressor's share alone, the part the
+    controller's ratio scales.
     """
     heat_pump = SingleStep.heat_pump(PositionHotWaterStorageInSystemSetup.PARALLEL)
     outputs = SingleStep.step(
@@ -132,9 +134,27 @@ def test_the_full_load_is_the_compressor_s_draw_of_a_full_load_step_without_the_
             MoreAdvancedHeatPumpHPLib.SpaceHeatingStorageTemperatureAtStartOfStepInCelsius: return_temperature_in_celsius,
         },
     )
-    assert (outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerHeatingRod] > 0.0) == rod_runs
+    conditions = HeatPumpStepConditions(
+        source_temperature_in_celsius=0.0,
+        ambient_temperature_in_celsius=0.0,
+        space_heating_return_temperature_in_celsius=return_temperature_in_celsius,
+        hot_water_return_temperature_in_celsius=0.0,
+        space_heating_set_temperature_in_celsius=0.0,
+        hot_water_supply_set_temperature_in_celsius=None,
+    )
+    outlet_in_celsius = return_temperature_in_celsius + MoreAdvancedHeatPumpHPLib.NOMINAL_LIFT_IN_KELVIN
+    results = heat_pump.capacity_at_outlet(conditions, outlet_temperature_in_celsius=outlet_in_celsius)
+    full_load = heat_pump.rod_assisted_heating(
+        conditions,
+        results,
+        part_load_ratio=1.0,
+        mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
+        return_temperature_in_celsius=return_temperature_in_celsius,
+        required_outlet_temperature_in_celsius=outlet_in_celsius,
+    )
+    assert (full_load.heating_rod_electrical_power_in_watt > 0.0) == rod_runs
     assert outputs[MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt] == pytest.approx(
-        outputs[MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH]
+        full_load.compressor_electrical_power_in_watt, rel=1e-12
     )
 
 

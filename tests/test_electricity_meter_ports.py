@@ -23,6 +23,7 @@ from hisim import simulator as sim
 from hisim.components import advanced_battery_bslib, controller_l2_energy_management_system, electricity_meter
 from hisim.components import advanced_ev_battery_bslib, generic_car
 from hisim.components.more_advanced_heat_pump.heat_pump import (
+    CompressorControl,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
 )
@@ -63,6 +64,9 @@ class MeteredHouse:
         heat_pump_config = MoreAdvancedHeatPumpHPLibConfig.preset_air_water("HeatPump")
         heat_pump_config.set_thermal_output_power_in_watt = 8000.0
         heat_pump_config.heating_rod_rated_electrical_power_in_watt = 8000.0
+        heat_pump_config.compressor_control = CompressorControl.INVERTER
+        heat_pump_config.minimum_thermal_output_power_in_watt = 1800.0
+        heat_pump_config.massflow_nominal_secondary_side_in_kg_per_s = 0.333
         heat_pump_config.heating_reference_temperature_in_celsius = -7.0
         heat_pump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
         self.heat_pump = MoreAdvancedHeatPumpHPLib(

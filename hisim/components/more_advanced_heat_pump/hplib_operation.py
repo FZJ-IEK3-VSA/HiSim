@@ -117,8 +117,7 @@ class HeatPumpStepConditions:
 
     """The temperatures the hplib heat pump reads in one step.
 
-    A set temperature the configuration does not read is None: the space-heating set temperature is read only in
-    the fixed-flow mode and for passive cooling, the hot-water set temperature only with hot-water preparation.
+    The hot-water set temperature is None without hot-water preparation.
     """
 
     #: The source temperature on the primary side, in °C.
@@ -129,8 +128,8 @@ class HeatPumpStepConditions:
     space_heating_return_temperature_in_celsius: float
     #: The return temperature of the hot-water circuit, the tank's step mean, in °C; 0 without hot water.
     hot_water_return_temperature_in_celsius: float
-    #: The space-heating set temperature, in °C, or None where it is not read.
-    space_heating_set_temperature_in_celsius: Optional[float]
+    #: The space-heating set point, the outlet the machine holds while it heats the building, in °C.
+    space_heating_set_temperature_in_celsius: float
     #: The hot-water supply temperature the hot-water controller aims at, in °C, or None without hot water.
     hot_water_supply_set_temperature_in_celsius: Optional[float]
 

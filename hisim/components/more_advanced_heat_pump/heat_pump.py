@@ -559,11 +559,19 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     after its minimum running and idle times, and the timers of that mode; only the control track decides what the
     machine does (:meth:`on_off_after_minimum_times`, the start-up ramp). The published track counts what the machine
     ran (:meth:`published_mode`): a space-heating step at an actual ratio of 0 runs nothing and is an off step there, so
-    ``OnOffStateHeatpump`` is 0, ``TimeOff`` grows, ``TimeOnHeating`` restarts and the next charge counts as a new start
-    in ``CounterOnOff`` and ``CounterSwitchToSH`` and in the start and heating-time KPIs. The control track stays in
-    space heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum
-    running time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are
-    the same.
+    ``OnOffStateHeatpump`` is 0, ``TimeOff`` grows and ``TimeOnHeating`` restarts. The control track stays in space
+    heating through such a step, so a ratio-0 step neither starts the minimum idle time nor ends the minimum running
+    time. At and below the part-load threshold the ratio is 1 whenever the heat pump heats, and both tracks are the same.
+
+    Starts and running time: at and below the part-load threshold the heat pump counts a start whenever it runs after
+    an off step (``CounterOnOff``, ``CounterSwitchToSH``), and a step it heats in is a step of running time. Above the
+    threshold a step is longer than a cycle: a space-heating step whose delivered mean power lies at or above the
+    minimum output is continuous running, and one below it cycles on the buffer's hysteresis band. Its space-heating
+    controller estimates those starts and commands them (``CompressorStartsInStep``); the heat pump adds them to both
+    counters (:meth:`switch_counters`) and does not count space heating resumed after a ratio-0 step as a start of its
+    own. The starts KPIs read ``CounterOnOff`` (:meth:`heat_pump_starts`, :meth:`space_heating_starts`), and the
+    heating-time KPI counts such a step at its cycling share (:meth:`heating_running_time_in_hours`). The heat pump
+    publishes its minimum thermal output (``ThermalPowerAtMinimumLoadSpaceHeatingInWatt``) for that estimate.
 
     Every step the heat pump also publishes what its compressor would draw for space heating at full load and at its
     minimum thermal power, at the space-heating buffer's start-of-step temperature
@@ -595,6 +603,9 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: The space-heating buffer's temperature at the start of the step, a committed value no pass of the step moves.
     #: The heat pump publishes its space-heating electricity at full and at minimum load at it.
     SpaceHeatingStorageTemperatureAtStartOfStepInCelsius = "SpaceHeatingStorageTemperatureAtStartOfStepInCelsius"
+    #: The compressor starts the space-heating controller estimates for this step above the part-load threshold, which
+    #: the heat pump adds to its start counters.
+    CompressorStartsInStep = "CompressorStartsInStep"
 
     # Outputs
     #: The actual part-load ratio: the fraction of the step the space-heating charge ran, reported back to the
@@ -605,6 +616,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: The compressor's space-heating electricity at its minimum thermal power, from the step's start temperatures,
     #: in W.
     ElectricalPowerAtMinimumLoadSpaceHeatingInWatt = "ElectricalPowerAtMinimumLoadSpaceHeatingInWatt"
+    #: The compressor's minimum thermal output, in W: the power below which the machine cycles.
+    ThermalPowerAtMinimumLoadSpaceHeatingInWatt = "ThermalPowerAtMinimumLoadSpaceHeatingInWatt"
 
     #: The key under which hplib's space-heating answers are cached: the published power range's and the
     #: space-heating step's capacity (:meth:`capacity_at_outlet`). Both ask hplib at its 5 K lift, where its answer is a
@@ -885,6 +898,26 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 "compressor's full-load COP, at the temperatures of ElectricalPowerAtFullLoadSpaceHeatingInWatt. The "
                 "backup heating rod is not part of it. A signal for the energy manager, not a draw."
             ),
+        )
+        self.thermal_power_at_minimum_load_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerAtMinimumLoadSpaceHeatingInWatt,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            output_description=(
+                "The compressor's minimum thermal output (minimum_thermal_output_power_in_watt), in W, zero or "
+                "positive: below it the machine cycles. A signal for the space-heating controller's cycle estimate, not "
+                "a heat flow."
+            ),
+        )
+        # The starts the space-heating controller estimates above the part-load threshold, a command it adds to its
+        # counters. Optional: a heat pump without that controller wired counts only its own starts.
+        self.compressor_starts_channel: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.CompressorStartsInStep,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            mandatory=False,
         )
 
         self.t_in_primary: ComponentInput = self.add_input(
@@ -1454,6 +1487,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.TargetTemperatureShInCelsius,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.CompressorStartsInStep,
+                hpc_classname,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.CompressorStartsInStep,
+            )
+        )
         return connections
 
     def get_default_connections_from_heat_pump_controller_dhw(
@@ -1929,6 +1969,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         stsv.set_output_value(
             self.electrical_power_at_minimum_load_channel, power_range.minimum_load_electrical_power_in_watt
         )
+        stsv.set_output_value(self.thermal_power_at_minimum_load_channel, self.minimum_thermal_output_power_in_watt)
         timers = HeatPumpRunTimers(
             time_on_heating_in_seconds=self.state.time_on_heating,
             time_on_cooling_in_seconds=self.state.time_on_cooling,
@@ -1983,6 +2024,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                     on_off=published_on_off, timers=published_timers, seconds_per_timestep=seconds_per_timestep
                 ),
             ),
+            commanded_starts=int(stsv.get_input_value(self.compressor_starts_channel)),
         )
 
     def space_heating_power_range_in_watt(
@@ -2516,27 +2558,46 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
 
     @staticmethod
-    def switch_counters(*, on_off: float, state: "MoreAdvancedHeatPumpHPLibState") -> "HeatPumpSwitchCounters":
+    def switch_counters(
+        *, on_off: float, control_on_off: float, state: "MoreAdvancedHeatPumpHPLibState", commanded_starts: int
+    ) -> "HeatPumpSwitchCounters":
         """Return the space-heating, hot-water and on/off switch counters after a step, on the published track.
 
         A counter grows by one when the machine enters its mode in this step: space heating or hot water from any
         other mode, and on from off. The counters count what the machine ran, so both the mode of this step and the
-        mode before it are published modes (:meth:`published_mode`): a space-heating charge after a step at ratio 0
-        counts as a new start. For example, a machine that was off and heats the building in this step counts one more
-        space-heating switch and one more switch on.
+        mode before it are published modes (:meth:`published_mode`), with one exception: space heating resumed after
+        a space-heating step at ratio 0, within one heating run of the control track, is no start of its own. Above
+        the part-load threshold the machine cycles inside such steps, and its space-heating controller estimates those
+        starts and commands them (``commanded_starts``); they are added to the on/off and the space-heating counters.
+        At and below the threshold the commanded starts are 0 and no step runs at ratio 0. For example, a machine that
+        was off and heats the building in this step counts one more space-heating switch and one more switch on; one
+        that heats again after a step at ratio 0 with 1 commanded start counts one of each as well, with 0 commanded
+        starts none.
 
         Args:
             on_off: The published mode of this step: 1 space heating, 2 hot water, -1 cooling, 0 off.
-            state: The state before the step, with the counters and the published mode of the step before.
+            control_on_off: The control mode of this step, after the minimum times.
+            state: The state before the step, with the counters and both modes of the step before.
+            commanded_starts: The starts the space-heating controller estimated for this step, 0 or more.
 
         Returns:
             The counters after the step.
+
+        Raises:
+            ValueError: If the commanded starts are negative.
         """
+        if commanded_starts < 0:
+            raise ValueError(f"The space-heating controller commands 0 or more compressor starts, got {commanded_starts!r}.")
         previous = state.published_on_off_previous
+        resumes_space_heating = state.on_off_previous == 1 and control_on_off == 1
         return HeatPumpSwitchCounters(
-            space_heating=state.counter_switch_space_heating + (1 if previous != on_off and on_off == 1 else 0),
+            space_heating=state.counter_switch_space_heating
+            + (1 if previous != on_off and on_off == 1 and not resumes_space_heating else 0)
+            + commanded_starts,
             hot_water=state.counter_switch_dhw + (1 if previous != on_off and on_off == 2 else 0),
-            on_off=state.counter_onoff + (1 if previous == 0 and on_off != 0 else 0),
+            on_off=state.counter_onoff
+            + (1 if previous == 0 and on_off != 0 and not resumes_space_heating else 0)
+            + commanded_starts,
         )
 
     def publish_primary_side(
@@ -2578,6 +2639,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         *,
         control: "HeatPumpModeTrack",
         published: "HeatPumpModeTrack",
+        commanded_starts: int,
     ) -> None:
         """Publish the step's circuits, powers, energies, totals and counters, and store them in the state.
 
@@ -2593,11 +2655,14 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             operation: The step's powers, outlets and flows, at the actual ratio.
             control: The control mode and its timers after the step.
             published: The published mode and its timers after the step (:meth:`published_mode`).
+            commanded_starts: The compressor starts the space-heating controller estimated for this step, 0 or more.
         """
         totals = self.stepped_energy_totals(
             operation=operation, state=self.state, seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep
         )
-        counters = self.switch_counters(on_off=published.on_off, state=self.state)
+        counters = self.switch_counters(
+            on_off=published.on_off, control_on_off=control.on_off, state=self.state, commanded_starts=commanded_starts
+        )
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
             self.publish_primary_side(stsv, published.on_off, conditions, operation)
 
@@ -2952,6 +3017,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         dhw_heat_pump_heating_energy_output_in_kilowatt_hour: Optional[float] = None
         heating_rod_power_in_watt: pd.Series = pd.Series([], dtype=float)
         on_off_state: pd.Series = pd.Series([], dtype=float)
+        counter_on_off: pd.Series = pd.Series([], dtype=float)
+        space_heating_thermal_power_in_watt: pd.Series = pd.Series([], dtype=float)
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
@@ -2960,15 +3027,10 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                     heating_rod_power_in_watt = postprocessing_results.iloc[:, index]
                 if output.field_name == self.HeatPumpOnOffState:
                     on_off_state = postprocessing_results.iloc[:, index]
-                if output.field_name == self.TimeOff:
-                    number_of_heat_pump_starts = self.get_heatpump_cycles(
-                        output=output, index=index, postprocessing_results=postprocessing_results
-                    )
-                elif output.field_name == self.HeatPumpOnOffState:
-                    number_of_space_heating_starts = self.get_space_heating_starts(
-                        output=output, index=index, postprocessing_results=postprocessing_results
-                    )
+                elif output.field_name == self.CounterOnOff:
+                    counter_on_off = postprocessing_results.iloc[:, index]
                 elif output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
+                    space_heating_thermal_power_in_watt = postprocessing_results.iloc[:, index]
                     # take only output values for heating
                     heating_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] > 0.0
@@ -3025,14 +3087,6 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                         )
                     )
 
-                elif output.field_name == self.TimeOnHeating:
-                    # TimeOnHeating is a running counter of the current continuous heating streak
-                    # (reset to 0 whenever heating stops), so count active timesteps instead of summing it.
-                    heating_time_in_seconds = (
-                        postprocessing_results.iloc[:, index] > 0
-                    ).sum() * self.my_simulation_parameters.seconds_per_timestep
-                    heating_time_in_hours = heating_time_in_seconds / 3600
-
                 elif output.field_name == self.TimeOnCooling:
                     # Same running-counter caveat as TimeOnHeating above.
                     cooling_time_in_seconds = (
@@ -3045,6 +3099,18 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
                 elif output.field_name == self.TemperatureInputSH:
                     return_temperature_list_in_celsius = postprocessing_results.iloc[:, index]
+
+        if not counter_on_off.empty:
+            number_of_heat_pump_starts = self.heat_pump_starts(counter_on_off.to_numpy(dtype=float))
+            if not on_off_state.empty:
+                number_of_space_heating_starts = self.space_heating_starts(
+                    counter_on_off=counter_on_off.to_numpy(dtype=float), on_off_state=on_off_state.to_numpy(dtype=float)
+                )
+        if not on_off_state.empty:
+            heating_time_in_hours = self.heating_running_time_in_hours(
+                on_off_state=on_off_state.to_numpy(dtype=float),
+                space_heating_thermal_power_in_watt=space_heating_thermal_power_in_watt.to_numpy(dtype=float),
+            )
 
         # get flow and return temperatures
         if not flow_temperature_list_in_celsius.empty and not return_temperature_list_in_celsius.empty:
@@ -3261,64 +3327,116 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             float(power_in_watt[hot_water].sum()) * seconds_per_timestep / watt_seconds_per_kilowatt_hour,
         )
 
-    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
-        """Return the number of starts of the heat pump in the simulated period, counted in its ``TimeOff`` column.
+    @staticmethod
+    def heat_pump_starts(counter_on_off: np.ndarray) -> int:
+        """Return the number of starts of the heat pump in the simulated period, from its published ``CounterOnOff``.
 
-        A start is a step whose ``TimeOff`` is 0 after a step whose ``TimeOff`` is not: an idle period ended, and
-        the machine runs again, in space heating, hot water or cooling. For example, the series 0, 60, 60, 0, 120, 0
-        holds two starts. A start in the first step of the simulation has no idle step before it and is not counted,
-        so the count is the published ``CounterOnOff`` at the end of the run, less one if the machine ran in the first
-        step. The count is one vectorised comparison of the column with itself shifted by one step.
+        The counter grows by every start into space heating, hot water or cooling the heat pump counts from its own
+        on/off state, and by the starts its space-heating controller estimates for the cycles inside a step above the
+        part-load threshold (:meth:`switch_counters`). The starts of the period are the counter's growth from the
+        first step to the last, so a start in the first step, which has no idle step before it, is not counted. For
+        example, the counter 1, 1, 2, 2, 4 holds three starts.
 
         Args:
-            output: The output whose column is read; it must be ``TimeOff``.
-            index: The position of that output's column in ``postprocessing_results``.
-            postprocessing_results: The simulated values of all outputs, one column per output.
+            counter_on_off: The published ``CounterOnOff`` per step.
 
         Returns:
-            The number of starts.
-
-        Raises:
-            ValueError: If ``output`` is not the ``TimeOff`` output: no other column holds the idle periods, and a
-                count read from it would be a silent 0.
+            The number of starts, 0 for an empty period.
         """
-        if output.field_name != self.TimeOff:
-            raise ValueError(
-                f"The heat pump starts are counted in its {self.TimeOff} column, not in {output.field_name}."
-            )
-        time_off_in_seconds = postprocessing_results.iloc[:, index].to_numpy()
-        return int(np.count_nonzero((time_off_in_seconds[:-1] != 0) & (time_off_in_seconds[1:] == 0)))
+        if counter_on_off.size == 0:
+            return 0
+        return int(round(counter_on_off[-1] - counter_on_off[0]))
 
-    def get_space_heating_starts(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> int:
-        """Return the number of space-heating starts of the heat pump, counted in its published on/off state.
+    @staticmethod
+    def space_heating_starts(*, counter_on_off: np.ndarray, on_off_state: np.ndarray) -> int:
+        """Return the number of space-heating starts of the heat pump, the starts counted in its space-heating steps.
 
-        A space-heating start is a step whose ``OnOffStateHeatpump`` is 1 (space heating) after a step whose state
-        is 0 (off). Starts into hot water (2) or cooling (-1) are not counted, and neither is a switch from hot water
-        straight to space heating, since the machine did not stop. For example, the states 0, 1, 1, 0, 2, 0, 1, 2, 1
-        hold two space-heating starts and one hot-water start. As for :meth:`get_heatpump_cycles`, a start in the
-        first step has no step before it and is not counted. The state is the mode the heat pump ran in
-        (:meth:`published_mode`), the same track its ``TimeOff`` follows, so every space-heating start is also a start
-        in :meth:`get_heatpump_cycles`.
+        A space-heating start is a growth of the published ``CounterOnOff`` in a step whose published
+        ``OnOffStateHeatpump`` is 1 (space heating): a start from off into space heating, or a start the space-heating
+        controller estimated for the cycles inside such a step above the part-load threshold. Starts into hot water (2)
+        or cooling (-1) are not counted, and neither is a switch from hot water straight to space heating, since the
+        machine did not stop. For example, the states 0, 1, 1, 0, 2, 0, 1, 2, 1 with the counter 0, 1, 1, 1, 2, 2, 3, 3,
+        3 hold two space-heating starts and one hot-water start. As for :meth:`heat_pump_starts`, a start in the first
+        step is not counted.
 
         Args:
-            output: The output whose column is read; it must be ``OnOffStateHeatpump``.
-            index: The position of that output's column in ``postprocessing_results``.
-            postprocessing_results: The simulated values of all outputs, one column per output.
+            counter_on_off: The published ``CounterOnOff`` per step.
+            on_off_state: The published ``OnOffStateHeatpump`` per step: 1 space heating, 2 hot water, -1 cooling, 0 off.
 
         Returns:
             The number of space-heating starts.
 
         Raises:
-            ValueError: If ``output`` is not the ``OnOffStateHeatpump`` output, the only column that tells space
-                heating from hot water and off.
+            ValueError: If the two series differ in length.
         """
-        if output.field_name != self.HeatPumpOnOffState:
+        if counter_on_off.shape != on_off_state.shape:
             raise ValueError(
-                f"The space-heating starts are counted in the heat pump's {self.HeatPumpOnOffState} column, "
-                f"not in {output.field_name}."
+                f"The start counter and the on/off state cover the same steps, got {counter_on_off.shape[0]} and "
+                f"{on_off_state.shape[0]} steps."
             )
-        mode = postprocessing_results.iloc[:, index].to_numpy()
-        return int(np.count_nonzero((mode[:-1] == 0) & (mode[1:] == 1)))
+        starts_in_step = np.diff(counter_on_off)
+        return int(round(float(starts_in_step[on_off_state[1:] == 1].sum())))
+
+    @staticmethod
+    def cycling_running_share(*, delivered_thermal_power_in_watt: np.ndarray, minimum_thermal_power_in_watt: float) -> np.ndarray:
+        """Return the share of each space-heating step the compressor runs, from its delivered mean power, from 0 to 1.
+
+        Above the part-load threshold a space-heating step whose delivered mean power lies at or above the minimum
+        output is continuous running at that power, the whole step. Below it the machine cycles at its minimum output
+        and runs the delivered power's share of it. For example, with a 1945 W minimum output 3000 W give 1.0 and
+        972.5 W give 0.5; a machine without a minimum output runs every step whole.
+
+        Args:
+            delivered_thermal_power_in_watt: The space-heating heat per step, the mean over the step, in W.
+            minimum_thermal_power_in_watt: The compressor's minimum thermal output, in W, 0 or more.
+
+        Returns:
+            The running share per step.
+
+        Raises:
+            ValueError: If the minimum output is negative.
+        """
+        if minimum_thermal_power_in_watt < 0.0:
+            raise ValueError(f"A compressor's minimum thermal output is 0 W or more, got {minimum_thermal_power_in_watt!r} W.")
+        if minimum_thermal_power_in_watt == 0.0:
+            return np.ones_like(delivered_thermal_power_in_watt, dtype=float)
+        return np.clip(delivered_thermal_power_in_watt / minimum_thermal_power_in_watt, 0.0, 1.0)
+
+    def heating_running_time_in_hours(
+        self, *, on_off_state: np.ndarray, space_heating_thermal_power_in_watt: np.ndarray
+    ) -> float:
+        """Return the time the heat pump heated in the simulated period, space heating and hot water, in h.
+
+        A step whose published state is 2 (hot water) runs whole. A space-heating step (1) runs whole at and below the
+        part-load threshold; above it, it runs its cycling share (:meth:`cycling_running_share`): the whole step at or
+        above the minimum output, the delivered power's share of the minimum output below it. For example, at 900 s
+        a space-heating step that delivers half the minimum output adds 450 s.
+
+        Args:
+            on_off_state: The published ``OnOffStateHeatpump`` per step.
+            space_heating_thermal_power_in_watt: The published ``ThermalOutputPowerSH`` per step, in W; read only
+                above the part-load threshold.
+
+        Returns:
+            The heating time, in h.
+
+        Raises:
+            ValueError: If above the part-load threshold the space-heating heat does not cover the steps of the state.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        running_share = np.isin(on_off_state, (1, 2)).astype(float)
+        if self.my_simulation_parameters.runs_part_load():
+            if space_heating_thermal_power_in_watt.shape != on_off_state.shape:
+                raise ValueError(
+                    "Above the part-load threshold the heating time reads the space-heating heat of every step, got "
+                    f"{space_heating_thermal_power_in_watt.shape[0]} values for {on_off_state.shape[0]} steps."
+                )
+            space_heating = on_off_state == 1
+            running_share[space_heating] = self.cycling_running_share(
+                delivered_thermal_power_in_watt=space_heating_thermal_power_in_watt[space_heating],
+                minimum_thermal_power_in_watt=self.minimum_thermal_output_power_in_watt,
+            )
+        return float(running_share.sum()) * seconds_per_timestep / 3600
 
     def get_flow_and_return_temperatures(
         self,

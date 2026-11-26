@@ -9,6 +9,7 @@ live beside it. The heat pump it commands is :mod:`hisim.components.more_advance
 """
 
 import importlib
+import math
 from enum import Enum, unique
 from dataclasses import dataclass
 from typing import ClassVar, List, NamedTuple, Optional, Tuple
@@ -164,6 +165,20 @@ class HeatPumpSpaceHeatingMode(int, Enum):
     HEATING = 1
 
 
+class AccumulatedStarts(NamedTuple):
+    """The compressor starts the cycle estimate publishes in one step, and the fraction of a start it carries on.
+
+    For example, 0.95 of a start carried from the steps before and 0.1 estimated in this step give
+    ``AccumulatedStarts(whole_starts=1, remainder=0.05)``
+    (:meth:`MoreAdvancedHeatPumpHPLibControllerSpaceHeating.whole_starts_of`).
+    """
+
+    #: The whole starts published in the step, 0 or more.
+    whole_starts: int
+    #: The fraction of a start carried to the next step, from 0 to 1.
+    remainder: float
+
+
 class HeatPumpSpaceHeatingControllerState(NamedTuple):
     """The whole memory of the heat pump's space-heating controller: its mode and the part-load outputs it publishes.
 
@@ -194,6 +209,12 @@ class HeatPumpSpaceHeatingControllerState(NamedTuple):
     #: The space-heating electricity of the own need in this step, in W: the ratio without the raise, from the state
     #: at the step's start, times the heat pump's full-load electricity.
     own_need_electrical_power_in_watt: float
+    #: The whole compressor starts the cycle estimate crossed in this step, 0 or more; 0 at and below the part-load
+    #: threshold (:meth:`MoreAdvancedHeatPumpHPLibControllerSpaceHeating.estimated_compressor_starts`).
+    compressor_starts_in_step: int
+    #: The fraction of a start the cycle estimate has accumulated and not yet published, from 0 to 1, carried from
+    #: step to step so that a cycle longer than a step is counted once.
+    cycle_starts_accumulated: float
 
 
 class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
@@ -251,6 +272,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     controller publishes the own need's electricity (``OwnNeedElectricalPowerInWatt``): what it would run without the
     raise, from the state at the step's start (:class:`HeatPumpSpaceHeatingControllerState`), so the energy manager
     can decide the raise without its own effect in the figure it decides on.
+
+    Cycle estimate: above the part-load threshold a step is longer than the heat pump's cycles, and the heat pump's
+    on/off state cannot show the starts inside it. The controller, which owns the hysteresis band, estimates them from
+    the hysteresis cycle (:meth:`starts_per_step_of_hysteresis_cycle`): from the heat pump's delivered space-heating heat
+    (``DeliveredThermalPowerSpaceHeatingInWatt``) and minimum output (``ThermalPowerAtMinimumLoadSpaceHeatingInWatt``),
+    the buffer's heat capacity and the heat pump's minimum times, which its configuration copies from the buffer and
+    the heat pump at configuration time. It carries the fraction of a start from step to step in its state and
+    publishes the whole starts as ``CompressorStartsInStep``, which the heat pump adds to its counters
+    (:meth:`estimated_compressor_starts`). At and below the threshold it publishes 0.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -276,6 +306,10 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     ElectricalPowerTargetFromEnergyManagerInWatt = "ElectricalPowerTargetFromEnergyManagerInWatt"
     #: The heat pump compressor's space-heating electricity at full load, from the step's start temperatures.
     ElectricalPowerAtFullLoadSpaceHeatingInWatt = "ElectricalPowerAtFullLoadSpaceHeatingInWatt"
+    #: The heat pump's space-heating heat, the mean over the step, in W: the delivered mean power of the cycle estimate.
+    DeliveredThermalPowerSpaceHeatingInWatt = "DeliveredThermalPowerSpaceHeatingInWatt"
+    #: The heat pump's minimum thermal output, in W: the power below which it cycles.
+    ThermalPowerAtMinimumLoadSpaceHeatingInWatt = "ThermalPowerAtMinimumLoadSpaceHeatingInWatt"
 
     # Outputs
     State_SH = "State_SH"
@@ -285,6 +319,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
     TargetTemperatureShInCelsius = "TargetTemperatureShInCelsius"
     #: The space-heating electricity the controller would run the heat pump at without the energy manager's raise.
     OwnNeedElectricalPowerInWatt = "OwnNeedElectricalPowerInWatt"
+    #: The compressor starts the cycle estimate counts in this step, a whole number (:meth:`estimated_compressor_starts`).
+    CompressorStartsInStep = "CompressorStartsInStep"
 
     #: The share of the band's upper offset that the space-heating target lies above the supply temperature,
     #: dimensionless (:meth:`space_heating_target_temperature_in_celsius`). Owner decision of 2026-10-19
@@ -313,6 +349,17 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type
         self.set_heating_temperature_for_building_in_celsius: float = float(
             concrete(self.heatpump_controller_config.set_heating_temperature_for_building_in_celsius)
+        )
+        #: The buffer's heat capacity, in J/K, or None for a system without a buffer, which gets no cycle estimate.
+        self.storage_heat_capacity_in_joule_per_kelvin: Optional[float] = concrete(
+            self.heatpump_controller_config.storage_heat_capacity_in_joule_per_kelvin
+        )
+        #: The heat pump's minimum running and idle times, in s, which floor the phases of an estimated cycle.
+        self.heat_pump_minimum_running_time_in_seconds: float = float(
+            concrete(self.heatpump_controller_config.heat_pump_minimum_running_time_in_seconds) or 0.0
+        )
+        self.heat_pump_minimum_idle_time_in_seconds: float = float(
+            concrete(self.heatpump_controller_config.heat_pump_minimum_idle_time_in_seconds) or 0.0
         )
         self.build(
             mode=self.heatpump_controller_config.mode,
@@ -412,6 +459,37 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             ),
         )
 
+        # The cycle estimate above the part-load threshold: the heat pump's delivered space-heating heat and its minimum
+        # output, read as signals. Optional, like ActualPartLoadRatioSh: unwired they read 0 W and nothing is estimated.
+        self.delivered_thermal_power_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.DeliveredThermalPowerSpaceHeatingInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            mandatory=False,
+        )
+        self.minimum_thermal_power_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.ThermalPowerAtMinimumLoadSpaceHeatingInWatt,
+            LoadTypes.HEATING,
+            Units.WATT,
+            mandatory=False,
+        )
+        self.compressor_starts_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.CompressorStartsInStep,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description=(
+                "The compressor starts the controller estimates for this step above the part-load threshold, a whole "
+                "number, 0 or more: the starts of the heat pump's cycles on the buffer's hysteresis band where it "
+                "delivers less than its minimum output, accumulated over the steps until a whole start is reached. 0 at "
+                "and below the threshold, where the heat pump counts its starts from its own on/off state. A command "
+                "the heat pump adds to its start counters."
+            ),
+            aggregation=OutputAggregation.SUM,
+        )
+
         self.add_default_connections(self.get_default_connections_from_heating_curve())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -489,10 +567,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
 
     @staticmethod
     def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
-        """Return the connections of the actual ratio the space-heating charge ran and of the full-load electricity.
+        """Return the connections of the actual ratio, the full-load electricity, the delivered heat and the minimum output.
 
         Returns:
-            The connections of ``ActualPartLoadRatioSh`` and ``ElectricalPowerAtFullLoadSpaceHeatingInWatt``.
+            The connections of ``ActualPartLoadRatioSh``, ``ElectricalPowerAtFullLoadSpaceHeatingInWatt``,
+            ``DeliveredThermalPowerSpaceHeatingInWatt`` (the heat pump's ``ThermalOutputPowerSH``) and
+            ``ThermalPowerAtMinimumLoadSpaceHeatingInWatt``.
         """
         # The heat pump's module imports this controller for its own default connections, so this import waits for the call.
         from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
@@ -509,6 +589,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
                 MoreAdvancedHeatPumpHPLib.get_classname(),
                 MoreAdvancedHeatPumpHPLib.ElectricalPowerAtFullLoadSpaceHeatingInWatt,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.DeliveredThermalPowerSpaceHeatingInWatt,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH,
+            ),
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.ThermalPowerAtMinimumLoadSpaceHeatingInWatt,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.ThermalPowerAtMinimumLoadSpaceHeatingInWatt,
             ),
         ]
 
@@ -596,6 +686,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             mode_without_raise=HeatPumpSpaceHeatingMode.OFF,
             part_load_ratio_without_raise_sh=1.0,
             own_need_electrical_power_in_watt=0.0,
+            compressor_starts_in_step=0,
+            cycle_starts_accumulated=0.0,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -674,6 +766,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
             storage_temperature_modifier_in_kelvin=0.0,
             upper_temperature_offset_in_kelvin=self.upper_temperature_offset_for_state_conditions_in_celsius,
         )
+        starts = self.estimated_compressor_starts(
+            stsv,
+            accumulated_starts=state.cycle_starts_accumulated,
+            set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+            storage_temperature_modifier=storage_temperature_modifier,
+        )
         return HeatPumpSpaceHeatingControllerState(
             mode=mode,
             requested_part_load_ratio_sh=requested_part_load_ratio,
@@ -683,6 +781,8 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
                 stsv, device_runs=True, target_temperature_in_celsius=target_without_raise_in_celsius
             ),
             own_need_electrical_power_in_watt=own_part_load_ratio * full_load_electrical_power_in_watt,
+            compressor_starts_in_step=starts.whole_starts,
+            cycle_starts_accumulated=starts.remainder,
         )
 
     def mode_after_decision(
@@ -795,6 +895,145 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         target_ratio = electrical_power_target_in_watt / full_load_electrical_power_in_watt
         return max(own_part_load_ratio, min(target_ratio, raised_part_load_ratio))
 
+    #: A sum of fractional starts that lies this close below a whole number counts as that whole number, dimensionless.
+    #: It absorbs the rounding of a sum of fractions: 24 steps of 1/24 start each add up to 0.9999999999999999.
+    START_COUNT_ROUNDING_TOLERANCE: ClassVar[float] = 1e-9
+
+    def estimated_compressor_starts(
+        self,
+        stsv: SingleTimeStepValues,
+        *,
+        accumulated_starts: float,
+        set_heating_flow_temperature_in_celsius: float,
+        storage_temperature_modifier: float,
+    ) -> "AccumulatedStarts":
+        """Return the whole compressor starts the cycle estimate crosses in this step and the fraction it carries on.
+
+        Above the part-load threshold, with a buffer wired and its heat capacity known, the controller estimates the
+        starts of the heat pump's hysteresis cycles in the step (:meth:`starts_per_step_of_hysteresis_cycle`) from the
+        heat pump's delivered space-heating heat, its minimum output, the buffer's heat capacity, the band between the
+        switch-on and switch-off points this pass uses (:meth:`heating_switch_temperatures_in_celsius`) and the heat
+        pump's minimum times, and adds them to the fraction carried from the steps before (:meth:`whole_starts_of`). At
+        and below the threshold, or without a buffer, it estimates nothing: the heat pump runs whole steps there and
+        counts its starts from its own on/off state. For example, a 6 h cycle at 900 s gives 1/24 start per step and one
+        whole start every 24 steps.
+
+        Args:
+            stsv: The step's values, to read the heat pump's delivered heat and minimum output from.
+            accumulated_starts: The fraction of a start carried from the steps before, from 0 to 1.
+            set_heating_flow_temperature_in_celsius: The supply temperature the heating curve asks for, in °C.
+            storage_temperature_modifier: The energy manager's raise of the switch points, in K.
+
+        Returns:
+            The whole starts of the step and the fraction carried on.
+        """
+        if self.storage_heat_capacity_in_joule_per_kelvin is None or not self.space_heating_part_load.runs_fractions():
+            return AccumulatedStarts(whole_starts=0, remainder=accumulated_starts)
+        switch_on_in_celsius, switch_off_in_celsius = self.heating_switch_temperatures_in_celsius(
+            set_heating_flow_temperature_in_celsius,
+            self.upper_temperature_offset_for_state_conditions_in_celsius,
+            self.lower_temperature_offset_for_state_conditions_in_celsius,
+            storage_temperature_modifier,
+        )
+        starts_in_step = self.starts_per_step_of_hysteresis_cycle(
+            delivered_thermal_power_in_watt=stsv.get_input_value(self.delivered_thermal_power_channel),
+            minimum_thermal_power_in_watt=stsv.get_input_value(self.minimum_thermal_power_channel),
+            band_heat_in_joule=self.storage_heat_capacity_in_joule_per_kelvin * (switch_off_in_celsius - switch_on_in_celsius),
+            minimum_running_time_in_seconds=self.heat_pump_minimum_running_time_in_seconds,
+            minimum_idle_time_in_seconds=self.heat_pump_minimum_idle_time_in_seconds,
+            seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+        )
+        return self.whole_starts_of(accumulated_starts=accumulated_starts, starts_in_step=starts_in_step)
+
+    @staticmethod
+    def starts_per_step_of_hysteresis_cycle(
+        *,
+        delivered_thermal_power_in_watt: float,
+        minimum_thermal_power_in_watt: float,
+        band_heat_in_joule: float,
+        minimum_running_time_in_seconds: float,
+        minimum_idle_time_in_seconds: float,
+        seconds_per_timestep: float,
+    ) -> float:
+        """Return the compressor starts of a step whose delivered mean power lies below the minimum output, a fraction.
+
+        Terms: the delivered mean power ``P`` is the heat pump's space-heating heat averaged over the step; the minimum
+        output ``P_min`` is the lowest power its compressor holds; the band heat ``Q`` is the heat the buffer takes
+        between the switch-on and the switch-off point, its heat capacity times the band. A step at or above the
+        minimum output is continuous running, and a step without load has no cycle: both give 0. Below the minimum
+        output the machine heats the buffer through the band at ``P_min - P`` while the house draws ``P``, and rests
+        while the house drains it at ``P``: ``t_on = Q / (P_min - P)``, ``t_off = Q / P``, each at least the heat
+        pump's minimum running and idle time, and the step holds ``dt / (t_on + t_off)`` starts.
+
+        For example, a buffer of 1.613 MJ/K over a 10 K band holds 16.13 MJ. At 900 W delivered and 1945 W minimum
+        output the machine runs 15435 s and rests 17922 s, so a 900 s step holds 0.0270 starts.
+
+        Why the hysteresis cycle: above the part-load threshold a step is longer than a cycle, and the heat pump's
+        on/off state cannot show the cycles inside it. The minimum times give only the most starts they allow, an
+        upper bound, not the expected count.
+
+        Args:
+            delivered_thermal_power_in_watt: The heat pump's space-heating heat, the mean over the step, in W; 0 or less
+                is a step without load.
+            minimum_thermal_power_in_watt: The heat pump's minimum thermal output, in W, 0 or more.
+            band_heat_in_joule: The heat the buffer takes across the hysteresis band, in J, above 0.
+            minimum_running_time_in_seconds: The shortest on phase, in s, 0 or more.
+            minimum_idle_time_in_seconds: The shortest off phase, in s, 0 or more.
+            seconds_per_timestep: The step length, in s.
+
+        Returns:
+            The starts in the step, 0 or more, a fraction of a start in general.
+
+        Raises:
+            ValueError: If the band heat is not a finite heat above 0 J, a minimum time or the minimum output is
+                negative, or the delivered power is not finite.
+        """
+        if not (math.isfinite(band_heat_in_joule) and band_heat_in_joule > 0.0):
+            raise ValueError(f"The buffer's band heat is a finite heat above 0 J, got {band_heat_in_joule!r} J.")
+        if minimum_running_time_in_seconds < 0.0 or minimum_idle_time_in_seconds < 0.0 or minimum_thermal_power_in_watt < 0.0:
+            raise ValueError(
+                "The heat pump's minimum running time, minimum idle time and minimum output are 0 or more, got "
+                f"{minimum_running_time_in_seconds!r} s, {minimum_idle_time_in_seconds!r} s and "
+                f"{minimum_thermal_power_in_watt!r} W."
+            )
+        if not math.isfinite(delivered_thermal_power_in_watt):
+            raise ValueError(f"The heat pump's delivered heat is a finite power, got {delivered_thermal_power_in_watt!r} W.")
+        if delivered_thermal_power_in_watt <= 0.0 or delivered_thermal_power_in_watt >= minimum_thermal_power_in_watt:
+            return 0.0
+        on_phase_in_seconds = max(
+            band_heat_in_joule / (minimum_thermal_power_in_watt - delivered_thermal_power_in_watt),
+            minimum_running_time_in_seconds,
+        )
+        off_phase_in_seconds = max(band_heat_in_joule / delivered_thermal_power_in_watt, minimum_idle_time_in_seconds)
+        return seconds_per_timestep / (on_phase_in_seconds + off_phase_in_seconds)
+
+    @classmethod
+    def whole_starts_of(cls, *, accumulated_starts: float, starts_in_step: float) -> "AccumulatedStarts":
+        """Return the whole starts a carried fraction and a step's starts cross together, and the fraction left over.
+
+        The estimate gives a fraction of a start per step; only whole starts are published, the rest is carried to
+        the next step. A sum within :attr:`START_COUNT_ROUNDING_TOLERANCE` below a whole number counts as that number.
+        For example, 0.95 carried and 0.1 in the step give 1 start and 0.05 carried on; 0.2 and 2.9 give 3 and 0.1.
+
+        Args:
+            accumulated_starts: The fraction carried from the steps before, from 0 to 1.
+            starts_in_step: The step's starts, 0 or more.
+
+        Returns:
+            The whole starts and the fraction carried on.
+
+        Raises:
+            ValueError: If either value is negative or not finite.
+        """
+        if not (math.isfinite(accumulated_starts) and math.isfinite(starts_in_step)):
+            raise ValueError(f"Carried and estimated starts are finite counts, got {accumulated_starts!r} and {starts_in_step!r}.")
+        if accumulated_starts < 0.0 or starts_in_step < 0.0:
+            raise ValueError(f"Carried and estimated starts are 0 or more, got {accumulated_starts!r} and {starts_in_step!r}.")
+        total = accumulated_starts + starts_in_step
+        whole_starts = math.floor(total + cls.START_COUNT_ROUNDING_TOLERANCE)
+        # the tolerance can make the whole starts exceed the total by less than itself: no fraction is left then
+        return AccumulatedStarts(whole_starts=whole_starts, remainder=max(total - whole_starts, 0.0))
+
     def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
         """Write the outputs that belong to ``state``: the mode, the requested ratio, its target and the own need.
 
@@ -807,6 +1046,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         if self.space_heating_part_load.target_channel is not None:
             stsv.set_output_value(self.space_heating_part_load.target_channel, state.target_temperature_sh_in_celsius)
         stsv.set_output_value(self.own_need_channel, state.own_need_electrical_power_in_watt)
+        stsv.set_output_value(self.compressor_starts_channel, state.compressor_starts_in_step)
 
     def publish_forced(self, *, stsv: SingleTimeStepValues, state: HeatPumpSpaceHeatingControllerState) -> None:
         """Write the outputs of a forced pass: those of ``state``, except the requested ratio above the threshold.

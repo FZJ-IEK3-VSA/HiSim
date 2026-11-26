@@ -1,5 +1,6 @@
 """Test for advanced heat pump hplib."""
 
+import numpy as np
 import pandas as pd
 import pytest
 from tests import functions_for_testing as fft
@@ -281,84 +282,43 @@ def test_heat_pump_hplib_new() -> None:
 
 
 @pytest.mark.base
-def test_get_heatpump_cycles_counts_transitions() -> None:
-    """get_heatpump_cycles counts off->on transitions and refuses any column other than TimeOff.
+def test_heat_pump_starts_are_the_growth_of_the_start_counter() -> None:
+    """The starts are the published ``CounterOnOff`` at the end less at the start: a start in the first step is not one.
 
-    A start is registered when the current ``TimeOff`` value is non-zero and the
-    following value is zero (i.e. the heat pump turns back on). A one-step series
-    has no transition. Any other output raises instead of counting a silent 0.
+    The counter 0, 0, 0, 1, 1, 2 holds two starts; 1, 1, 1 none, its start being the first step's; a one-step series
+    none. Catches a count that includes the first step's start or reads anything but the counter's growth.
     """
-    simpars = SimulationParameters.one_day_only(2017, 60)
-    config = _eight_kilowatt_heat_pump_config()
-    heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
-
-    time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("HeatPump")
-    )
-    other_output = cp.ComponentOutput(
-        "HeatPump",
-        heatpump.ThermalOutputPowerSH,
-        lt.LoadTypes.HEATING,
-        lt.Units.WATT,
-        component_id=ComponentID("HeatPump"),
-    )
-
-    # Column 0 holds the TimeOff series; an unrelated column sits at index 1.
-    # Series: 0, 60, 60, 0, 120, 0  -> transitions at indices 2->3 and 4->5 => 2 cycles.
-    postprocessing_results = pd.DataFrame(
-        {
-            heatpump.TimeOff: [0, 60, 60, 0, 120, 0],
-            "other": [1, 2, 3, 4, 5, 6],
-        }
-    )
-    cycles = heatpump.get_heatpump_cycles(
-        output=time_off_output, index=0, postprocessing_results=postprocessing_results
-    )
-    assert cycles == 2
-
-    # Single-element series: the only element has no successor, so no start.
-    single = pd.DataFrame({heatpump.TimeOff: [60]})
-    assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=single) == 0
-
-    # No transitions when the series never returns to zero after a non-zero value.
-    always_on_then_off = pd.DataFrame({heatpump.TimeOff: [0, 60, 60, 60]})
-    assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=always_on_then_off) == 0
-
-    # Any output other than TimeOff is refused: it would otherwise count a silent 0.
-    with pytest.raises(ValueError, match="TimeOff"):
-        heatpump.get_heatpump_cycles(output=other_output, index=1, postprocessing_results=postprocessing_results)
+    assert MoreAdvancedHeatPumpHPLib.heat_pump_starts(np.array([0.0, 0.0, 0.0, 1.0, 1.0, 2.0])) == 2
+    assert MoreAdvancedHeatPumpHPLib.heat_pump_starts(np.array([1.0, 1.0, 1.0])) == 0
+    assert MoreAdvancedHeatPumpHPLib.heat_pump_starts(np.array([1.0])) == 0
 
 
 @pytest.mark.base
 def test_the_start_kpis_count_every_start_and_the_space_heating_starts_whatever_output_comes_after_them() -> None:
     """Catches a start KPI that ends as the count of the component's last output, or counts hot-water starts as SH.
 
-    The KPI entries walk every output of the heat pump. The cycle count used to be assigned for each of them, and every
-    output but ``TimeOff`` counted 0, so the KPI read 0 whenever an output came after ``TimeOff``, which it does in
-    every simulation. The published modes 0, 1, 1, 0, 2, 2, 0, 1, 2, 1, 0, -1, 0, 1 (1 space heating, 2 hot water,
-    -1 cooling, 0 off) hold five starts: into space heating at steps 1, 7 and 13, into hot water at step 4 and into
-    cooling at step 11. The switch from hot water to space heating at step 9 is no start: the machine did not stop.
-    The ``TimeOff`` column follows the same modes, so "Number of heat pump starts" is 5 and "Number of space-heating
-    starts" is 3.
+    The KPI entries walk every output of the heat pump; the starts are computed once all of them are read. The
+    published modes 0, 1, 1, 0, 2, 2, 0, 1, 2, 1, 0, -1, 0, 1 (1 space heating, 2 hot water, -1 cooling, 0 off) hold
+    five starts: into space heating at steps 1, 7 and 13, into hot water at step 4 and into cooling at step 11. The
+    switch from hot water to space heating at step 9 is no start: the machine did not stop. ``CounterOnOff`` grows at
+    exactly these steps, so "Number of heat pump starts" is 5 and "Number of space-heating starts" is 3.
     """
     simpars = SimulationParameters.one_day_only(2017, 60)
     heatpump = MoreAdvancedHeatPumpHPLib(config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=simpars)
     published_modes = [0, 1, 1, 0, 2, 2, 0, 1, 2, 1, 0, -1, 0, 1]
-    time_off_in_seconds = []
-    off_streak_in_seconds = 0
-    for mode in published_modes:
-        off_streak_in_seconds = off_streak_in_seconds + 60 if mode == 0 else 0
-        time_off_in_seconds.append(off_streak_in_seconds)
+    counter = [0]
+    for previous, mode in zip(published_modes[:-1], published_modes[1:]):
+        counter.append(counter[-1] + (1 if previous == 0 and mode != 0 else 0))
     postprocessing_results = pd.DataFrame(
         {
             heatpump.HeatPumpOnOffState: published_modes,
-            heatpump.TimeOff: time_off_in_seconds,
+            heatpump.CounterOnOff: counter,
             heatpump.TimeOnHeating: [60 if mode in (1, 2) else 0 for mode in published_modes],
         }
     )
 
     kpi_entries = heatpump.get_component_kpi_entries(
-        all_outputs=[heatpump.heatpump_state, heatpump.time_off, heatpump.time_on_heating],
+        all_outputs=[heatpump.heatpump_state, heatpump.counter_on_off_channel, heatpump.time_on_heating],
         postprocessing_results=postprocessing_results,
     )
 
@@ -366,18 +326,6 @@ def test_the_start_kpis_count_every_start_and_the_space_heating_starts_whatever_
     assert values["Number of heat pump starts"] == 5
     assert values["Number of space-heating starts"] == 3
     assert "Number of SH heat pump cycles" not in values
-
-
-@pytest.mark.base
-def test_get_space_heating_starts_refuses_any_column_but_the_published_state() -> None:
-    """Catches the space-heating start count reading a column that cannot tell space heating from hot water."""
-    simpars = SimulationParameters.one_day_only(2017, 60)
-    heatpump = MoreAdvancedHeatPumpHPLib(config=_eight_kilowatt_heat_pump_config(), my_simulation_parameters=simpars)
-    postprocessing_results = pd.DataFrame({heatpump.TimeOff: [60, 0, 0]})
-    with pytest.raises(ValueError, match="OnOffStateHeatpump"):
-        heatpump.get_space_heating_starts(
-            output=heatpump.time_off, index=0, postprocessing_results=postprocessing_results
-        )
 
 
 def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) -> list:
@@ -401,19 +349,25 @@ def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) 
     ids=["never_active", "always_active", "two_active_periods"],
 )
 def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(is_active_profile: list) -> None:
-    """Heating/cooling hours must equal the actual time the heat pump was on."""
+    """Heating/cooling hours must equal the actual time the heat pump was on.
+
+    At 60 s a step the published state shows heating is a whole step of heating time; cooling counts the steps of its
+    running ``TimeOnCooling`` streak.
+    """
     simpars = SimulationParameters.one_day_only(2017, 60)
     config = _eight_kilowatt_heat_pump_config()
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     streak = _running_streak_counter(is_active_profile, simpars.seconds_per_timestep)
     # The component's own output objects, so the test cannot drift from how they are declared.
-    heating_output = heatpump.time_on_heating
+    state_output = heatpump.heatpump_state
     cooling_output = heatpump.time_on_cooling
-    postprocessing_results = pd.DataFrame({heatpump.TimeOnHeating: streak, heatpump.TimeOnCooling: streak})
+    postprocessing_results = pd.DataFrame(
+        {heatpump.HeatPumpOnOffState: [1 if active else 0 for active in is_active_profile], heatpump.TimeOnCooling: streak}
+    )
 
     kpi_entries = heatpump.get_component_kpi_entries(
-        all_outputs=[heating_output, cooling_output], postprocessing_results=postprocessing_results
+        all_outputs=[state_output, cooling_output], postprocessing_results=postprocessing_results
     )
     heating_hours = next(e for e in kpi_entries if e.name == "Heating hours of SH heat pump").value
     cooling_hours = next(e for e in kpi_entries if e.name == "Cooling hours of SH heat pump").value

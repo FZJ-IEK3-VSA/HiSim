@@ -22,6 +22,7 @@ import pytest
 
 from hisim import loadtypes as lt
 from hisim import sim_repository
+from hisim.caching import CacheSettings
 from hisim.component import SingleTimeStepValues
 from hisim.components import weather
 from hisim.components.weather import calculation
@@ -182,8 +183,7 @@ def published_humidity(component: weather.Weather, timesteps: List[int]) -> List
 @pytest.fixture(name="no_shared_cache")
 def fixture_no_shared_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the run's cache in the test's own directory, whatever the environment configures."""
-    for variable in ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR"):
-        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORIES, raising=False)
 
 
 @pytest.mark.base

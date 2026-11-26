@@ -120,7 +120,7 @@ def fixture_start_of_step_days(tmp_path_factory) -> Dict[str, StartOfStepDayResu
     The building files its solar-gain series in the cache directory; redirecting it keeps the working tree clean.
     """
     patcher = pytest.MonkeyPatch()
-    patcher.setenv(CacheSettings.Variables.DIRECTORY, str(tmp_path_factory.mktemp("start_of_step_solar_cache")))
+    patcher.setenv(CacheSettings.Variables.DIRECTORIES, str(tmp_path_factory.mktemp("start_of_step_solar_cache")))
     try:
         return {variant_name: StartOfStepDay.run(variant_name) for variant_name in OneDaySnapshot.variant_names()}
     finally:

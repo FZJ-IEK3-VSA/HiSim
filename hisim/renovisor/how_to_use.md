@@ -49,7 +49,9 @@ path verification (below).
 | `translator_error.json` | only on exit 3: what the translator could not map |
 
 Nothing is written outside `--out` except the cache directories (`--cache-dir`, or the ordered
-list in `HISIM_CACHE_DIRECTORIES`), which are shared state rather than output. `run` and
+list in `HISIM_CACHE_DIRECTORIES`, which every HiSim run reads; `--cache-dir` outranks it), which are
+shared state rather than output. `HISIM_CACHE_DIR` and `HISIM_CACHE_SHARED_DIR` are retired: a run
+with either set fails and names `HISIM_CACHE_DIRECTORIES` instead. `run` and
 `translate` also take `--base-files`, the directory of recorded energy-system files to translate
 against; it defaults to `energy_systems/`.
 

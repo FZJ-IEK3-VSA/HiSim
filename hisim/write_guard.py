@@ -9,10 +9,9 @@ hisim-renovisor-translator-epc.23):
   directory). Nothing the next calculation needs may live there, so the caller can delete it whole
   once it has copied what it wants. A result directory below ``hisim/inputs`` is refused: the
   shipped data is nobody's output;
-* **the cache directories**, which are shared between calculations on purpose: the parameters'
-  ``cache_locations()`` (``cache_dir_path``, the ordered ``cache_directories`` a container maps in
-  through ``HISIM_CACHE_DIRECTORIES``) and the ``HISIM_CACHE_DIR`` / ``HISIM_CACHE_SHARED_DIR``
-  overrides of the cache client.
+* **the cache directories**, which are shared between calculations on purpose: exactly the
+  directories of the parameters' resolved ``cache_locations()`` -- their own ``cache_directories``,
+  else the ordered list in ``HISIM_CACHE_DIRECTORIES`` a container sets, else ``cache_dir_path``.
 
 Everything else -- the repository tree, ``hisim/inputs`` (bar the default cache below it), the
 working directory, the home directory, the system temporary directory, an installed package -- is a
@@ -540,9 +539,6 @@ class WriteGuard:
     #: The environment variable that selects :class:`GuardMode`; ``enforce`` when unset.
     MODE_VARIABLE: ClassVar[str] = "HISIM_WRITE_GUARD"
 
-    #: The cache-client variables that name a directory the cache writes to (``hisim.caching.settings``).
-    CACHE_DIRECTORY_VARIABLES: ClassVar[Tuple[str, ...]] = ("HISIM_CACHE_DIR", "HISIM_CACHE_SHARED_DIR")
-
     _active: ClassVar[ContextVar[Optional["WriteGuard"]]] = ContextVar("hisim_write_guard", default=None)
     _hook_installed: ClassVar[bool] = False
     _install_lock: ClassVar[threading.Lock] = threading.Lock()
@@ -774,8 +770,8 @@ class WriteGuard:
     ) -> Iterator["WriteGuard"]:
         """Run the body as one guarded calculation over the registry *directories*.
 
-        The cache overrides of the environment (:attr:`CACHE_DIRECTORY_VARIABLES`) are registered
-        first; everything else is registered by the code that learns it.
+        The guard registers nothing itself: the code that learns a directory registers it, the cache
+        directories through :class:`hisim.caching.locations.CacheLocations` as the parameters resolve them.
 
         Args:
             label: What the calculation is, for the messages.
@@ -799,13 +795,12 @@ class WriteGuard:
         token = cls._active.set(guard)
         directories.activate()
         try:
-            directories.add_cache_directories(os.environ.get(variable) for variable in cls.CACHE_DIRECTORY_VARIABLES)
-            try:
-                yield guard
-            except BaseException as error:
-                if guard.stray_writes and not isinstance(error, StrayWriteError):
-                    error.add_note(str(StrayWriteError(guard.stray_writes)))
-                raise
+            yield guard
+        except BaseException as error:
+            if guard.stray_writes and not isinstance(error, StrayWriteError):
+                error.add_note(str(StrayWriteError(guard.stray_writes)))
+            raise
+        else:
             if guard.stray_writes:
                 raise StrayWriteError(guard.stray_writes)
         finally:

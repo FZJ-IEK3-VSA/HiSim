@@ -179,10 +179,22 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: idle times below take effect.
     cycling_mode: bool = True
     #: Shortest run once the machine switched on, in s, while :attr:`cycling_mode` is on. 0 means no
-    #: minimum; a negative or non-finite time is refused when the heat pump is built.
-    minimum_running_time_in_seconds: Optional[int] = 3600
-    #: Shortest pause once the machine switched off, in s, refused and read as the running time is.
-    minimum_idle_time_in_seconds: Optional[int] = 3600
+    #: minimum; a negative or non-finite time is refused when the heat pump is built. 600 s protects the
+    #: compressor of an air/water inverter unit: it is the lowest minimum running time Daikin allows (Altherma 3 R F,
+    #: installer reference guide, field setting [8-01], 5 to 95 min, "it is NOT allowed to set [8-01] to a value below
+    #: 10 minutes"), Stiebel Eltron's "Mindestlaufzeit der Wärmepumpe von ca. 10 Minuten" (WPF 04-16 installation
+    #: manual, https://assets.heizung-billiger.de/documents/sima_189.pdf) and the lower end of the 10 to 20 min the
+    #: manufacturers recommend according to the Bundesverband Wärmepumpe (quoted by
+    #: https://42watt.de/magazin/taktung-warmepumpe). It lies above what the compressor itself needs: 2 min for motor
+    #: cooling and oil return (Danfoss) and about 6 min before a short run costs efficiency (EA Technology lab test,
+    #: 2012, both quoted there). Owner decision of 2026-11-26.
+    minimum_running_time_in_seconds: Optional[int] = 600
+    #: Shortest pause once the machine switched off, in s, refused and read as the running time is. 600 s, the
+    #: restart delay of an air/water inverter unit: longer than the 5 min minimum off time of Trane's residential units
+    #: (https://www.trane.com/residential/en/resources/glossary/hvac-short-cycling/) and equal to the running time.
+    #: Stiebel Eltron's 20 min default idle time (parameter STILLSTANDSZEIT, WPF 04-16 and WPW 10-22 Trend installation
+    #: manuals) belongs to an on/off brine/water machine, not to this air/water default. Owner decision of 2026-11-26.
+    minimum_idle_time_in_seconds: Optional[int] = 600
     #: Lowest thermal power the machine modulates down to before it has to cycle.
     minimum_thermal_output_power_in_watt: float = 1800.0
     #: Where the space-heating buffer vessel sits relative to the machine, which decides
@@ -279,8 +291,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         """The fleet's air/water heat pump, scaled to the building it heats.
 
         The field defaults are that machine: hplib's generic air/water parameter set
-        (``model="Generic"``, ``group_id=1``), cycling with an hour of minimum running and
-        idle time, modulating down to 1800 W, flowing at 52 °C into a buffer vessel parallel
+        (``model="Generic"``, ``group_id=1``), cycling with ten minutes of minimum running and
+        idle time each, modulating down to 1800 W, flowing at 52 °C into a buffer vessel parallel
         to it, and heating space only. What the preset does not fix is how large the machine
         is and what design condition it is rated at: ``set_thermal_output_power_in_watt`` and
         ``heating_reference_temperature_in_celsius`` stay ``AUTO`` so that both are copied

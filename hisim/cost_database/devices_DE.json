@@ -444,6 +444,52 @@
       "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
     },
     {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR",
+      "valid_from_year": 2024,
+      "specific_investment": {
+        "value": {
+          "min": 46,
+          "best_estimate": 80,
+          "max": 120
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 5.9,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.19,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_lt_radiator_hausjournal_2022",
+        "src_capex_lt_radiator_homeandsmart_2026",
+        "src_ariadne_henger_2026_modernisation_costs",
+        "src_gergely_2025_hvac_embodied_carbon",
+        "src_ibu_epd_kermi_steel_radiator_2023",
+        "src_capex_23",
+        "src_capex_36"
+      ],
+      "field_sources": {
+        "specific_investment": ["src_capex_lt_radiator_hausjournal_2022", "src_capex_lt_radiator_homeandsmart_2026"],
+        "maintenance_rate_per_year": ["src_capex_23"],
+        "service_life_in_years": ["src_capex_23", "src_capex_36", "src_ibu_epd_kermi_steel_radiator_2023"],
+        "embodied_co2": ["src_gergely_2025_hvac_embodied_carbon"]
+      },
+      "notes": "Low-temperature radiator retrofit, design 55/45 C as HiSim's EmitterDesign; EUR per m2 of conditioned floor area. Investment: the derivation gives 46.8/85.7/128.4 EUR/m2, i.e. the 2024 RADIATOR row (56.25 EUR/m2) times the low-temperature/standard cost ratio of the hausjournal worked examples (6935/4550 = 1.524; same house, 11 radiators each, incl. labour), with the band from the homeandsmart device price range (200-800 EUR per radiator) plus the hausjournal labour share (1585/11 = 144 EUR per radiator) relative to the hausjournal 630 EUR per low-temperature radiator; the row states 46/80/120 EUR/m2, rounded down and aligned with the RADIATOR rows. Final household prices incl. VAT; price levels 2022 (hausjournal) and 2025/26 (homeandsmart). The row prices a full replacement of all radiators; Henger et al. 2026 define the heat-pump retrofit with a partial replacement of heating surfaces to reach 55 C supply (p. 49) and cite Techem 2025 for multi-family houses (no emitter change in 50 % of cases, larger surfaces in 40 %, p. 51), so the row is an upper estimate for a retrofit. Maintenance best estimate 0.01 per year (VDI 2067) as the RADIATOR row; the band 0.005-0.015 is an assumption. Service life 30 years (VDI 2067; steel radiator EPD: reference service life at least 30 years). Embodied CO2 5.9 kgCO2eq per m2 and installation from Gergely et al. 2025, Table A.7: radiators 31,250 kgCO2eq for 20 houses with 2661 m2 (Table 2) over 50 years, i.e. two installations at the paper's 35-year radiator life; modules A1-A3 and C3. The paper does not state the radiator design temperature: the heat-pump system efficiency (282.8 % with radiators vs 353.4 % with floor heating, Table 4) points to low-temperature radiators, the radiator mass (1.35 kg/m2 at 48.5 W/m2 heat loss) rather to 70/55. Its houses are NZEB, so a building with a higher specific heat load needs proportionally more emitter mass."
+    },
+    {
       "component_type": "ELECTRICITY_METER",
       "valid_from_year": 2024,
       "specific_investment": {

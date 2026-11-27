@@ -84,7 +84,7 @@ def _hds_facts(config: Any) -> Optional[ComponentCostFacts]:
     work.
 
     Returns:
-        The facts, or None for an emitter type with no cost database entry (low-temperature radiators); that None
+        The facts, or None for an emitter type with no cost database entry; that None
             becomes an unresolved subject.
     """
     heating_system = getattr(config, "heating_system", None)
@@ -93,8 +93,10 @@ def _hds_facts(config: Any) -> Optional[ComponentCostFacts]:
         asset_class = ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
     elif heating_name == "RADIATOR":
         asset_class = ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
+    elif heating_name == "LOW_TEMPERATURE_RADIATOR":
+        asset_class = ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR
     else:
-        return None  # low-temperature radiators have no cost database entry yet
+        return None
     return ComponentCostFacts(
         asset_class=asset_class,
         size=concrete(config.absolute_conditioned_floor_area_in_m2),

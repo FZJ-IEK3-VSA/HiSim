@@ -534,7 +534,7 @@ def test_a_meter_without_its_output_constant_refuses_instead_of_billing_a_stale_
 
 @pytest.mark.base
 def test_the_heat_distribution_extractor_matches_the_real_emitter_types():
-    """``_hds_facts`` prices floor heating and radiators and declines low-temperature radiators.
+    """``_hds_facts`` prices floor heating, radiators and low-temperature radiators.
 
     Failure mode caught: the emitter match drifting away from ``HeatDistributionSystemType``. The
     enum has been a string enum whose values equal its member names since the string-valued-enum
@@ -554,12 +554,12 @@ def test_the_heat_distribution_extractor_matches_the_real_emitter_types():
     assert radiator.asset_class == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
     assert radiator.size == base.absolute_conditioned_floor_area_in_m2
 
-    # No cost database entry for this one yet; None is the honest answer and becomes an
-    # unresolved reason one level up rather than a dropped component.
-    low_temperature = dataclasses.replace(
-        base, heating_system=HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR
+    low_temperature = _hds_facts(
+        dataclasses.replace(base, heating_system=HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR)
     )
-    assert _hds_facts(low_temperature) is None
+    assert low_temperature is not None
+    assert low_temperature.asset_class == ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR
+    assert low_temperature.size == base.absolute_conditioned_floor_area_in_m2
 
 
 @pytest.mark.base

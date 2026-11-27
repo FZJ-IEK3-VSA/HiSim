@@ -1683,7 +1683,7 @@ class EmitterSubstitution:
     """The emitter the translator writes when the requested one cannot be carried through.
 
     HiSim models all three emitters of ``heat_distribution.type_of_system``, but the lifecycle
-    cost database has no row for the low-temperature radiator, and decision D7 of the cost
+    cost database for Ireland has no row for the low-temperature radiator, and decision D7 of the cost
     specification aborts a whole evaluation on a subject it cannot price. A heat-pump package
     asking for the emitter a heat-pump retrofit naturally installs would therefore end at exit 5
     with nothing written, which is a worse answer than a stated approximation.
@@ -1691,7 +1691,7 @@ class EmitterSubstitution:
     So that one value is written as surface heating -- ``FLOORHEATING``, the heat pump's other
     low-temperature emitter, which is priced -- and the run reports it as ``not_implemented_yet``
     with the whitelist's sentence beside it. The substitution lives here and the sentence lives
-    in ``not_implemented_yet.yaml``; the day ``hisim/economics/adapter.py`` gains the missing
+    in ``not_implemented_yet.yaml``; the day ``devices_IE.json`` gains the missing
     cost row, both go away together.
     """
 

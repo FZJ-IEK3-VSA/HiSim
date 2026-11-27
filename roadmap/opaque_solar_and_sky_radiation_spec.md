@@ -1,10 +1,10 @@
 # Spec: the building absorbs solar radiation on its walls and roof and radiates heat to the sky
 
-Status: draft (2026-11-26, revised 2026-11-27 after review); nothing is built. D5, D11 and the value of h_r in D2 are
-decided (owner, 2026-11-27); every other decision is a proposal with a recommendation until the owner confirms it. The
-work starts now, in parallel to the building description spec (Q4). Owner: Nicolai Gölz. Epic: none yet. Builds on:
-nothing on `main` for the TABULA rules; `roadmap/building_description_spec.md` (branch `building/explicit-description`)
-for the field of D4.
+Status: draft (2026-11-26, revised 2026-11-27 after review); nothing is built. D5, D11 and the values of R_se and h_r
+in D2 (Q2) are decided (owner, 2026-11-27); every other decision is a proposal with a recommendation until the owner
+confirms it. The work starts now, in parallel to the building description spec (Q4). Owner: Nicolai Gölz. Epic: none
+yet. Builds on: nothing on `main` for the TABULA rules; `roadmap/building_description_spec.md` (branch
+`building/explicit-description`) for the field of D4.
 
 Clause and equation numbers are those of ISO/FDIS 13790:2007; those of ISO 6946:2017, the standard 11.3.4 and 11.3.5
 name for R_se and U_c, carry its number. ISO 52016-1:2017, which supersedes ISO 13790, and ASHRAE 140-2023 are cited
@@ -65,7 +65,7 @@ gain on the inner nodes, which 11.3.2 NOTE 2 calls a convenience. Not taken: the
 operative temperature on H_tr,em, because it would change the network.
 
 **D2 — The parameter values are those ISO 13790 and ISO 6946 print; h_r keeps the rounding of ISO 13790** (proposed,
-2026-11-26; h_r decided, owner, 2026-11-27).
+2026-11-26; R_se and h_r decided, owner, 2026-11-27, Q2).
 
 | Symbol | Value | Where it stands in ISO 13790 | Source of the number |
 |---|---|---|---|
@@ -80,7 +80,7 @@ So ISO 13790 fixes h_r = 5 ε, Δθ_er and the two F_r values in its normative t
 to ISO 6946; α alone rests on the informative example, on ISO 52016-1 Table B.29 and on ASHRAE 140. ISO 6946 Annex C
 would also give R_se as a function of the wind speed (h_ce = 4 + 4 v, 0.04 at 4 m/s); not taken, ISO 13790 uses the
 constant. J.1.4 confirms the reading of Eq. 46: its opaque facade has α 0.6, R_se 0.04 and U 0.493 and states 0.012,
-their product, as the facade's g-value. The alternative set of ISO 52016-1 and the recommendation are Q2.
+their product, as the facade's g-value.
 
 **D3 — A TABULA building spreads its exposed wall area in four equal quarters over south, east, north and west**
 (proposed, 2026-11-26). I_sol,k of Eq. 44 needs an orientation per element, and TABULA states wall areas without one;
@@ -343,8 +343,8 @@ irradiances are pvlib's isotropic sums of that file: horizontal 1067 kWh/m²; ve
 | **Sum, roof at 45°** | | | **187.3 W = 1641 kWh/a** | | **1549** |
 | Sum, roof horizontal | | | 207.4 W = 1817 kWh/a | | 1727 |
 
-With the ISO 52016-1 set (Q2) the two factors are 1.885 and 0.0248. Peaks: a wall quarter under 836 W/m² gains
-99 W, a 45° roof quarter under 1022 W/m² 340 W, the horizontal roof under 916 W/m² 1218 W.
+Peaks: a wall quarter under 836 W/m² gains 99 W, a 45° roof quarter under 1022 W/m² 340 W, the horizontal roof under
+916 W/m² 1218 W.
 
 ## 5. What changes and what does not
 
@@ -400,15 +400,12 @@ hours above the cooling set point) at 60 s and 15 min, and the ASHRAE 140 base c
 
 ## 8. Open questions
 
-Q2 is open and gets a bead with the epic (§9); Q1, Q3 and Q4 are decided.
+Q1 to Q4 are decided; nothing is open.
 
 - **Q1. Δθ_er: the constant, or the weather's sky temperature.** *Decided (owner, 2026-11-27):* the constant, D11.
-- **Q2. The value set.** (a) ISO 13790 with the R_se and ε of ISO 6946 (D2): R_se 0.04 m²K/W, h_r 4.5 W/(m²K). (b) ISO
-  52016-1: R_se = 1/(20 + 4.14) = 0.0414 m²K/W and h_r = 4.14 W/(m²K) from Table 25 of its verification cases, no ε; the
-  20 is ISO 6946's h_ce, the 4.14 its own. The two sets differ by 3.5 % in the absorbed radiation and 5 % in the sky
-  term (§4.7). With (a) every value but α stands in ISO 13790 or in the standard it names for R_se; α rests on the
-  worked example J.1.4, ISO 52016-1 Table B.29 and ASHRAE 140 (table of D2). Recommendation: (a): the model is ISO
-  13790, and the TABULA U-values rest on the same R_se.
+- **Q2. The value set.** *Decided (owner, 2026-11-27):* ISO 13790 with the R_se and ε of ISO 6946, D2: R_se 0.04 m²K/W,
+  h_r 4.5 W/(m²K). The set of ISO 52016-1 Table 25, R_se 0.0414 m²K/W and h_r 4.14 W/(m²K), is ruled out by
+  h_r = 4.5.
 - **Q3. The tilt of a TABULA pitched roof.** *Decided (owner, 2026-11-27):* 45° in four quarters, D5.
 - **Q4. The build order against the building description spec.** *Decided (owner, 2026-11-27):* the work starts
   now, in parallel; D4 and §9.
@@ -429,4 +426,3 @@ agreed; until then the table names them.
 | to be created (P2) | the first pull request: `envelope.py` with its tests; the TABULA derivation with the surface list and the sky term as attributes, with tests on named rows and the refusals (§6); the report lines; the golden's regeneration (new attributes, the 21 refusals) | – |
 | to be created (P2) | the second pull request: the two configuration fields; the producer column and the shared planes; the composition in `i_simulate`; the outputs and ports; the energy-balance and switch-off tests; the goldens and twins; the RenoVisor heads-up | – |
 | to be created (P2) | the third pull request: `sky_facing_surfaces` on `BuildingDescription`; after the description spec's first pull request | – |
-| to be created (P2, the owner's question) | Q2 | – |

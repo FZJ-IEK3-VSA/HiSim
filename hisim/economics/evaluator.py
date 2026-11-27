@@ -15,6 +15,7 @@ from types import MappingProxyType
 from typing import ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim import log
+from hisim.contracts.port_energies import PortEnergies
 from hisim.economics.actors import (
     AllocationContext,
     ModernizationLevyOutcome,
@@ -238,6 +239,10 @@ class EvaluationInputs:
     #: non-component. ``None`` means unknown: the inputs came from an older ``economic_inputs.json``
     #: without the field, and a reader that needs the sources (``StagedDocument``) refuses it.
     component_sources: Optional[Dict[str, KpiSource]] = field(default_factory=dict)
+    #: The energy of every declared port of the run, the fluid loops the components tag and every meter's exchange,
+    #: as the run's energy balance computed them. None for inputs built in code without a run, and for an older
+    #: ``economic_inputs.json`` without the field. Nothing prices it yet.
+    port_energies: Optional[PortEnergies] = None
 
     def annual_heat_demand(self) -> Optional[float]:
         """Return the annual heat in kWh the levelized cost of heat divides by, or None when nothing states it.

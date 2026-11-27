@@ -45,7 +45,6 @@ Beside the ports, :class:`DeclaredPorts` reads what each meter publishes (:class
 
 from __future__ import annotations
 
-import enum
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, ClassVar, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple, Type
@@ -66,26 +65,8 @@ from hisim.component import (
     MeterComponent,
 )
 from hisim.config.channels import PortTypeCompatibility
+from hisim.contracts.port_energies import PeerKind
 from hisim.energy_port import EnergyPort, LoopQuantity, MeteredExchange
-
-
-@enum.unique
-class PeerKind(str, enum.Enum):
-
-    """What the other side of a port is (complete Sankey spec, §4.1 and §4.3).
-
-    ``COMPONENT`` is another component, declared or not; ``METER`` a meter that reads the port (owner decision Q-J);
-    ``BOUNDARY`` a node where energy enters or leaves the house ("natural gas supply", "ambient heat source",
-    "unconverted sunlight", "heat loss to outdoors");
-    ``STORE`` the component's own store, the other side of its storage change; ``UNLINKED`` nobody, a port whose
-    wiring names no meter and no component that moves energy and whose carrier has no default.
-    """
-
-    COMPONENT = "component"
-    METER = "meter"
-    BOUNDARY = "boundary"
-    STORE = "store"
-    UNLINKED = "unlinked"
 
 
 @dataclass(frozen=True)

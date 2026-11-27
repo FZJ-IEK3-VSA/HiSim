@@ -16,6 +16,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
+from hisim.contracts.port_energies import PortEnergies
 from hisim.economics.calculators.aggregation import TimelineAggregation
 from hisim.economics.carriers import EnergyCarrier, UsefulHeatKind, validate_energy_attribution
 from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts, UnresolvedSubject
@@ -406,6 +407,8 @@ def inputs_to_json(inputs: EvaluationInputs) -> dict:
             if inputs.component_sources is None
             else {subject: source.to_dict() for subject, source in inputs.component_sources.items()}
         ),
+        # The energy of every declared port, loop tag and meter exchange the energy balance computed; totals only.
+        "port_energies": None if inputs.port_energies is None else inputs.port_energies.to_json(),
     }
 
 
@@ -485,6 +488,8 @@ def inputs_from_json(raw: dict, tariffs_base_path: Optional[str] = None) -> Eval
         living_area_in_m2=raw.get("living_area_in_m2"),
         current_cold_rent_in_euro_per_m2_month=raw.get("current_cold_rent_in_euro_per_m2_month"),
         component_sources=_component_sources_from_json(raw),
+        # Optional key; an older file, and inputs built without a run, read as None.
+        port_energies=None if raw.get("port_energies") is None else PortEnergies.from_json(raw["port_energies"]),
     )
 
 

@@ -207,16 +207,19 @@ class PostProcessor:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
 
-    def compute_lifecycle_costs(self, ppdt: PostProcessingDataTransfer) -> None:
+    def compute_lifecycle_costs(self, ppdt: PostProcessingDataTransfer, energy_balance: "EnergyBalanceReport") -> None:
         """Runs the parallel lifecycle cost engine and decides what its failure means (roadmap/cost_spec.md §10).
 
         A `CostDataError` always fails postprocessing. Any other failure is logged and the legacy
         outputs are written as always, unless the run declared that it cannot finish without the
         engine's answer (`SimulationParameters.require_lifecycle_costs`, which a RenoVisor
         calculation does): then the failure is re-raised as a `LifecycleCostEngineError` naming it.
+        The engine receives the energy of every declared port from the run's energy balance, computed
+        once after the run; it derives no energy itself.
 
         Args:
             ppdt: The postprocessing data of the run.
+            energy_balance: The run's energy balance, as the setup rules after the run judged it.
 
         Raises:
             LifecycleCostEngineError: When the engine failed and the run requires its answer.
@@ -230,6 +233,7 @@ class PostProcessor:
                 all_outputs=ppdt.all_outputs,
                 postprocessing_results=ppdt.results,
                 simulation_parameters=ppdt.simulation_parameters,
+                port_energies=energy_balance.port_energies(),
                 generate_report=(
                     PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
                 ),
@@ -460,7 +464,7 @@ class PostProcessor:
             PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
             or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
         ):
-            self.compute_lifecycle_costs(ppdt)
+            self.compute_lifecycle_costs(ppdt, energy_balance)
 
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(

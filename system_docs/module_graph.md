@@ -20,7 +20,7 @@ a file that moves to another package changes group with it. `hisim.components.sh
 | infrastructure | caching, write guard, result paths, calculation scope and progress | leaves |
 | parameters | simulation parameters, post-processing options | leaves, infrastructure |
 | config | `hisim.config` | leaves |
-| contracts | `hisim.contracts` (empty: the types that cross the seams) | leaves, config, parameters |
+| contracts | `hisim.contracts` (the types that cross the seams; today the port energies) | leaves, config, parameters |
 | shared_code | `hisim.components.shared` (empty: types several components use) | leaves, config |
 | subcomponents | `hisim.subcomponents` | leaves, config, shared_code |
 | component_model | component, dynamic_component, energy_port, sim_repository, part_load, explicit_state_controller, fluid_loops | the foundation |

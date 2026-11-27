@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, List, Optional,
 import pandas as pd
 
 from hisim import log
+from hisim.contracts.port_energies import PortEnergies
 from hisim.economics import adapter
 from hisim.economics.audit import build_input_audit, write_cost_audit, write_parity_report
 from hisim.economics.carriers import EnergyCarrier, validate_energy_attribution
@@ -1023,6 +1024,8 @@ def compute_lifecycle_costs(
     all_outputs: List[Any],
     postprocessing_results: pd.DataFrame,
     simulation_parameters: Any,
+    *,
+    port_energies: PortEnergies,
     generate_report: bool = False,
 ) -> None:
     """Run the lifecycle cost engine from postprocessing (option COMPUTE_LIFECYCLE_COSTS).
@@ -1046,6 +1049,8 @@ def compute_lifecycle_costs(
         all_outputs: The run's output declarations (column order of the results frame).
         postprocessing_results: The in-memory per-timestep results.
         simulation_parameters: The run's parameters, optionally carrying `economic_parameters` and `economic_context`.
+        port_energies: The energy of every declared port, loop tag and meter exchange, as the run's energy balance
+            computed them; written into `economic_inputs.json` with the rest of the extract.
         generate_report: Whether option LIFECYCLE_COST_REPORT is set too.
 
     Raises:
@@ -1060,7 +1065,10 @@ def compute_lifecycle_costs(
     # A database that will not load is a CostDataError and propagates: a run that asked for
     # lifecycle costs must fail, not finish without cost files.
     database = CostDatabase(parameters.cost_database_path)
-    inputs = build_evaluation_inputs(wrapped_components, all_outputs, postprocessing_results, simulation_parameters)
+    inputs = replace(
+        build_evaluation_inputs(wrapped_components, all_outputs, postprocessing_results, simulation_parameters),
+        port_energies=port_energies,
+    )
     # The faithful extract goes to disk before anything economic touches it; its content depends
     # on the simulation only. It also records the country and the price basis year the run priced
     # at, which a consumer of this file alone (the staged evaluator) cannot learn otherwise; the

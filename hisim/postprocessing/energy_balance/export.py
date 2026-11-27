@@ -34,12 +34,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Sequence
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
 from hisim import log
 from hisim.component import ComponentOutput
+from hisim.contracts.port_energies import LoopTag, MeterEnergy, PortEnergies, PortEnergy
 from hisim.postprocessing.energy_balance.check import (
     BalanceCheck,
     ComponentBalance,
@@ -93,6 +94,8 @@ class EnergyBalanceReport:
         """
         self.seconds_per_timestep = seconds_per_timestep
         self.tolerance = tolerance
+        #: The run's components, for the fluid loops they tag (:meth:`port_energies`).
+        self.components: Tuple[Any, ...] = tuple(components)
         self.declared = DeclaredPorts.collect(results, all_outputs, components, seconds_per_timestep)
         check = BalanceCheck(tolerance)
         self.nonfinite: List[NonFinitePort] = check.nonfinite(self.declared)
@@ -192,6 +195,56 @@ class EnergyBalanceReport:
                 for name, reason in self.declared.exempt.items()
             ],
         }
+
+    def port_energies(self) -> PortEnergies:
+        """Return the energy of every declared port, every fluid loop the components tag and every meter's exchange.
+
+        The record the cost engine reads, built from the balance computed here, so the economics never derives an
+        energy itself. A port's energy is its total over the run, with the steps kept in memory; a meter's import and
+        export are its published totals, with whether they agree with the ports it reads. The loop tags list every
+        loop a component tags, also one the balance does not book: the heat distribution system without a buffer tags
+        its loop but books no heat on it, and still takes part in the heating. For example, in a run with a PV system, a
+        household load and an electricity meter, the PV's electricity production and the load's consumption are ports
+        whose peer is the meter, and the meter's import and export are one meter entry; a gas boiler that heats a
+        buffer adds the loop tag of its space-heating loop.
+
+        Returns:
+            The run's port energies; empty for a run in which no component declares a port, tags a loop or meters.
+        """
+        ports = tuple(
+            PortEnergy(
+                subject=series.component,
+                port=series.port_name,
+                role=series.port.role,
+                carrier=series.port.carrier,
+                environment=series.port.environment,
+                peer=series.peer.name,
+                peer_kind=series.peer.kind,
+                energy_of_simulated_period_in_kwh=series.annual_kilowatt_hours,
+                energy_per_step_in_kwh=series.kilowatt_hours,
+            )
+            for series in self.declared.all_series()
+        )
+        loop_tags: List[LoopTag] = []
+        for component in self.components:
+            # A stand-in without the method tags no loop, as the tests build them.
+            port_sets = getattr(component, "port_sets", None)
+            for port_set in port_sets() if callable(port_sets) else ():
+                loop = port_set.loop
+                loop_tags.append(LoopTag(subject=port_set.component_name, loop=loop.name, carrier=loop.carrier, supplies=loop.supplies))
+        meters = tuple(
+            MeterEnergy(
+                meter=balance.meter,
+                carrier=balance.carrier,
+                import_output=balance.reading.exchange.import_output,
+                export_output=balance.reading.exchange.export_output,
+                import_of_simulated_period_in_kwh=float(balance.reading.import_kilowatt_hours.sum()),
+                export_of_simulated_period_in_kwh=float(balance.reading.export_kilowatt_hours.sum()),
+                agrees=balance.agrees,
+            )
+            for balance in self.meter_check.balances
+        )
+        return PortEnergies(ports=ports, loop_tags=tuple(loop_tags), meters=meters)
 
     def sankeys(self) -> Dict[str, Dict[str, Any]]:
         """Every view of the run's Sankey graph: ``overall``, the connected graph, then one filter per carrier."""

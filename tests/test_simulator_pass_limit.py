@@ -305,3 +305,33 @@ class TestTheRunLogsOneSummaryOfThePassCounts:
             f"Pass counts: 0 of 24 time steps needed more than 100 passes; the largest pass count was "
             f"{max(leader.passes_per_step().values())} (the limit is 6000 passes at 3600 s steps)."
         ]
+
+
+class TestTheLoopIsAMethodAnEngineReplaces:
+    """``run_all_timesteps`` runs every time step through ``run_timestep_loop``, which an engine may replace."""
+
+    def test_the_run_keeps_the_passes_of_every_step_in_step_order(self, tmp_path: Path) -> None:
+        """Catches pass counts that are lost, reordered or counted differently from the passes the components saw."""
+        simulator, leader = slow_loop_simulator(tmp_path, seconds_per_timestep=900)
+
+        simulator.run_all_timesteps()
+
+        passes = leader.passes_per_step()
+        assert simulator.pass_counts == [passes[timestep] for timestep in range(len(passes))]
+
+    def test_a_loop_set_on_the_instance_runs_the_time_steps(self, tmp_path: Path) -> None:
+        """Catches a run that calls the loop past the method, so that an engine set on the instance never runs."""
+        simulator, leader = slow_loop_simulator(tmp_path, seconds_per_timestep=900)
+        python_loop = simulator.run_timestep_loop
+        calls: List[str] = []
+
+        def engine() -> Tuple[List[List[float]], List[int]]:
+            calls.append("engine")
+            rows, pass_counts = python_loop()
+            return [list(row) for row in rows], pass_counts
+
+        simulator.run_timestep_loop = engine  # type: ignore[method-assign]
+        simulator.run_all_timesteps()
+
+        assert calls == ["engine"]
+        assert simulator.pass_counts == [leader.passes_per_step()[timestep] for timestep in range(96)]

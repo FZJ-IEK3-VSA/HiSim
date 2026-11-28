@@ -222,29 +222,28 @@ class TestTheResultPayload:
 
 @pytest.mark.base
 class TestTheLowTemperatureRadiatorBlocker:
-    """A pinned gap: the cost engine has no price for a low-temperature radiator.
+    """A pinned gap: the Irish cost database has no price for a low-temperature radiator.
 
-    ``hisim/economics/adapter.py`` declines to price the emitter and decision D7 of the cost
+    ``devices_IE.json`` has no row for the emitter and decision D7 of the cost
     specification aborts the whole evaluation on an unresolvable subject, so a package installing
     exactly that emitter -- as a heat-pump retrofit naturally would -- could not complete at all.
     The translator therefore writes surface heating for it and says so, which is a stated
     approximation rather than a hidden one.
 
-    This test points at the reason rather than at the workaround: the day the cost database gains
-    a row for ``HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR`` the adapter stops returning
-    ``None``, this fails, and the substitution together with its two whitelist entries can go --
+    This test points at the reason rather than at the workaround: the day ``devices_IE.json`` gains
+    a row for ``HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR``, this fails, and the substitution together with its two whitelist entries can go --
     T-NIY will demand it, because nothing will reach them any more.
     """
 
-    def test_the_cost_adapter_still_has_no_row_for_the_emitter(self) -> None:
+    def test_the_irish_cost_database_still_has_no_row_for_the_emitter(self) -> None:
         """The whole reason the substitution exists, asserted where the reason lives."""
-        from hisim.components.heat_distribution_system import HeatDistributionSystemType
-        from hisim.economics.adapter import FactsExtractors
+        from hisim.economics.database import CostDatabase
+        from hisim.loadtypes import ComponentType
 
-        extractor = FactsExtractors.BY_CLASS_NAME["HeatDistribution"]
+        database = CostDatabase()
 
-        assert extractor(_emitter_config(HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR)) is None
-        assert extractor(_emitter_config(HeatDistributionSystemType.FLOORHEATING)) is not None
+        assert not database.has_device_entry(ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR, "IE")
+        assert database.has_device_entry(ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING, "IE")
 
     def test_the_translator_writes_the_priced_emitter_and_reports_the_substitution(self) -> None:
         """Written into the file as floor heating, into the report as the value that was asked."""
@@ -270,28 +269,6 @@ class TestTheLowTemperatureRadiatorBlocker:
 
         assert "no cost row" in sentence.lower()
         assert "modelled as surface heating" in sentence.lower()
-
-
-def _emitter_config(emitter: Any) -> Any:
-    """Return the smallest object the cost adapter's heat-distribution extractor reads.
-
-    The extractor reads two attributes off a component config and nothing else, so a stand-in
-    carrying those two is enough and keeps the test free of a component import chain.
-
-    Args:
-        emitter: The ``HeatDistributionSystemType`` member the config declares.
-
-    Returns:
-        An object with ``heating_system`` and ``absolute_conditioned_floor_area_in_m2``.
-    """
-
-    class _Config:  # pylint: disable=too-few-public-methods
-        """A config stand-in with the two fields the extractor reads."""
-
-        heating_system = emitter
-        absolute_conditioned_floor_area_in_m2 = 140.0
-
-    return _Config()
 
 
 @pytest.mark.system_setups

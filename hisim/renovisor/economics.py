@@ -474,7 +474,7 @@ class RealizedTwin:
 
         Returns:
             ``(component name, facts)`` for the first component of that class, or ``None`` when the
-            twin has none, when the adapter prices no variant of it (a low-temperature radiator)
+            twin has none, when the adapter prices no variant of it
             or when it is configured at zero size, i.e. not installed.
         """
         extractor = FactsExtractors.BY_CLASS_NAME[component_class]

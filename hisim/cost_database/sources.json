@@ -737,6 +737,51 @@
       "retrieved": "2026-11-25",
       "kind": "LITERATURE",
       "notes": "56.1 t CO2/TJ NCV is 0.202 kg CO2 per kWh of NCV, the basis the AI-estimate gas rows' 0.20 kg/kWh was stated on; cited for that basis (hisim-gas-emission-factor-basis-3c9e)."
+    },
+    {
+      "id": "src_capex_lt_radiator_hausjournal_2022",
+      "citation": "hausjournal.net: Heizkoerper austauschen - Kosten (Kostenbeispiele: 11 Heizkoerper im Einfamilienhaus, Standard vs. Niedertemperatur)",
+      "url": "https://www.hausjournal.net/heizkoerper-austauschen-kosten",
+      "publication_year": 2022,
+      "retrieved": "2026-11-27",
+      "kind": "MARKET_SURVEY",
+      "notes": "Article dated 9 November 2022. Standard radiators (Rippenheizkoerper, average labour): 3570 EUR devices + 980 EUR labour = 4550 EUR (413.64 EUR per radiator). Low-temperature radiators, higher labour: 5350 EUR devices + 1585 EUR labour = 6935 EUR (630.45 EUR per radiator). Hydraulic balancing stated separately at 500-750 EUR per single-family house, not part of the examples. Floor area of the example house not stated."
+    },
+    {
+      "id": "src_capex_lt_radiator_homeandsmart_2026",
+      "citation": "homeandsmart.de: Niedertemperatur-Heizkoerper: Funktion, Kosten, Vorteile",
+      "url": "https://www.homeandsmart.de/niedertemperatur-heizkoerper-vergleich-701067",
+      "publication_year": 2026,
+      "retrieved": "2026-11-27",
+      "kind": "MARKET_SURVEY",
+      "notes": "Page shows the dates 5 January 2025 and 20 November 2026 without a label. 200 to 800 EUR per low-temperature radiator depending on model, size and manufacturer; installation is not mentioned, so read as device price. No statement on the number of radiators per house."
+    },
+    {
+      "id": "src_ariadne_henger_2026_modernisation_costs",
+      "citation": "Henger, R., Meyer, R., Buechel, J., Herkel, S., Oberst, C. (2026): Was kostet die Modernisierung (m)eines Gebaeudes? Energetische Modernisierungskosten von Wohngebaeuden im Studienvergleich. Ariadne-Analyse, Kopernikus-Projekt Ariadne, Potsdam",
+      "url": "https://doi.org/10.48485/pik.2026.04",
+      "publication_year": 2026,
+      "retrieved": "2026-11-27",
+      "kind": "LITERATURE",
+      "notes": "Meta-analysis of modernisation costs (BDEW, KWW, IWU, ARGE, Ariadne Waerme- & Wohnen-Panel), gross, Q1 2025 price level. Section 4.3.2, p. 49: the air-to-water heat pump variant includes a partial replacement of heating surfaces to lower the supply temperature to 55 C; emitter costs are not stated separately (single-family house, 150 m2, 10 kW: about 27,000 to 53,000 EUR for heat pump incl. heating surfaces, read from Fig. 10). P. 51 cites Techem Energy Services (2025): in multi-family houses no change of heating surfaces in 50 % of heat-pump cases, larger heating surfaces in 40 %. Used for the design point and the scope statement of the low-temperature radiator row, not for a number."
+    },
+    {
+      "id": "src_gergely_2025_hvac_embodied_carbon",
+      "citation": "Gergely, L.Z., Barna, E., Horvath, M., Szalay, Z. (2025): Assessing embodied and operational carbon of residential HVAC systems: Baselines for life-cycle sustainability. Building and Environment 269, 112442",
+      "url": "https://doi.org/10.1016/j.buildenv.2024.112442",
+      "publication_year": 2025,
+      "retrieved": "2026-11-27",
+      "kind": "LITERATURE",
+      "notes": "Open access (CC BY-NC). 20 Hungarian NZEB single-family houses (60-216 m2, together 2661 m2 net heated floor area, Table 2; average heat loss 48.5 W/m2, Section 3.1.1), Oekobaudat and EPDs (Section 2.3.2), EN 15978, 50-year period. Radiators 1.35 kg per m2 net heated floor area (Section 3.1.2), 35-year life (Table 5). Table A.7: radiators 31,250 kgCO2eq over 50 years for all 20 houses. The radiator design temperature is not stated."
+    },
+    {
+      "id": "src_ibu_epd_kermi_steel_radiator_2023",
+      "citation": "Kermi GmbH / IBU: Umwelt-Produktdeklaration Heizkoerper aus Stahl, EPD-KER-20230254-CCB1-DE, issued 29.08.2023, valid to 28.08.2028 (identical LCA published by Vasco Group as EPD-VAS-20230254-CCB1-EN)",
+      "url": "https://gerabad.de/media/df/9d/94/1712237989/ker_heizkoerper_aus_stahl.pdf",
+      "publication_year": 2023,
+      "retrieved": "2026-11-27",
+      "kind": "MANUFACTURER",
+      "notes": "Declared unit 1 kg steel radiator (panel, flat-tube, convector and design radiators; plants Pankofen and Stribro, data 2021). Reference service life of at least 30 years (p. 2). GWP-total A1-A3 2.66 kgCO2eq/kg, A4 0.0075, A5 0.216, C2 0.0033, D -1.59 (p. 4)."
     }
   ]
 }

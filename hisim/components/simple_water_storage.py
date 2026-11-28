@@ -29,6 +29,7 @@ from hisim.config import (
     ConfigBase,
     ConfigSizingError,
     DisplayConfig,
+    FactContribution,
     OwnFields,
     Sizable,
     Size,
@@ -267,6 +268,55 @@ class SimpleHotWaterStorageConfig(ConfigBase):
     #: elsewhere. It decides the temperature the standby loss is computed against and where that heat goes.
     installation_location: Sizable[lt.InstallationLocation] = sized_field(
         rule=Size.TECHNICAL_ROOM_LOCATION, value_type=lt.InstallationLocation
+    )
+
+    @staticmethod
+    def heat_capacity_in_joule_per_kelvin_of(volume_in_liter: float) -> float:
+        """Return the heat a fully mixed vessel of water takes per kelvin it warms, in J/K.
+
+        The heat capacity is the vessel's water mass, its volume times water's density at 40 °C, times water's specific
+        heat (:class:`hisim.hydronics.Water`). For example, 389.04 l hold 385.93 kg of water and take 1.613 MJ/K;
+        155.6 l take 0.645 MJ/K.
+
+        Args:
+            volume_in_liter: The vessel's volume, in l.
+
+        Returns:
+            The heat capacity, in J/K.
+
+        Raises:
+            ValueError: If the volume is not a finite volume above 0 l.
+        """
+        if not (math.isfinite(volume_in_liter) and volume_in_liter > 0.0):
+            raise ValueError(f"A water vessel's volume is a finite volume above 0 l, got {volume_in_liter!r} l.")
+        return hydronics.Water.DENSITY_KG_PER_LITER * volume_in_liter * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+
+    @staticmethod
+    def sizing_facts(config: "SimpleHotWaterStorageConfig", ctx: SizingContext) -> dict:
+        """Contribute the buffer's heat capacity for the components around it, in J/K.
+
+        Runs after the buffer itself resolved, so the volume is the final number, whether the volume law computed it
+        from the generator's power or the author stated it. The heat pump's space-heating controller reads it to
+        estimate how often the machine cycles on the buffer's hysteresis band where a step is longer than a cycle
+        (:meth:`heat_capacity_in_joule_per_kelvin_of`).
+
+        Args:
+            config: This buffer configuration, fully resolved.
+            ctx: The sizing context; unused, the value is this config's own.
+
+        Returns:
+            The one fact named in :attr:`SIZING_CONTRIBUTIONS`.
+        """
+        del ctx
+        return {
+            "storage_heat_capacity_in_joule_per_kelvin": SimpleHotWaterStorageConfig.heat_capacity_in_joule_per_kelvin_of(
+                float(concrete(config.volume_heating_water_storage_in_liter))
+            )
+        }
+
+    #: Sizing facts this config contributes: the buffer's heat capacity, its water mass times water's specific heat.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = (
+        FactContribution(facts=("storage_heat_capacity_in_joule_per_kelvin",), compute=sizing_facts),
     )
 
     @preset
@@ -2140,8 +2190,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             storage_volume_in_liter=concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter),
         )
         #: The buffer's heat capacity ``C = M c``, in J/K: 170 kg of water hold 0.71 MJ/K.
-        self.heat_capacity_in_joule_per_kelvin = (
-            self.water_mass_in_storage_in_kg * hydronics.Water.SPECIFIC_HEAT_J_PER_KG_K
+        self.heat_capacity_in_joule_per_kelvin = SimpleHotWaterStorageConfig.heat_capacity_in_joule_per_kelvin_of(
+            float(concrete(self.waterstorageconfig.volume_heating_water_storage_in_liter))
         )
         #: The buffer's standby loss coefficient ``UA`` to its surroundings, in W/K: 2 W/(m² K) over the 3.66 m² of a
         #: 500 l cylinder are 7.3 W/K.

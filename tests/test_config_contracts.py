@@ -341,7 +341,11 @@ class PilotWireFormat:
             "technical_room_location",
         ),
         "PVSystemConfig": ("pv_peak_power_in_watt",),
-        "MoreAdvancedHeatPumpHPLibConfig": ("maximal_thermal_power_in_watt",),
+        "MoreAdvancedHeatPumpHPLibConfig": (
+            "maximal_thermal_power_in_watt",
+            "minimum_running_time_in_seconds",
+            "minimum_idle_time_in_seconds",
+        ),
         "ElectricHeatingConfig": ("maximal_thermal_power_in_watt",),
         "DistrictHeatingConfig": (
             "maximal_thermal_power_in_watt",
@@ -354,7 +358,7 @@ class PilotWireFormat:
         "FuelMeterConfig": (),
         "HeatingMeterConfig": (),
         "SimpleDHWStorageConfig": (),
-        "SimpleHotWaterStorageConfig": (),
+        "SimpleHotWaterStorageConfig": ("storage_heat_capacity_in_joule_per_kelvin",),
         "WeatherConfig": ("weather_identity", "heating_reference_temperature_in_celsius"),
         "UtspLpgConnectorConfig": ("occupancy_identity",),
         "ElectricityMeterConfig": (),

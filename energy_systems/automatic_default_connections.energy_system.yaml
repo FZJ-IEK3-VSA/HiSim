@@ -34,8 +34,8 @@ components:
     config:
       with_domestic_hot_water_preparation: true
     inputs:
-      - HeatPumpControllerDHW
       - MoreAdvancedHeatPumpHPLibControllerSH
+      - HeatPumpControllerDHW
       - DHWStorage
       - SimpleHotWaterStorage
       - input: TemperatureAmbient

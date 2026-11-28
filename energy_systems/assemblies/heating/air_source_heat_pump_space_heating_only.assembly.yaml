@@ -129,6 +129,8 @@ tests:
       # what the heat pump would draw at full load from the step's start temperatures, a signal; 40 kW at a COP >= 2
     - {output: HeatPump.ElectricalPowerAtMinimumLoadSpaceHeatingInWatt, unit: WATT, min: 0, max: 20000}
       # the minimum thermal power over the full-load COP, at most the full load
+    - {output: HeatPump.ThermalPowerAtMinimumLoadSpaceHeatingInWatt, unit: WATT, min: 0, max: 40000}
+      # the sized minimum output (a share of the rated capacity), which the space-heating controller's starts estimate reads
     - {output: Buffer.WaterTemperatureToHeatDistribution, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToHeatGenerator, unit: CELSIUS, min: 0, max: 100}
     - {output: Buffer.WaterTemperatureToSecondaryHeatGenerator, unit: CELSIUS, min: 0, max: 100}

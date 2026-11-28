@@ -159,13 +159,14 @@ partners:
       ports:
         dhw: {circuit: dhw}
   HeatPumpControllerDHW:
-    # Reads the cylinder under test, the one SimpleDHWStorage of its system, and the space-heating controller's
-    # signal, which its hot-water priority limit reads.
+    # Reads the cylinder under test, the one SimpleDHWStorage of its system, the space-heating controller's
+    # signal, which its hot-water priority limit reads, and the actual hot-water ratio of the heat pump it joins with,
+    # without requiring it back.
     requires: [HeatPumpControllerSH]
     component:
       class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
       preset: standard
-      inputs: [{$port: cylinder}, HeatPumpControllerSH]
+      inputs: [{$port: cylinder}, HeatPumpControllerSH, HeatPump]
       ports:
         cylinder: {partner: SimpleDHWStorage}
   HeatPumpControllerSH:

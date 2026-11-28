@@ -3562,6 +3562,8 @@ class GenericBoilerController(ExplicitStateController[GenericBoilerControllerSta
             maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
             space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            # whole steps: the boiler's controller sets its hot-water ratio after the mode, which this limit decides
+            charged_share_of_step=1.0,
         )
         if requested_mode == HeatingMode.DOMESTIC_HOT_WATER and not charges:
             return HeatingMode.SPACE_HEATING, timer

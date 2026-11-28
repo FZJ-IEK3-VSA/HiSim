@@ -10,8 +10,8 @@ Two kinds of check, by cost:
 * :class:`HeatPumpResolutionRuns` runs the grouped heat-pump twin for the first four weeks of 2021 at 60, 900 and
   3600 s, without its energy manager (``metered_directly``), and asserts the heat the distribution system delivers to
   the building and the heat pump's space-heating electricity at 900 s within 1 % of 60 s, the tolerance of the
-  modelling guide. Its hot-water electricity misses the 1 % (+1.27 %) and is a strict expected failure until the owner
-  decides (:attr:`HeatPumpResolutionRuns.ASSERTED`). 3600 s and the lowest room temperature are recorded in the test's
+  modelling guide, and the hot-water electricity too, since the hot-water charge runs a part-load fraction above 600 s
+  (:attr:`HeatPumpResolutionRuns.ASSERTED`). 3600 s and the lowest room temperature are recorded in the test's
   output, not asserted. ``extendedbase2``, with the other heat-pump resolution runs; about 45 s on a local machine.
 * :class:`BlessedStarts` reads the twin's blessed full-year goldens, which the golden gate keeps equal to a run of the
   same setup, and runs nothing (``base``), as tests/test_space_heating_time_resolution.py reads its 60 s reference.
@@ -118,22 +118,15 @@ class HeatPumpResolutionRuns:
             "lowest_room_temperature_in_celsius": float(column("Building", "TemperatureIndoorAir").min()),
         }
 
-    #: The energies the 900 s run is held to. The hot-water electricity misses the 1 %: measured on 2026-11-27,
-    #: 95.63 kWh at 900 s against 94.43 kWh at 60 s (+1.27 %; +0.92 % with the local LoadProfileGenerator's
-    #: profile), while the heat the tap and the charges book agree within 1 % (tests/test_dhw_chain_time_resolution.py).
-    #: The hot-water charge runs whole steps above the threshold until its part load (#916), so a 900 s charge ends
-    #: the cylinder hotter and at a lower COP. The modulation spec gives no fix for it: the owner decides, and until
-    #: then the case is a strict expected failure, which fails as soon as it passes.
-    ASSERTED: ClassVar[Tuple[Any, ...]] = (
+    #: The energies the 900 s run is held to. The hot-water electricity missed the 1 % while the hot-water charge ran
+    #: whole steps above the threshold (2026-11-27: 95.63 kWh at 900 s against 94.43 kWh at 60 s, +1.27 %), since a
+    #: 900 s charge ended the cylinder past its charge end at a lower COP. Since the charge runs the part-load fraction
+    #: that ends the cylinder at its charge end (bead hisim-heat-pump-model-rework-fpqz.9), measured on 2026-11-28:
+    #: 95.34 kWh against 94.43 kWh (+0.97 %); 3600 s 103.16 kWh (+9.2 %), recorded only.
+    ASSERTED: ClassVar[Tuple[str, ...]] = (
         "delivered_heat_in_kwh",
         "space_heating_electricity_in_kwh",
-        pytest.param(
-            "hot_water_electricity_in_kwh",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="+1.27 % at 900 s: the hot-water charge runs whole steps above 600 s (#916); owner decision pending",
-            ),
-        ),
+        "hot_water_electricity_in_kwh",
     )
 
 

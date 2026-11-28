@@ -278,7 +278,7 @@ class SingleStep:
         """Step ``heat_pump`` once with its inputs set from ``values`` by field name (0 for the rest).
 
         The hot-water set temperature is :attr:`UNLIMITING_SET_TEMPERATURE_IN_CELSIUS` unless ``values`` names one, and
-        the space-heating part-load ratio is 1, the whole step, unless ``values`` names one.
+        the space-heating and the hot-water part-load ratios are 1, the whole step, unless ``values`` names them.
 
         Returns:
             Every output of the heat pump by field name.
@@ -286,6 +286,7 @@ class SingleStep:
         values = {
             MoreAdvancedHeatPumpHPLib.SupplyTemperatureSetForDHWInCelsius: SingleStep.UNLIMITING_SET_TEMPERATURE_IN_CELSIUS,
             MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioSh: 1.0,
+            MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioDhw: 1.0,
             **values,
         }
         fakes: List[cp.ComponentOutput] = []

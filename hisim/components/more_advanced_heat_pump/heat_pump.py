@@ -553,7 +553,15 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     electricity. A space-heating step the
     heat pump keeps running against its controller (its minimum running time) runs the whole step. It reports the actual
     ratio it ran with (``ActualPartLoadRatioSh``): the requested ratio, 1 for a step it keeps running on its own, 0 in
-    any other mode. The hot-water side runs whole steps.
+    any other mode.
+
+    A hot-water charge its hot-water controller commands runs the requested part-load ratio that controller sends
+    (``RequestedPartLoadRatioDhw``) the same way, through the same law (:meth:`rod_assisted_heating`): 1 at and below
+    the part-load threshold, and above it the fraction of the step that ends the cylinder at the controller's charge
+    end. Below 1 the heat pump publishes the averaged flow ``r m`` at the full-load (capped) outlet, books the heat that
+    flow carries and the compressor's electricity for it, ``r`` times the full-load electricity at that operating
+    point. It reports the actual ratio (``ActualPartLoadRatioDhw``): the requested ratio, 1 for a hot-water step it
+    keeps running on its own (its minimum running time), 0 in any other mode (:meth:`hot_water_actual_ratio`).
 
     The heat pump keeps two tracks of its mode and run timers. The control track is the mode its controllers command
     after its minimum running and idle times, and the timers of that mode; only the control track decides what the
@@ -606,11 +614,17 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
     #: The compressor starts the space-heating controller estimates for this step above the part-load threshold, which
     #: the heat pump adds to its start counters.
     CompressorStartsInStep = "CompressorStartsInStep"
+    #: The requested part-load ratio of a hot-water charge: the fraction of the step the hot-water controller commands
+    #: it to run.
+    RequestedPartLoadRatioDhw = "RequestedPartLoadRatioDhw"
 
     # Outputs
     #: The actual part-load ratio: the fraction of the step the space-heating charge ran, reported back to the
     #: space-heating controller.
     ActualPartLoadRatioSh = "ActualPartLoadRatioSh"
+    #: The actual part-load ratio of the hot-water charge: the fraction of the step it ran, reported back to the
+    #: hot-water controller.
+    ActualPartLoadRatioDhw = "ActualPartLoadRatioDhw"
     #: The compressor's space-heating electricity at full load, from the step's start temperatures, in W.
     ElectricalPowerAtFullLoadSpaceHeatingInWatt = "ElectricalPowerAtFullLoadSpaceHeatingInWatt"
     #: The compressor's space-heating electricity at its minimum thermal power, from the step's start temperatures,
@@ -1006,6 +1020,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=True,
+            )
+
+            self.hot_water_part_load_command = PartLoadCommand(
+                self,
+                requested_ratio_input_name=self.RequestedPartLoadRatioDhw,
+                actual_ratio_output_name=self.ActualPartLoadRatioDhw,
+                device_description="the heat pump's hot-water charge",
             )
 
         # The outlet its space-heating controller tells the machine to hold, in every arrangement; passive cooling
@@ -1516,6 +1537,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
                 MoreAdvancedHeatPumpHPLibControllerDHW.SupplyTemperatureSetForDHWInCelsius,
             )
         )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.RequestedPartLoadRatioDhw,
+                hpc_dhw_classname,
+                MoreAdvancedHeatPumpHPLibControllerDHW.RequestedPartLoadRatioDhw,
+            )
+        )
         return connections
 
     def get_default_connections_from_weather(
@@ -1954,8 +1982,8 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
 
         Reads the controllers' signals and the circuits' return temperatures, applies the minimum running and idle
         times in cycling mode on the control track, turns the requested space-heating ratio into the actual one it runs
-        (:meth:`space_heating_actual_ratio`), computes the step in the control mode at that ratio
-        (:meth:`operation_in_mode`), advances both tracks of its run timers, the control
+        (:meth:`space_heating_actual_ratio`), and the requested hot-water ratio likewise (:meth:`hot_water_actual_ratio`),
+        computes the step in the control mode at those ratios (:meth:`operation_in_mode`), advances both tracks of its run timers, the control
         track in the control mode and the published track in the mode it ran (:meth:`published_mode`), and publishes the
         step with the actual ratio (:meth:`publish_operation`). For example, at 900 s a space-heating step at a ratio of
         0 after 600 s of heating leaves the control track heating for 1500 s and the published track off for 900 s.
@@ -1999,8 +2027,17 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
         actual_ratio = self.space_heating_actual_ratio(stsv, on_off=on_off, on_off_space_heating=on_off_space_heating)
-        operation = self.operation_in_mode(on_off, conditions, timers, space_heating_part_load_ratio=actual_ratio)
+        hot_water_ratio = self.hot_water_actual_ratio(stsv, on_off=on_off, on_off_dhw=on_off_dhw)
+        operation = self.operation_in_mode(
+            on_off,
+            conditions,
+            timers,
+            space_heating_part_load_ratio=actual_ratio,
+            hot_water_part_load_ratio=hot_water_ratio,
+        )
         self.space_heating_part_load_command.publish_actual_ratio(stsv, actual_ratio)
+        if self.with_domestic_hot_water_preparation:
+            self.hot_water_part_load_command.publish_actual_ratio(stsv, hot_water_ratio)
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         published_on_off = self.published_mode(on_off=on_off, actual_ratio=actual_ratio)
         published_timers = HeatPumpRunTimers(
@@ -2152,6 +2189,31 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             return 1.0
         return 0.0
 
+    def hot_water_actual_ratio(self, stsv: SingleTimeStepValues, *, on_off: float, on_off_dhw: float) -> float:
+        """Return the actual hot-water ratio, the fraction of the step the hot-water charge runs.
+
+        A hot-water step the hot-water controller commands runs the requested ratio; a hot-water step the heat pump
+        keeps running against its controller (its minimum running time) runs the whole step, 1; a step in any other
+        mode, or a heat pump without hot-water preparation, runs 0. For example, a heat pump charging the cylinder
+        whose controller sends 0.4 runs 0.4 of the step.
+
+        Args:
+            stsv: The step's values, to read the requested ratio from.
+            on_off: The mode the heat pump runs after its minimum times, 2 for hot water.
+            on_off_dhw: The hot-water controller's signal, 2 for a charge.
+
+        Returns:
+            The actual ratio, from 0 to 1.
+
+        Raises:
+            ValueError: If the controller sent a ratio outside [0, 1].
+        """
+        if on_off != 2 or not self.with_domestic_hot_water_preparation:
+            return 0.0
+        if on_off_dhw == 2:
+            return self.hot_water_part_load_command.requested_ratio(stsv)
+        return 1.0
+
     @staticmethod
     def published_mode(*, on_off: float, actual_ratio: float) -> float:
         """Return the mode the heat pump ran in, for its published state, timers, counters and KPIs only.
@@ -2206,11 +2268,13 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         timers: "HeatPumpRunTimers",
         *,
         space_heating_part_load_ratio: float,
+        hot_water_part_load_ratio: float,
     ) -> "HeatPumpOperation":
         """Return the heat pump's powers, outlets and flows for one step in the mode ``on_off`` selects.
 
-        1 heats the building, holding the space-heating set point for the part-load ratio's share of the step, 2 the
-        hot water for the whole step, -1 cools the building (passively through the brine, or actively), 0 is off.
+        1 heats the building, holding the space-heating set point for the space-heating ratio's share of the step, 2
+        charges the hot water for the hot-water ratio's share of the step, -1 cools the building (passively through the
+        brine, or actively), 0 is off.
 
         Raises:
             ValueError: If ``on_off`` is no known mode.
@@ -2218,7 +2282,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         if on_off == 1:
             return self.space_heating(conditions, timers, part_load_ratio=space_heating_part_load_ratio)
         if on_off == 2:
-            return self.hot_water(conditions, timers)
+            return self.hot_water(conditions, timers, part_load_ratio=hot_water_part_load_ratio)
         if on_off == -1:
             return self.passive_cooling(conditions) if self.passive_cooling_with_brine else self.active_cooling(conditions)
         if on_off == 0:
@@ -2280,16 +2344,26 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             eer=results.eer,
         )
 
-    def hot_water(self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers") -> "HeatPumpOperation":
-        """Return a hot-water step at full load: at hplib's flow with a parallel storage, at the nominal flow otherwise.
+    def hot_water(
+        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers", *, part_load_ratio: float
+    ) -> "HeatPumpOperation":
+        """Return a hot-water step at a part-load ratio: at hplib's flow with a parallel storage, the nominal flow otherwise.
 
-        A hot-water charge holds the nominal 5 K lift at the machine's one minimum output: it runs at full load and its
-        controller ends it on the tank's temperature.
+        A hot-water charge holds the nominal 5 K lift at the machine's one minimum output: it runs at full load for the
+        part-load ratio's share of the step, and its controller ends it on the tank's temperature.
+
+        Args:
+            conditions: The step's temperatures, with the hot-water return and set temperature.
+            timers: How long the machine has been heating before this step.
+            part_load_ratio: The fraction of the step the hot-water charge runs at full load, from 0 to 1.
+
+        Returns:
+            The step's powers, outlet and flow.
         """
         self.heatpump.delta_t = self.NOMINAL_LIFT_IN_KELVIN
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
-            return self.hot_water_at_hplib_flow(conditions)
-        return self.hot_water_at_nominal_flow(conditions, timers)
+            return self.hot_water_at_hplib_flow(conditions, part_load_ratio=part_load_ratio)
+        return self.hot_water_at_nominal_flow(conditions, timers, part_load_ratio=part_load_ratio)
 
     def hplib_result(
         self,
@@ -2347,14 +2421,23 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
             operation_mode=self.SPACE_HEATING_OPERATION_MODE,
         )
 
-    def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions") -> "HeatPumpOperation":
+    def hot_water_at_hplib_flow(self, conditions: "HeatPumpStepConditions", *, part_load_ratio: float) -> "HeatPumpOperation":
         """Return a hot-water step with a parallel storage: hplib's flow, its outlet capped, the heat the flow carries.
 
         hplib answers the tank's return. hplib has no outlet limit, so the heat pump caps its outlet at the lower of
         ``maximal_dhw_supply_temperature_in_celsius`` and its hot-water controller's set temperature
         (:func:`hisim.hydronics.capped_hot_water_supply_temperature_c`); the flow stays, the capped outlet is the
         required one, and the compressor and, above its maximal outlet, the backup rod deliver the heat the flow
-        carries up to it (:meth:`rod_assisted_heating`).
+        carries up to it (:meth:`rod_assisted_heating`), for the part-load ratio's share of the step: the averaged
+        flow ``r m`` at the capped outlet. For example, 0.3 kg/s from a 50 °C return capped at 55 °C carry 6270 W at
+        ratio 1 and 2508 W at ratio 0.4, at 0.12 kg/s and 55 °C.
+
+        Args:
+            conditions: The step's temperatures, with the hot-water return and set temperature.
+            part_load_ratio: The fraction of the step the charge runs at full load, from 0 to 1.
+
+        Returns:
+            The step's powers, outlet and flow.
         """
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
@@ -2373,7 +2456,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         heating = self.rod_assisted_heating(
             conditions,
             results,
-            part_load_ratio=1.0,
+            part_load_ratio=part_load_ratio,
             mass_flow_in_kg_per_second=results.mass_flow_in_kg_per_second,
             return_temperature_in_celsius=return_in_celsius,
             required_outlet_temperature_in_celsius=outlet_in_celsius,
@@ -2386,14 +2469,23 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         )
 
     def hot_water_at_nominal_flow(
-        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers"
+        self, conditions: "HeatPumpStepConditions", timers: "HeatPumpRunTimers", *, part_load_ratio: float
     ) -> "HeatPumpOperation":
         """Return a hot-water step without a parallel storage: the nominal flow, a 5 K target lift, the outlet capped.
 
         The outlet follows from the target power at the nominal flow (:meth:`nominal_flow_operating_point`) and is
         capped at the lower of the maximal hot-water supply and the controller's set temperature, as in
         :meth:`hot_water_at_hplib_flow`; that outlet is the required one, which the compressor and the backup rod
-        deliver (:meth:`rod_assisted_heating`), and the heat pump books the heat the flow carries.
+        deliver (:meth:`rod_assisted_heating`) for the part-load ratio's share of the step, and the heat pump books
+        the heat the averaged flow carries.
+
+        Args:
+            conditions: The step's temperatures, with the hot-water return and set temperature.
+            timers: How long the machine has been heating before this step, for its start-up share.
+            part_load_ratio: The fraction of the step the charge runs at full load, from 0 to 1.
+
+        Returns:
+            The step's powers, outlet and flow.
         """
         return_in_celsius = conditions.hot_water_return_temperature_in_celsius
         results = self.hplib_result(
@@ -2420,7 +2512,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         heating = self.rod_assisted_heating(
             conditions,
             results,
-            part_load_ratio=1.0,
+            part_load_ratio=part_load_ratio,
             mass_flow_in_kg_per_second=pumped.mass_flow_in_kg_per_second,
             return_temperature_in_celsius=return_in_celsius,
             required_outlet_temperature_in_celsius=outlet_in_celsius,

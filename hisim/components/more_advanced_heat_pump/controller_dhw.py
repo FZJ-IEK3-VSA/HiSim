@@ -1,8 +1,9 @@
 """The domestic-hot-water L1 controller of the hplib heat pump.
 
 :class:`MoreAdvancedHeatPumpHPLibControllerDHW` switches the heat pump's hot-water side on and off on the hot-water
-storage's temperature and sends the supply temperature for the hot-water charge; it also applies the hot-water
-priority limit against the space-heating controller's signal. Its configuration
+storage's temperature, sends the supply temperature for the hot-water charge and, above the part-load threshold, the
+fraction of the step the charge runs; it also applies the hot-water priority limit against the space-heating
+controller's signal. Its configuration
 (:class:`MoreAdvancedHeatPumpHPLibControllerDHWConfig`), its states (:class:`HeatPumpDhwState`) and the state it keeps
 between steps (:class:`HeatPumpDhwControllerState`) live beside it.
 """
@@ -33,6 +34,7 @@ from hisim.config import (
     preset,
 )
 from hisim.explicit_state_controller import ExplicitStateController
+from hisim.part_load import PartLoadControl
 from hisim.components.dual_circuit_system import HotWaterPriorityLimit, HotWaterPriorityTimer
 from hisim.loadtypes import (
     OutputAggregation,
@@ -182,6 +184,9 @@ class HeatPumpDhwControllerState(NamedTuple):
     #: The hysteresis decision without the energy manager's raise, which the next step starts from: whether the
     #: controller would charge the tank on its own.
     charge_without_raise: HeatPumpDhwState
+    #: The requested part-load ratio of the commanded charge: 0 without one, 1 at and below the part-load threshold,
+    #: above it the fraction of the step that ends the tank at the charge end (:class:`hisim.part_load.PartLoadRule`).
+    requested_part_load_ratio_dhw: float
 
 
 class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhwControllerState], L1ControllerComponent):
@@ -199,6 +204,16 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
     The controller also keeps the charge it would run without the energy manager's raise and publishes whether the
     commanded charge is that own need (``ChargesWithoutRaise``), so the energy manager counts only such a charge's draw
     as the heat pump's own need.
+
+    Above the part-load threshold (``SimulationParameters.part_load_above_seconds``) a step is longer than the end of a
+    charge, so the controller commands the fraction of the step the charge runs (``RequestedPartLoadRatioDhw``), the
+    way the boiler's controller commands its hot-water charge: :class:`hisim.part_load.PartLoadControl` sets it from
+    the actual ratio the heat pump reports (``ActualPartLoadRatioDhw``) and the end-of-step temperature of the tank
+    sensor the controller is wired to (``WaterTemperatureAtEndOfStepFromDHWStorageInCelsius``), so that the tank ends
+    the step at the charge end, ``t_max`` plus the raise less ``charge_end_below_target_in_kelvin``
+    (``TargetTemperatureDhwInCelsius``), and the charge ends on the next step as it would at 60 s. The priority limit
+    counts that fraction of the step as charge time. At and below the threshold the ratio is exactly 1 for every
+    charge, so a fine-step run is unchanged.
     """
 
     cost_relevance = CostRelevance.FREE_OF_COST
@@ -209,6 +224,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
     #: The space-heating controller's signal (1 heating), which tells whether space heating asks for the heat pump
     #: while a hot-water charge has priority (:class:`~hisim.components.dual_circuit_system.HotWaterPriorityLimit`).
     SpaceHeatingStateFromController = "SpaceHeatingStateFromController"
+    #: The tank sensor's temperature at the end of the step, from which the part-load rule sets the requested ratio.
+    WaterTemperatureAtEndOfStepFromDHWStorageInCelsius = "WaterTemperatureAtEndOfStepFromDHWStorageInCelsius"
+    #: The actual part-load ratio the heat pump reports its hot-water charge ran with.
+    ActualPartLoadRatioDhw = "ActualPartLoadRatioDhw"
 
     # Outputs
     State_dhw = "StateDHW"
@@ -216,6 +235,10 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
     SupplyTemperatureSetForDHWInCelsius = "SupplyTemperatureSetForDHWInCelsius"
     #: 1 while the heat pump charges the tank on a charge the controller would run without the raise, else 0.
     ChargesWithoutRaise = "ChargesWithoutRaise"
+    #: The requested part-load ratio of the hot-water charge: the fraction of the step the heat pump is to charge.
+    RequestedPartLoadRatioDhw = "RequestedPartLoadRatioDhw"
+    #: The tank temperature at which the controller ends a charge, the target of the requested ratio.
+    TargetTemperatureDhwInCelsius = "TargetTemperatureDhwInCelsius"
 
     def __init__(
         self,
@@ -297,9 +320,19 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             ),
         )
 
+        self.dhw_part_load = PartLoadControl(
+            self,
+            end_temperature_input_name=self.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
+            actual_ratio_input_name=self.ActualPartLoadRatioDhw,
+            requested_ratio_output_name=self.RequestedPartLoadRatioDhw,
+            target_output_name=self.TargetTemperatureDhwInCelsius,
+            device_description="the heat pump's hot-water charge",
+        )
+
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
         self.add_default_connections(self.get_default_connections_from_space_heating_controller())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
 
     @staticmethod
     def get_default_connections_from_space_heating_controller() -> List[ComponentConnection]:
@@ -316,10 +349,30 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             )
         ]
 
+    @staticmethod
+    def get_default_connections_from_more_advanced_heat_pump() -> List[ComponentConnection]:
+        """Return the connection of the actual hot-water ratio the heat pump reports, which the part-load rule reads.
+
+        Returns:
+            The connection of ``ActualPartLoadRatioDhw`` to the heat pump's ``ActualPartLoadRatioDhw``.
+        """
+        # The heat pump's module imports this controller for its own default connections, so this import waits for the call.
+        from hisim.components.more_advanced_heat_pump.heat_pump import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+
+        return [
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.ActualPartLoadRatioDhw,
+                MoreAdvancedHeatPumpHPLib.get_classname(),
+                MoreAdvancedHeatPumpHPLib.ActualPartLoadRatioDhw,
+            )
+        ]
+
     def get_default_connections_from_simple_dhw_storage(
         self,
     ):
-        """Get simple dhw water storage default connections."""
+        """Get simple dhw water storage default connections: its start-of-step and its end-of-step temperature."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.simple_water_storage"
         component_module = importlib.import_module(name=component_module_name)
@@ -333,6 +386,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
                 # the tank's start-of-step temperature T0: the controller decides on a value the step's
                 # iteration does not move
                 component_class.WaterTemperatureAtStartOfStepInCelsius,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureAtEndOfStepFromDHWStorageInCelsius,
+                dhw_classname,
+                component_class.WaterTemperatureAtEndOfStepInCelsius,
             )
         )
         return connections
@@ -357,7 +417,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
         return connections
 
     def initial_state(self) -> HeatPumpDhwControllerState:
-        """Return the state before the first step: no charge, an idle priority timer and ``t_max`` as the set temperature.
+        """Return the state before the first step: no charge, an idle priority timer, ``t_max`` as the set temperature.
 
         Returns:
             The initial state.
@@ -368,6 +428,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             hot_water_priority_timer=HotWaterPriorityTimer(),
             supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius,
             charge_without_raise=HeatPumpDhwState.OFF,
+            requested_part_load_ratio_dhw=0.0,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -458,6 +519,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
         The same hysteresis decides a second time with no raise, from the charge without the raise the step started
         with: whether the charge is the controller's own need (:attr:`ChargesWithoutRaise`).
 
+        The requested ratio of a running charge is :meth:`hisim.part_load.PartLoadControl.next_requested_ratio` on the
+        tank's start and end temperature, aiming at the charge end (:meth:`charge_end_temperature_in_celsius`): 1 at and
+        below the part-load threshold. The priority limit counts that share of the step as charge time; a step the
+        limit yields to space heating requests 0.
+
         Args:
             timestep: The step.
             stsv: The step's values, to read the inputs from.
@@ -484,6 +550,14 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             maximum_temperature_in_celsius=self.config.t_max_dhw_storage_in_celsius,
             charge_end_below_target_in_kelvin=self.config.charge_end_below_target_in_kelvin,
         )
+        supply_temperature_set_in_celsius = self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin
+        # the share of the step the charge runs if it runs, which the priority limit counts as charge time
+        running_ratio = self.dhw_part_load.next_requested_ratio(
+            stsv,
+            device_runs=charge == HeatPumpDhwState.ON,
+            start_temperature_in_celsius=storage_temperature_in_celsius,
+            target_temperature_in_celsius=self.charge_end_temperature_in_celsius(supply_temperature_set_in_celsius),
+        )
         charges, timer = HotWaterPriorityLimit.decide(
             timer=state.hot_water_priority_timer,
             charge_requested=charge == HeatPumpDhwState.ON,
@@ -491,17 +565,36 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             maximum_priority_time_in_seconds=self.config.maximum_hot_water_priority_time_in_seconds,
             space_heating_interval_in_seconds=self.config.space_heating_interval_after_hot_water_priority_in_seconds,
             seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+            charged_share_of_step=running_ratio,
         )
         return HeatPumpDhwControllerState(
             charge=charge,
             commanded_charge=charge if charges else HeatPumpDhwState.OFF,
             hot_water_priority_timer=timer,
-            supply_temperature_set_for_dhw_in_celsius=self.config.t_max_dhw_storage_in_celsius + raise_in_kelvin,
+            supply_temperature_set_for_dhw_in_celsius=supply_temperature_set_in_celsius,
             charge_without_raise=charge_without_raise,
+            requested_part_load_ratio_dhw=running_ratio if charges else 0.0,
         )
 
+    def charge_end_temperature_in_celsius(self, supply_temperature_set_in_celsius: float) -> float:
+        """Return the tank temperature at which a charge ends, the target of the requested ratio, in °C.
+
+        It is the supply set temperature, ``t_max`` plus the energy manager's raise, less the configured charge end
+        (:attr:`MoreAdvancedHeatPumpHPLibControllerDHWConfig.charge_end_below_target_in_kelvin`), the same threshold
+        :meth:`next_state` switches the charge off at. For example, 60 °C less the default 2 K gives 58 °C.
+
+        Args:
+            supply_temperature_set_in_celsius: The hot-water supply set temperature, ``t_max`` plus the raise, in °C.
+
+        Returns:
+            The charge end, in °C.
+        """
+        return supply_temperature_set_in_celsius - self.config.charge_end_below_target_in_kelvin
+
     def publish(self, *, stsv: SingleTimeStepValues, state: HeatPumpDhwControllerState) -> None:
-        """Write the outputs that belong to ``state``: the commanded charge, the set temperature and the own charge.
+        """Write the outputs that belong to ``state``: the commanded charge with its ratio, target and set temperature.
+
+        The own charge (``ChargesWithoutRaise``) is written as well.
 
         Args:
             stsv: The step's values, to write the outputs to.
@@ -515,6 +608,25 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(ExplicitStateController[HeatPumpDhw
             state.commanded_charge == HeatPumpDhwState.ON and state.charge_without_raise == HeatPumpDhwState.ON
         )
         stsv.set_output_value(self.charges_without_raise_channel, 1.0 if charges_on_its_own else 0.0)
+        stsv.set_output_value(self.dhw_part_load.requested_ratio_channel, state.requested_part_load_ratio_dhw)
+        stsv.set_output_value(
+            self.dhw_part_load.target_channel,
+            self.charge_end_temperature_in_celsius(state.supply_temperature_set_for_dhw_in_celsius),
+        )
+
+    def publish_forced(self, *, stsv: SingleTimeStepValues, state: HeatPumpDhwControllerState) -> None:
+        """Write the outputs of a forced pass: those of ``state``, except the requested ratio above the threshold.
+
+        Above the threshold the requested ratio becomes the actual ratio the heat pump reports it ran with, so the
+        charge stops changing (:meth:`hisim.part_load.PartLoadControl.publish_held`); the state keeps the ratio its
+        pass decided. At and below the threshold every output is the state's.
+
+        Args:
+            stsv: The step's values.
+            state: The state of the last unforced pass.
+        """
+        self.publish(stsv=stsv, state=state)
+        self.dhw_part_load.publish_held(stsv)
 
     @staticmethod
     def get_cost_capex(

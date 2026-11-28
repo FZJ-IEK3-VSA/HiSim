@@ -346,7 +346,19 @@ class FluidLoopPortSet:
 
 
 class SingleTimeStepValues:
-    """Contains the values for a single time step."""
+    """The values of one time step: one Python float per output of the run, read and written through the ports.
+
+    Every value is a float. ``set_output_value`` stores ``float(value)``, so an int, a bool or a numpy scalar a
+    component publishes arrives as the same number in float form, and an unconnected input reads 0.0. For example,
+    a controller that publishes its mode as the int 1 is read back as 1.0, and its result column is a float column.
+
+    Why: a result column holds one type for the whole run, whatever a component publishes in a given step, and a
+    loop that holds the step values as one vector of 64-bit floats (the planned Rust engine) hands every component
+    the same values as this one. Converting costs about 1 % of a run's time.
+    """
+
+    #: How far a value may move in a pass for the time step to count as converged (``is_close_enough_to_previous``).
+    CONVERGENCE_THRESHOLD: ClassVar[float] = 0.0001
 
     def __init__(self, number_of_values: int):
         """Initializes a new single time step values class."""
@@ -363,20 +375,20 @@ class SingleTimeStepValues:
         return newstsv
 
     def get_input_value(self, component_input: ComponentInput) -> float:
-        """Gets a value for an input from the single time step values."""
+        """Return the value an input reads in this pass: its source output's value, or 0.0 when it is unconnected."""
         if component_input.source_output is None:
-            return 0
+            return 0.0
         return self.values[component_input.source_output.global_index]
 
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
-        """Sets a single output value in the single time step values array."""
-        self.values[output.global_index] = value
+        """Set an output's value in this pass, as a float (``float(value)``; the class docstring says why)."""
+        self.values[output.global_index] = float(value)
 
     def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
         """Checks if the values are sufficiently similar to another array."""
         count = len(self.values)
         for i in range(count):
-            if abs(previous_values.values[i] - self.values[i]) > 0.0001:
+            if abs(previous_values.values[i] - self.values[i]) > self.CONVERGENCE_THRESHOLD:
                 return False
         return True
 
@@ -385,7 +397,7 @@ class SingleTimeStepValues:
         count = len(self.values)
         error_msg = ""
         for i in range(count):
-            if abs(previous_values.values[i] - self.values[i]) > 0.0001:
+            if abs(previous_values.values[i] - self.values[i]) > self.CONVERGENCE_THRESHOLD:
                 error_msg += (
                     outputs[i].get_pretty_name()
                     + " previously: "

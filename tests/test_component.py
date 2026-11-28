@@ -11,6 +11,7 @@ from enum import Enum, unique
 from typing import List
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from dataclasses_json import dataclass_json
 
@@ -184,6 +185,31 @@ def test_single_time_step_values() -> None:
 
     log.information(f"Difference message: {diff_msg}")
     log.information("SingleTimeStepValues tests passed!")
+
+
+@pytest.mark.base
+def test_single_time_step_values_hold_only_floats() -> None:
+    """An int, a bool or a numpy scalar a component publishes is stored as a float, and an unconnected input reads 0.0.
+
+    Otherwise a result column's type would depend on which value a component published last.
+    """
+    stsv = cp.SingleTimeStepValues(3)
+    outputs = []
+    for index in range(3):
+        output = cp.ComponentOutput(
+            "Component1", f"Output{index}", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Component1")
+        )
+        output.global_index = index
+        outputs.append(output)
+
+    stsv.set_output_value(outputs[0], 3)
+    stsv.set_output_value(outputs[1], True)
+    stsv.set_output_value(outputs[2], np.float64(0.5))
+
+    assert stsv.values == [3.0, 1.0, 0.5]
+    assert all(type(value) is float for value in stsv.values)  # pylint: disable=unidiomatic-typecheck
+    unconnected = cp.ComponentInput("Component2", "Input1", lt.LoadTypes.ANY, lt.Units.ANY, False)
+    assert type(stsv.get_input_value(unconnected)) is float  # pylint: disable=unidiomatic-typecheck
 
 
 @pytest.mark.base

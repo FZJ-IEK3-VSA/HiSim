@@ -119,6 +119,11 @@ class Simulator:
     #: the step length, because a store is turned over more often in a longer step and contracts more slowly.
     MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH: ClassVar[int] = 100
 
+    #: The pass counter of a time step (0 for the first pass) above which every later pass runs with
+    #: ``force_convergence``: controllers then hold their decisions so the physics can settle. The 13th pass is the
+    #: first forced one.
+    FORCED_CONVERGENCE_AFTER_PASSES: ClassVar[int] = 10
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -149,6 +154,8 @@ class Simulator:
         #: The most passes one time step may take (:meth:`maximum_passes_for_step_length`). It is set from the step
         #: length whenever the simulation parameters are set, so the convergence loop only compares against it.
         self.maximum_passes_per_timestep: int = self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH
+        #: The passes each time step of the last run took, in step order (:meth:`run_timestep_loop`).
+        self.pass_counts: List[int] = []
         if my_simulation_parameters is not None:
             if self._force_log_connections:
                 my_simulation_parameters.log_connections = True
@@ -441,16 +448,10 @@ class Simulator:
                 myerr = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
                 with open(self.iteration_logging_path, "a", encoding="utf-8") as filestream:
                     filestream.write(myerr + "\n")
-            if iterative_tries > 10:
+            if iterative_tries > self.FORCED_CONVERGENCE_AFTER_PASSES:
                 force_convergence = True
             if iterative_tries > self.maximum_passes_per_timestep:
-                list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                raise ValueError(
-                    f"More than {self.maximum_passes_per_timestep} passes in time step {timestep} "
-                    f"({self._simulation_parameters.seconds_per_timestep} s steps; the limit is "
-                    f"{self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes per 60 s of step length)\n"
-                    f"{list_of_changed_values}"
-                )
+                raise self.pass_limit_error(timestep, stsv, previous_values)
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -458,6 +459,22 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
         return (stsv, iterative_tries, force_convergence)
+
+    def pass_limit_error(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, previous_values: cp.SingleTimeStepValues
+    ) -> ValueError:
+        """The error of a time step that has not converged within the pass limit.
+
+        The message names the step, the step length, the limit and every output that still changed on the last pass;
+        an engine that replaces the loop raises the same one (``roadmap/rust_ideas/renovisor_rust_engine_spec.md``, §4.7).
+        """
+        list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
+        return ValueError(
+            f"More than {self.maximum_passes_per_timestep} passes in time step {timestep} "
+            f"({self._simulation_parameters.seconds_per_timestep} s steps; the limit is "
+            f"{self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH} passes per 60 s of step length)\n"
+            f"{list_of_changed_values}"
+        )
 
     @staticmethod
     def evaluation_positions(
@@ -737,59 +754,14 @@ class Simulator:
             f"finished connecting all components. A total of {len(self.wrapped_components)} "
             f"components were defined. They have a total of {len(self.all_outputs)} outputs."
         )
-        all_result_lines = []
         log.information(f"Starting simulation for year {self._simulation_parameters.year}")
         log.information(f"Starting simulation for {self._simulation_parameters.timesteps} timesteps")
-        lastmessage = datetime.datetime.now()
-        last_step: int = 0
-        starttime = datetime.datetime.now()
-        total_iteration_tries_since_last_msg = 0
-        # The end-of-run summary of the pass counts: updated once per step, nothing per pass.
-        steps_above_minimum_pass_limit = 0
-        largest_pass_count = 0
-
-        # All outputs start at zero for the first step only; every later step starts from the
-        # values the step before it converged to (the warm start below).
-        number_of_outputs = len(self.all_outputs)
-        stsv = cp.SingleTimeStepValues(number_of_outputs)
-
         self._notify_progress(ProgressEvent.LOOP_START, 0, None)
-        for step in range(self._simulation_parameters.timesteps):
-            (
-                resulting_stsv,
-                iteration_tries,
-                force_convergence,
-            ) = self.process_one_timestep(step, stsv)
-            # Warm start: the next step's first pass reads the values this step converged to, so a
-            # component that reads an output computed later in the order sees the previous step's
-            # value on that pass instead of 0. No copy is needed: process_one_timestep clones its
-            # argument before it writes, so the values appended below are never changed afterwards.
-            stsv = resulting_stsv
-
-            # Accumulates iteration counter
-            total_iteration_tries_since_last_msg += iteration_tries
-            largest_pass_count = max(largest_pass_count, iteration_tries)
-            if iteration_tries > self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH:
-                steps_above_minimum_pass_limit += 1
-
-            # Appends
-            all_result_lines.append(resulting_stsv.values)
-            del resulting_stsv
-            # Calculates time execution
-            elapsed = datetime.datetime.now() - lastmessage
-
-            # For simulation longer than 5 seconds
-            if elapsed.total_seconds() > 5 and step != 0:
-                lastmessage = self.show_progress(
-                    starttime,
-                    step,
-                    total_iteration_tries_since_last_msg,
-                    last_step,
-                    force_convergence,
-                )
-                last_step = step
-                total_iteration_tries_since_last_msg = 0
-        self.log_pass_count_summary(steps_above_minimum_pass_limit, largest_pass_count)
+        all_result_lines, self.pass_counts = self.run_timestep_loop()
+        self.log_pass_count_summary(
+            sum(1 for passes in self.pass_counts if passes > self.MAXIMUM_PASSES_PER_60_S_OF_STEP_LENGTH),
+            max(self.pass_counts, default=0),
+        )
         # The loop is done; what follows, up to the finished flag, is postprocessing.
         self._notify_progress(ProgressEvent.LOOP_END, self._simulation_parameters.timesteps, 0.0)
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
@@ -810,6 +782,55 @@ class Simulator:
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")
+
+    def run_timestep_loop(self) -> Tuple[Sequence[Sequence[float]], List[int]]:
+        """Run every time step of the simulation and return the result rows and the passes each step took.
+
+        All values start at zero for the first step only; every later step starts from the values the step before it
+        converged to (the warm start). A progress message is logged at most every 5 s of wall time
+        (:meth:`show_progress`). An engine may replace this method on the instance and must then give the same rows
+        and pass counts, as the planned Rust loop does (``roadmap/rust_ideas/renovisor_rust_engine_spec.md``, §4.7).
+
+        Returns:
+            One row of values per time step, in the order of ``all_outputs``, and the number of passes of each step.
+
+        Raises:
+            ValueError: If a step does not converge within the pass limit (:meth:`process_one_timestep`).
+        """
+        all_result_lines: List[Sequence[float]] = []
+        pass_counts: List[int] = []
+        lastmessage = datetime.datetime.now()
+        last_step: int = 0
+        starttime = datetime.datetime.now()
+        total_iteration_tries_since_last_msg = 0
+        stsv = cp.SingleTimeStepValues(len(self.all_outputs))
+        for step in range(self._simulation_parameters.timesteps):
+            (
+                resulting_stsv,
+                iteration_tries,
+                force_convergence,
+            ) = self.process_one_timestep(step, stsv)
+            # Warm start: the next step's first pass reads the values this step converged to, so a
+            # component that reads an output computed later in the order sees the previous step's
+            # value on that pass instead of 0. No copy is needed: process_one_timestep clones its
+            # argument before it writes, so the values appended below are never changed afterwards.
+            stsv = resulting_stsv
+            total_iteration_tries_since_last_msg += iteration_tries
+            pass_counts.append(iteration_tries)
+            all_result_lines.append(resulting_stsv.values)
+            del resulting_stsv
+            elapsed = datetime.datetime.now() - lastmessage
+            if elapsed.total_seconds() > 5 and step != 0:
+                lastmessage = self.show_progress(
+                    starttime,
+                    step,
+                    total_iteration_tries_since_last_msg,
+                    last_step,
+                    force_convergence,
+                )
+                last_step = step
+                total_iteration_tries_since_last_msg = 0
+        return all_result_lines, pass_counts
 
     def log_pass_count_summary(self, steps_above_minimum_pass_limit: int, largest_pass_count: int) -> None:
         """Log one line on how many passes the time steps of the run needed.

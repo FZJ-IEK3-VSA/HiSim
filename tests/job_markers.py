@@ -62,6 +62,7 @@ class JobMarkers:
             "mpc",
             "hpcharness",
             "upstream_history",
+            "verification",
         }
     )
     #: The guide's group markers: they select a group inside a job, are carried beside a job marker, and are

@@ -98,6 +98,7 @@ class WeatherDataSourceEnum(str, Enum):
     DWD_10MIN = "DWD_10MIN"
     ERA5 = "ERA5"
     DWD_15MIN = "DWD_15MIN"
+    EPW = "EPW"
 
 
 class WeatherSourceFiles:
@@ -121,6 +122,7 @@ class WeatherSourceFiles:
         WeatherDataSourceEnum.DWD_10MIN: ("",),
         WeatherDataSourceEnum.DWD_15MIN: ("",),
         WeatherDataSourceEnum.ERA5: ("",),
+        WeatherDataSourceEnum.EPW: ("",),
     }
 
     #: What a suffix contributes when no file of that name exists. A ``.csv`` beside a DWD test
@@ -188,9 +190,11 @@ class WeatherSourceFiles:
     #: Where each data source declares the year its rows belong to: the name of the year column and
     #: the number of lines above the column header, as the source's reader skips them. ``None`` for a
     #: source that declares no year -- a DWD test reference year is a synthetic year of month, day and
-    #: hour rows (MEZ) that belongs to no calendar year.
+    #: hour rows (MEZ) that belongs to no calendar year, and a typical meteorological year in EPW form
+    #: stitches months of different years together (and has no column header to read a year from).
     YEAR_COLUMNS: ClassVar[Mapping[WeatherDataSourceEnum, Optional[Tuple[str, int]]]] = {
         WeatherDataSourceEnum.DWD_TRY: None,
+        WeatherDataSourceEnum.EPW: None,
         WeatherDataSourceEnum.NSRDB: ("Year", 11),
         WeatherDataSourceEnum.NSRDB_15MIN: ("Year", 2),
         WeatherDataSourceEnum.DWD_10MIN: ("year", 2),
@@ -331,6 +335,8 @@ class RelativeHumidity:
       over the stations exactly as the file's temperature is.
     - ``ERA5``: the ``relative_humidity`` column of the export; ERA5 publishes the 2 m dew point, from
       which the export computes it.
+    - ``EPW``: field 9 of every hourly record, which the EnergyPlus weather format names
+      ``Relative Humidity``; the file has no column header, the reader names the fields.
 
     The provenance of the shipped files is in ``hisim/inputs/weather/humidity_provenance.md``.
 
@@ -359,6 +365,7 @@ class RelativeHumidity:
         WeatherDataSourceEnum.DWD_10MIN: "relative_humidity",
         WeatherDataSourceEnum.DWD_15MIN: "relative_humidity",
         WeatherDataSourceEnum.ERA5: "relative_humidity",
+        WeatherDataSourceEnum.EPW: "Relative Humidity",
     }
 
     @classmethod
@@ -524,6 +531,8 @@ def read_source_data(inputs: WeatherSeriesInputs) -> pd.DataFrame:
         raw_data = read_dwd_15min_data(filepath, inputs.year)
     elif inputs.data_source == WeatherDataSourceEnum.ERA5:
         raw_data = read_era5_data(filepath, inputs.year)
+    elif inputs.data_source == WeatherDataSourceEnum.EPW:
+        raw_data = read_epw_data(filepath, inputs.year)
     else:
         raise ValueError(f"Unsupported weather data source: {inputs.data_source}")
     return RelativeHumidity.checked(raw_data, inputs)
@@ -606,7 +615,10 @@ def timestep_labels(one_minute_series: pd.Series, seconds_per_timestep: int) -> 
 def interpolate(pd_database: Any, year: int, pad_start_with_first_sample: bool = False) -> Any:
     """Interpolates a time series to one minute, padding the year's first and last hour.
 
-    The hourly sources label each hour at its middle, 00:30 to 23:30. A zero is prepended at midnight
+    The hourly sources label each hour at its middle, 00:30 to 23:30, in their station's time zone,
+    which the series' index carries; the padding is placed at midnight and at 23:59 of that zone
+    (Berlin for the German and the hourly NSRDB sources, a fixed UTC offset for an EPW), so the
+    one-minute series always starts at the station's own 1 January 00:00. A zero is prepended at midnight
     (the first sample instead when ``pad_start_with_first_sample`` is set: a zero is the irradiance of
     the night before, but a relative humidity of zero would be air drier than any outdoor air),
     and the last sample is repeated at the end of the hour it stands for -- 29 minutes after it, which
@@ -623,12 +635,10 @@ def interpolate(pd_database: Any, year: int, pad_start_with_first_sample: bool =
     Returns:
         Any: the one-minute series.
     """
+    station_zone = pd_database.index.tz
     start_value = float(pd_database.iloc[0]) if pad_start_with_first_sample else 0.0
-    firstday = pd.Series(
-        [start_value],
-        index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
-    )
-    end_of_year = pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")
+    firstday = pd.Series([start_value], index=[pd.Timestamp(datetime.datetime(year, 1, 1, 0, 0), tz=station_zone)])
+    end_of_year = pd.Timestamp(datetime.datetime(year, 12, 31, 23, 59), tz=station_zone)
     end_of_last_hour = pd_database.index[-1] + pd.Timedelta(minutes=29)
     lastday = pd.Series(pd_database.iloc[-1], index=[min(end_of_year, end_of_last_hour)])
     pd_database = pd.concat([pd_database, firstday, lastday])
@@ -715,6 +725,26 @@ class StationHeader:
     #: degree of latitude, degree of longitude).
     DAT_LABELS: ClassVar[Tuple[str, str, str]] = ("Ort", "Breitengrad", "Längengrad")
 
+    #: The fields of the first line of an EnergyPlus weather file (EPW), the ``LOCATION`` line, in the
+    #: order the format states them: the keyword, the city, the state, the country, the data source,
+    #: the WMO station number, the latitude and the longitude in degrees, the time zone in hours from
+    #: UTC and the elevation in m.
+    EPW_LOCATION_FIELDS: ClassVar[Tuple[str, ...]] = (
+        "LOCATION",
+        "City",
+        "State",
+        "Country",
+        "Data Source",
+        "WMO",
+        "Latitude",
+        "Longitude",
+        "Time Zone",
+        "Elevation",
+    )
+
+    #: The fields of :attr:`EPW_LOCATION_FIELDS` that hold the station's name, latitude and longitude.
+    EPW_LABELS: ClassVar[Tuple[str, str, str]] = ("City", "Latitude", "Longitude")
+
     #: How many lines of a ``.dat`` file the header is looked for in; the station block is at the top.
     DAT_HEADER_LINES: ClassVar[int] = 3
 
@@ -737,7 +767,10 @@ class StationHeader:
         Raises:
             ValueError: if the header lacks one of the labels; the message names it.
         """
-        if source_enum in cls.CSV_COLUMNS:
+        if source_enum == WeatherDataSourceEnum.EPW:
+            header = cls.read_epw_header(filepath)
+            labels = cls.EPW_LABELS
+        elif source_enum in cls.CSV_COLUMNS:
             header = cls.read_csv_header(filepath)
             labels = cls.CSV_COLUMNS[source_enum]
         else:
@@ -792,6 +825,32 @@ class StationHeader:
                 if separator:
                     header[label.strip()] = value.strip()
         return header
+
+    @classmethod
+    def read_epw_header(cls, filepath: str) -> Dict[str, str]:
+        """Read the ``LOCATION`` line of an EPW file, its first line, under the field names of the format.
+
+        Example: ``LOCATION,DENVER INTL AP,CO,USA,TMY3,725650,39.83,-104.65,-7.0,1650.0`` yields
+        ``"City": "DENVER INTL AP"``, ``"Latitude": "39.83"``, ``"Longitude": "-104.65"``,
+        ``"Time Zone": "-7.0"`` and ``"Elevation": "1650.0"``, every value as the file spells it.
+
+        Args:
+            filepath: the EPW file.
+
+        Returns:
+            Dict[str, str]: each field of :attr:`EPW_LOCATION_FIELDS` with its value.
+
+        Raises:
+            ValueError: if the first line is not a ``LOCATION`` line with the format's ten fields.
+        """
+        with open(filepath, encoding="utf-8") as epw_file:
+            values = [value.strip() for value in next(csv.reader(epw_file), [])]
+        if len(values) != len(cls.EPW_LOCATION_FIELDS) or values[0] != cls.EPW_LOCATION_FIELDS[0]:
+            raise ValueError(
+                f"The weather file {filepath} (EPW) does not start with a LOCATION line of "
+                f"{len(cls.EPW_LOCATION_FIELDS)} fields, as the EPW format requires; its first line is {values}."
+            )
+        return dict(zip(cls.EPW_LOCATION_FIELDS, values))
 
 
 def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Dict[str, Any]:
@@ -881,6 +940,104 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
 
         # calculate direct normal
         data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["B"], lon_in_degrees, lat_in_degrees)
+    return data
+
+
+class EpwRecord:
+    """The layout of an EnergyPlus weather file (EPW): eight header lines, then one record per hour.
+
+    A record is a comma-separated line of 35 fields without a column header, stamped with its year,
+    month, day and hour (1 to 24, the hour the record ends). The positions below are the fields the
+    reader takes, as the EPW data dictionary numbers them from 1: the dry-bulb temperature (7), the
+    relative humidity (9), the station pressure in Pa (10), the global horizontal (14), direct normal
+    (15) and diffuse horizontal (16) irradiance in Wh/m² and the wind speed in m/s (22).
+    """
+
+    #: The header lines above the first record: LOCATION, DESIGN CONDITIONS, TYPICAL/EXTREME PERIODS,
+    #: GROUND TEMPERATURES, HOLIDAYS/DAYLIGHT SAVINGS, two COMMENTS lines and DATA PERIODS.
+    HEADER_LINES: ClassVar[int] = 8
+
+    #: The zero-based position of each field the reader takes, under the raw column it becomes.
+    COLUMNS: ClassVar[Mapping[str, int]] = {
+        "Month": 1,
+        "Day": 2,
+        "Hour": 3,
+        "T": 6,
+        RelativeHumidity.COLUMN: 8,
+        "Pressure": 9,
+        "GHI": 13,
+        "DNI": 14,
+        "DHI": 15,
+        "Wspd": 21,
+    }
+
+    #: The records of a typical meteorological year: every hour of a year of 365 days.
+    HOURS_PER_YEAR: ClassVar[int] = 8760
+
+    #: The file states the pressure in Pa; the raw frame keeps hPa, as the other readers deliver it.
+    PASCAL_PER_HECTOPASCAL: ClassVar[float] = 100.0
+
+    #: A year of 365 days whose day-of-year numbering the records are checked against.
+    NON_LEAP_YEAR: ClassVar[int] = 2021
+
+
+def read_epw_data(filepath: str, year: int) -> pd.DataFrame:
+    """Read an EnergyPlus weather file (EPW) as the hourly raw frame, labelled in the station's standard time.
+
+    An EPW holds one record per hour of a year, 8760 for a typical meteorological year, each stamped with
+    the hour it ends (1 to 24); the record's values are the hour's means and sums. The reader labels each
+    record at the middle of its hour, 00:30 to 23:30, as the other hourly readers do, and lays the records
+    onto the simulated year by position, because a typical year stitches months of different years
+    together. The labels carry the station's fixed UTC offset from the file's LOCATION line (Denver:
+    UTC−7, no daylight saving), the standard time the run's window is looked up in. The irradiances are
+    hourly sums in Wh/m², numerically the hour's mean in W/m²; the pressure is converted from Pa to hPa,
+    the unit the raw frame keeps.
+
+    Example: the first record of the Denver TMY3 (1 January, hour 1: −18.0 °C, 85 %, 83 700 Pa, no sun,
+    calm) becomes the row labelled 1 January 00:30−07:00 with T −18.0, relative humidity 85.0, Pressure
+    837.0 and zero irradiance and wind speed.
+
+    Args:
+        filepath: the EPW file.
+        year: the simulated year.
+
+    Returns:
+        pd.DataFrame: the hourly raw frame with the columns of :data:`RAW_COLUMNS`.
+
+    Raises:
+        ValueError: if the file does not hold exactly 8760 records, or their month, day and hour stamps
+            are not the hours of a 365-day year in order.
+    """
+    header = StationHeader.read_epw_header(filepath)
+    station_zone = datetime.timezone(datetime.timedelta(hours=float(header["Time Zone"])))
+    records = pd.read_csv(filepath, skiprows=EpwRecord.HEADER_LINES, header=None, usecols=list(EpwRecord.COLUMNS.values())).rename(
+        columns={position: column for column, position in EpwRecord.COLUMNS.items()}
+    )
+    if len(records) != EpwRecord.HOURS_PER_YEAR:
+        raise ValueError(
+            f"The weather file {filepath} (EPW) holds {len(records)} records below its {EpwRecord.HEADER_LINES} "
+            f"header lines; a typical meteorological year holds {EpwRecord.HOURS_PER_YEAR}, one per hour."
+        )
+    stamped_hour = (
+        pd.to_datetime({"year": EpwRecord.NON_LEAP_YEAR, "month": records["Month"], "day": records["Day"]}).dt.dayofyear.to_numpy() * 24 + records["Hour"].to_numpy()
+    )
+    if not np.array_equal(stamped_hour, np.arange(1, EpwRecord.HOURS_PER_YEAR + 1) + 24):
+        raise ValueError(
+            f"The records of the weather file {filepath} (EPW) are not the hours of a 365-day year in order: "
+            "a record's month, day and hour do not match its position in the file."
+        )
+    data = pd.DataFrame(
+        {
+            "T": records["T"].astype(float),
+            "Pressure": records["Pressure"].astype(float) / EpwRecord.PASCAL_PER_HECTOPASCAL,
+            "GHI": records["GHI"].astype(float),
+            "DNI": records["DNI"].astype(float),
+            "DHI": records["DHI"].astype(float),
+            "Wspd": records["Wspd"].astype(float),
+            RelativeHumidity.COLUMN: records[RelativeHumidity.COLUMN].astype(float),
+        }
+    )
+    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=EpwRecord.HOURS_PER_YEAR, freq="h", tz=station_zone)
     return data
 
 

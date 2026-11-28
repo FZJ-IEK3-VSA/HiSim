@@ -1580,7 +1580,7 @@ class MoreAdvancedHeatPumpHPLib(PhysicsComponent):
         else:
             target_power_in_watt = thermal_power_at_lift_in_watt
         target_power_in_watt = target_power_in_watt * (
-            1 - np.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
+            1 - math.exp(-time_on_heating_in_seconds / MoreAdvancedHeatPumpHPLib.START_UP_TIME_CONSTANT_IN_SECONDS)
         )
         return pump.operating_point(
             heat_power_in_watt=float(target_power_in_watt), return_temperature_in_celsius=return_temperature_in_celsius

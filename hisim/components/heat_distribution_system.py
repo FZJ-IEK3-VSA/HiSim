@@ -1,6 +1,7 @@
 """Heat Distribution Module."""
 
 import importlib
+import math
 from enum import Enum, unique
 from typing import Any, ClassVar, List, Optional, Tuple, assert_never
 from dataclasses import dataclass
@@ -778,14 +779,14 @@ class HeatDistribution(cp.PhysicsComponent):
 
         water_temperature_input_in_celsius = residence_temperature_in_celsius + (
             (self.state.water_input_temperature_in_celsius - residence_temperature_in_celsius)
-            * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
+            * math.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
         )
         water_temperature_output_in_celsius = residence_temperature_in_celsius + (
             (self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius)
-            * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
+            * math.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
         )
 
-        thermal_power_delivered_effective_in_watt = self.state.thermal_power_delivered_in_watt * np.exp(
+        thermal_power_delivered_effective_in_watt = self.state.thermal_power_delivered_in_watt * math.exp(
             -(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds
         )
 

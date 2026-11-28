@@ -160,7 +160,7 @@ For this you list the respective `PostProcessingOptions` (`hisim/postprocessingo
 Component Classes
 -----------
 All HiSim component classes are stored in the `hisim/components` directory and inherit from the parent class `Component` (`hisim/component.py`). They can be used in your energy-system file to customize different configurations.
-Every component has a `ConfigBase` dataclass holding its parameters and a `DisplayConfig` controlling its visibility in reports.
+Every component has a `ConfigBase` dataclass holding its parameters and a `DisplayConfig` whose `pretty_name` (when set) is its display name in the KPI results.
 A `Component` child class has to have the following methods implemented:
 
 * i_prepare_simulation: called once before the time-step loop

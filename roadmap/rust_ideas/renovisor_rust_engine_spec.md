@@ -1,6 +1,6 @@
 # Spec: A RenoVisor calculation runs in Rust alone, in under 5 s and 2 s as the target, with Python as the reference every Rust component is checked against
 
-Status: building, on the branch `renovisor-rust-engine-spec`; the code reaches `main` in the pull requests that follow this spec. The agent tooling, the Python half of the twins, the Rust loop (§4.7) and the twins of the heat pump and the building are built; the twins of the two storages and the energy manager are being converted. D13–D15 (2026-11-28) widen the goal from twins of the step to whole components and a run without Python (§4.8). Owner decisions D1–D16 taken. Owner: Noah Pflugradt.
+Status: building, on the branch `renovisor-rust-engine-spec`; the code reaches `main` in the pull requests that follow this spec. The agent tooling, the Python half of the twins, the Rust loop (§4.7) and the twins of the heat pump and the building are built; the twins of the two storages and the energy manager are being converted. D13–D15 (2026-11-28) widen the goal from twins of the step to whole components and a run without Python (§4.8). Owner decisions D1–D17 taken. Owner: Noah Pflugradt.
 Epic: hisim-renovisor-rust-engine-4fhq. Builds on: `roadmap/rust_ideas/rust_simulator_spec.md` (options O2–O7,
 O10 and the discarded ideas D1–D6 there), `roadmap/rust_ideas/hisim_rust_recommended_cleanup_steps.md`,
 `roadmap/rust_ideas/feasibility_rust_hisim.md`. How each component gets from Python to its twin, and what each conversion finds, is
@@ -148,6 +148,15 @@ commit, and a binary that finds the Python sources at start and sees them change
 and the file. In a Python-hosted run D8 stands, and a stale twin's fallback to Python comes with a prominent warning,
 not only a log line. Consequence: the manifests and the start-up check (bead 4fhq.9) follow the conversions of
 §4.8 step 1 and cover every twin at once; the binary's check is bead 4fhq.41.
+
+**D17 — The RenoVisor translator, its result payload and the lifecycle cost engine get Rust implementations too, so
+a RenoVisor calculation runs from its request to its `result.json` without Python** (owner, 2026-11-28, from the
+review of this spec). D15's household is the first milestone; a full RenoVisor run is the end of the plan.
+Consequence: two more layers in §4.8, the translator (`hisim/renovisor/` without its tooling, about 11k lines) and
+the result side with the cost engine RenoVisor requires (`hisim/economics/`, about 43k lines, more than every
+component together), and whole components for every class the capability probes reach, not only the household's 15.
+Their oracles exist: path verification tier 1 translates every capability probe, and a Python run writes the
+`result.json` and economics result to compare with.
 
 ## 3. Terms
 
@@ -460,6 +469,8 @@ milliseconds where Python and pandas take seconds.
 | `i_doublecheck` | each component | per component | the harness: a case whose state goes implausible fails in both (bead 4fhq.31) |
 | the loop | `Simulator.run_timestep_loop` | `hisim-engine` (§4.7) | the stand-in and the goldens, as today |
 | results, KPIs, costs, the files RenoVisor reads | `hisim/postprocessing/`, `hisim/renovisor/result.py` | to write | the golden's KPIs and the results table, D7's tolerance |
+| the RenoVisor translator: a calculation request into an energy system and its mapping report (D17) | `hisim/renovisor/` (request, measures, envelope, TABULA, translate, report) | to write | path verification tier 1: the energy-system YAML and `mapping_report.json` of every capability probe and worked mockup, and `problems.json` of a refused request |
+| RenoVisor's result payload and the lifecycle cost engine (D17) | `hisim/renovisor/` (result, KPIs, costs, layers, provenance), `hisim/economics/` | to write | Python's `result.json`, `economic_inputs.json` and economics result for the same run, per capability probe |
 
 **A whole component** extends the twin of §4.5: next to `from_handover` it gets a constructor from its configuration
 and the run's parameters that does what `__init__` and `i_prepare_simulation` do, and the two must agree: built from
@@ -473,7 +484,9 @@ distribution, heating curve, weather and LPG connector), each native in the Rust
 mixed run comes. (2) Each of them whole: construction and preparation against its hand-over, `i_doublecheck`.
 (3) The prepared-data readers. (4) Wiring against the loop plan. (5) Reading and sizing the energy-system YAML
 against the realized configurations. (6) Results and KPIs against the golden. (7) A Rust executable that runs the
-system from its two files, timed against D13.
+system from its two files, timed against D13. Then D17: (8) the translator against the capability probes; (9) the
+result payload and the cost engine; (10) whole components for every class the probes reach; (11) a RenoVisor
+calculation from its request to its `result.json` in Rust alone, timed against D13.
 
 ## 5. What changes and what does not
 
@@ -623,4 +636,7 @@ Epic hisim-renovisor-rust-engine-4fhq.
 | hisim-renovisor-rust-engine-4fhq.38 (P2) | the run without Python: under 5 s, 2 s the target (D13, D15), blocked by .26 and .33–.37 | – |
 | hisim-renovisor-rust-engine-4fhq.40 (P2) | the shared crate binds ports by run-time names and reads lists and optional values | – |
 | hisim-renovisor-rust-engine-4fhq.41 (P2) | the Rust-only binary's freshness: embedded manifests, CI, refusal at start (D16) | – |
+| hisim-renovisor-rust-engine-4fhq.42 (P2) | the RenoVisor translator in Rust, equal for every capability probe (D17) | – |
+| hisim-renovisor-rust-engine-4fhq.43 (P2) | the result payload and the lifecycle cost engine in Rust (D17) | – |
+| hisim-renovisor-rust-engine-4fhq.44 (P2) | a RenoVisor calculation from its request to its `result.json` in Rust alone, under 5 s (D17), blocked by .38, .42, .43 | – |
 | hisim-renovisor-rust-engine-4fhq.39 (P2) | the harness quality bar of the conversion protocol for the building, both storages and the energy manager | – |

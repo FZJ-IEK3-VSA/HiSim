@@ -222,6 +222,12 @@ A log, newest last. Class B is blocking, N non-blocking.
 | 2026-11-28 | gates | A gate's checkout is read-only, so a test that runs a real energy system needs the cache variables `tests/conftest.py` clears per test; the Rust loop's first gate failed on that, not on the loop | – (tooling) | – | fixed |
 | 2026-11-28 | goldens in the gate | Every gate built so far still runs the goldens itself, against P5 | N, protocol | hisim-renovisor-rust-engine-4fhq.18 | open |
 
+| 2026-11-28 | agent image | The image's entrypoint still set `HISIM_CACHE_DIR`, which `main` had retired, so every HiSim run in it failed on the current tree (goldens, gates, trace recording); found by the electricity-meter task's preparation | – (tooling) | – | fixed, image rebuilt |
+| 2026-11-28 | electricity meter, both heat-pump controllers, battery | The first harnesses measured against §4.4's bar before conversion: branch coverage of the step code 100 % (meter, hot-water controller), 93.5 % (space-heating controller), 95.2 % (battery, bslib's code included); every uncovered branch is unreachable in a run | – (measures) | – | – |
+| 2026-11-28 | electricity meter | Like the energy manager, it derives its readings and their signs from the wiring at its first step; the hand-over carries them by input name | N, structure | hisim-component-physics-4g9.81 (same pattern) | open |
+| 2026-11-28 | battery | bslib caps a discharge at 90 % of the content on the AC side, but the conversion loss takes the cells below empty (SG1 10 kWh at 900 s: state of charge -0.00225) | N (the twin reproduces it), modelling | hisim-component-physics-4g9.82 | open |
+| 2026-11-28 | battery | bslib's hysteresis flag `_threshold` lives outside save/restore; bslib 0.7's systems never set it, and the docstrings say they do | N (latent; blocking for a system that sets it) | hisim-component-physics-4g9.83 | open |
+
 Measurements of the protocol itself (inspection precision, harness scores, misses per twin) go here as they come.
 
 ## 8. Open questions

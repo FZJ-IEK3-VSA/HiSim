@@ -1,6 +1,6 @@
 # Spec: A RenoVisor calculation runs in Rust alone, in under 5 s and 2 s as the target, with Python as the reference every Rust component is checked against
 
-Status: building, on the branch `renovisor-rust-engine-spec`; the code reaches `main` in the pull requests that follow this spec. The agent tooling, the Python half of the twins, the Rust loop (§4.7) and the twins of the heat pump and the building are built; the twins of the two storages and the energy manager are being converted. D13–D15 (2026-11-28) widen the goal from twins of the step to whole components and a run without Python (§4.8). Owner decisions D1–D15 taken. Owner: Noah Pflugradt.
+Status: building, on the branch `renovisor-rust-engine-spec`; the code reaches `main` in the pull requests that follow this spec. The agent tooling, the Python half of the twins, the Rust loop (§4.7) and the twins of the heat pump and the building are built; the twins of the two storages and the energy manager are being converted. D13–D15 (2026-11-28) widen the goal from twins of the step to whole components and a run without Python (§4.8). Owner decisions D1–D16 taken. Owner: Noah Pflugradt.
 Epic: hisim-renovisor-rust-engine-4fhq. Builds on: `roadmap/rust_ideas/rust_simulator_spec.md` (options O2–O7,
 O10 and the discarded ideas D1–D6 there), `roadmap/rust_ideas/hisim_rust_recommended_cleanup_steps.md`,
 `roadmap/rust_ideas/feasibility_rust_hisim.md`. How each component gets from Python to its twin, and what each conversion finds, is
@@ -140,6 +140,14 @@ are tested against.
 RenoVisor reads; weather, load profiles and other prepared data are read from the cache a Python run wrote. It
 matches its golden (D7's tolerance). Consequence: the 15 components of that system get whole Rust components first,
 and the layers around them only as far as that system needs.
+
+**D16 — A Rust-only run refuses a stale twin; D8's check is built once the household's 15 components have twins**
+(owner, 2026-11-28). A run without Python (D14) has nothing to fall back to, so freshness becomes a build-time
+guarantee: the binary carries its twins' manifests, CI fails on a twin that is stale against the Python of the same
+commit, and a binary that finds the Python sources at start and sees them changed refuses to run, naming the twin
+and the file. In a Python-hosted run D8 stands, and a stale twin's fallback to Python comes with a prominent warning,
+not only a log line. Consequence: the manifests and the start-up check (bead 4fhq.9) follow the conversions of
+§4.8 step 1 and cover every twin at once; the binary's check is bead 4fhq.41.
 
 ## 3. Terms
 
@@ -613,4 +621,6 @@ Epic hisim-renovisor-rust-engine-4fhq.
 | hisim-renovisor-rust-engine-4fhq.36 (P2) | the YAML and sizing in Rust, equal to the realized configurations (§4.8 step 5) | – |
 | hisim-renovisor-rust-engine-4fhq.37 (P2) | results, KPIs and costs in Rust, equal to the golden (§4.8 step 6), blocked by .35, .36 | – |
 | hisim-renovisor-rust-engine-4fhq.38 (P2) | the run without Python: under 5 s, 2 s the target (D13, D15), blocked by .26 and .33–.37 | – |
+| hisim-renovisor-rust-engine-4fhq.40 (P2) | the shared crate binds ports by run-time names and reads lists and optional values | – |
+| hisim-renovisor-rust-engine-4fhq.41 (P2) | the Rust-only binary's freshness: embedded manifests, CI, refusal at start (D16) | – |
 | hisim-renovisor-rust-engine-4fhq.39 (P2) | the harness quality bar of the conversion protocol for the building, both storages and the energy manager | – |

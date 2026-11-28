@@ -1,11 +1,15 @@
 # Spec: the stratified hot-water cylinder is a second component, interchangeable with the mixed one: N explicit layers with real flows, sub-stepped inside the simulation step by the combined rule
 
-Status: decided (owner decisions D1 to D11 of 2026-11-25, the two questions of §8 of 2026-11-26, and the decisions of
-2026-11-28 after the sub-stepping prototype: D1, D2, D6 and D8 revised, D12 to D15 added), nothing built. Owner: Noah
-Pflugradt. Epic: hisim-hydronics-fxix (bead hisim-hydronics-fxix.1; the rename is hisim-dhw-return-outputs-rename-653d;
-the sourcing of the defaults is hisim-stratified-cylinder-defaults-1eff; port heights at fractional positions within a
-layer are hisim-stratified-fractional-heights-9b4e; the charge-end signal is hisim-stratified-charge-end-signal-5e39,
-on PR #1299's branch; the coarse model hisim-stratified-storage-coarse-0392 is closed, superseded by D1). Builds on:
+Status: decided (owner decisions D1 to D11 of 2026-11-25, the two questions of §8 of 2026-11-26, the decisions of
+2026-11-28 after the sub-stepping prototype: D1, D2, D6 and D8 revised, D12 to D15 added, and the second round of
+2026-11-28: D9 dropped, D12's pricing revised, a port height on a layer boundary goes to the layer below, and the
+spec decides nothing about measurements not yet made), nothing built. Owner: Noah Pflugradt. Epic:
+hisim-hydronics-fxix (bead hisim-hydronics-fxix.1; the rename bead hisim-dhw-return-outputs-rename-653d is closed,
+dropped by D9; the sourcing of the defaults is hisim-stratified-cylinder-defaults-1eff; port heights at fractional
+positions within a layer are hisim-stratified-fractional-heights-9b4e; the charge-end signal is
+hisim-stratified-charge-end-signal-5e39, on PR #1299's branch; the coarse model hisim-stratified-storage-coarse-0392 is
+closed, superseded by D1; the question to the cost-data owner whether the solar-thermal price includes the cylinder is
+hisim-solar-price-includes-cylinder-7a3c under hisim-cost-data-l07). Builds on:
 `roadmap/hydronic_coupling_spec.md` (§4.5, §5.3, §9.5, D4, D5), `roadmap/hydronic_part_load_spec.md` (decisions 3, 7,
 9, 16, 23), `roadmap/two_mode_buffer_spec.md`, `roadmap/fluid_loops_spec.md` (#1122), the start-of-step node of #1009,
 the seams spec (`roadmap/hisim_seams_spec.html`, `system_docs/module_graph.yaml`), and renovisorissues #94.
@@ -147,23 +151,24 @@ extrapolated limit. Cost over N = 5: the loop takes +11 / +10 % at N = 10 and +4
 at N = 40 (§7.5). The owner chose N = 10 as the balance of the two: the collector about 3 to 4 % below N = 40 at
 a quarter to a third of N = 20's extra cost. Part of the N dependence is geometry, not resolution: the coil and pocket
 heights snap to layer boundaries, which move with N; bead hisim-stratified-fractional-heights-9b4e (P3) places them
-at fractional positions within a layer, after which fewer layers may do. Measured but not decided (hp4, N = 5, one
+at fractional positions within a layer and remeasures the convergence. Measured but not decided (hp4, N = 5, one
 change each, §7.2): the backup coil heating the upper 40 % instead of 50 % gives +4.6 % collector heat, a 300 l
 cylinder +3.1 %. Consequence: the preset's docstring and the field comments say the heights and the conductivity are
 estimates; bead hisim-stratified-cylinder-defaults-1eff sources them (manufacturer data sheets, VDI 6002, EN 12977 or
 similar).
 
-**D9 — The return outputs are renamed in their own PR with a heads-up** (owner, 2026-11-25; the old Q6).
+**D9 — The return outputs keep their names** (owner, 2026-11-25: renamed in their own PR with a heads-up, the old
+Q6; revised 2026-11-28: the rename is dropped). The decision of 2026-11-25 renamed
 `StepMeanWaterTemperatureToHeatGeneratorInCelsius` and `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius`
-become `WaterTemperatureToHeatGeneratorInCelsius` and `WaterTemperatureToSecondaryHeatGeneratorInCelsius` on both
-cylinder classes, with the recorded twins re-recorded, the goldens re-blessed and the heads-up of
-`system_docs/results_and_interfaces.md` §5 on renovisorissues. Since D1's revision the value is again a mean on both
-classes: the mixed class's exact mean of its one node over the step, the stratified class's mean over the sub-steps
-of the outlet layer's start-of-sub-step temperature, which is the outlet layer's start-of-step temperature when one
-sub-step serves the step (§4.5). The rename stays decided, for the buffer's spelling and because the new name states
-no time basis, which differs between the classes; each class's output description says what its value is. Until
-that PR the stratified class carries the old names, whose descriptions say the value is the mean over the sub-steps.
-Bead hisim-dhw-return-outputs-rename-653d, PR 6 of §9.
+to `WaterTemperatureToHeatGeneratorInCelsius` and `WaterTemperatureToSecondaryHeatGeneratorInCelsius` on both cylinder
+classes, because the stratified class of that day published a start-of-step value, not a mean. Since D1's revision
+the value is a mean over the step on both classes: the mixed class's exact mean of its one node, the stratified
+class's mean over the sub-steps of the outlet layer's start-of-sub-step temperature, which is the outlet layer's
+start-of-step temperature when one sub-step serves the step (§4.5). So the names are true for both, and the owner
+dropped the rename on 2026-11-28: no rename PR, no re-recording of the twins for it, no heads-up for it. Each
+class's output description says what its mean is: the mixed class the exact mean of its one node over the step, the
+stratified class the mean over the sub-steps of the outlet layer. Bead hisim-dhw-return-outputs-rename-653d is
+closed with this decision.
 
 **D10 — hisim-bq3h (solar priority) is P2, scheduled after the stratified cylinder** (owner, 2026-11-25; the old
 Q8; confirmed 2026-11-28, D14). Its effect is measured on the stratified cylinder with the sensors in their pockets.
@@ -173,15 +178,22 @@ Recorded on the bead.
 field and a pair of outputs; the existing sensor outputs carry the upper pocket, so the backups' default connections
 stay (§4.6). A third pocket is added when a third reader exists.
 
-**D12 — Only houses with solar thermal get the stratified bivalent cylinder** (owner, 2026-11-28). A solar-thermal
-retrofit normally includes a new bivalent cylinder, so its effect belongs to the measure; every other house keeps
-the mixed cylinder. Consequence: the three recorded solar twins (`household_gas_solar_thermal`,
+**D12 — Only houses with solar thermal get the stratified bivalent cylinder, and the solar-thermal measure buys it**
+(owner, 2026-11-28; the pricing revised the same day, second round). A solar-thermal retrofit normally includes a new
+bivalent cylinder, so its effect and its cost belong to the measure; every other house keeps the mixed cylinder.
+Consequence: the three recorded solar twins (`household_gas_solar_thermal`,
 `household_gas_solar_thermal_building_sizer`, `household_heatpump_solar_thermal_building_sizer`) state the
 stratified class, re-recorded with re-blessed goldens and a heads-up (§5); RenoVisor's two solar base files
 (`BaseFiles.WITH_SOLAR_THERMAL`, `hisim/renovisor/translate.py:531`) are those twins, so a house with a collector is
 simulated with the bivalent cylinder and a house without one with the mixed cylinder; the mapping report's entry
-for the solar-thermal measure says that the measure includes the bivalent cylinder; RenoVisor's equipment register
-(`renovisor/economics.py:393`) gets the row for `StratifiedDHWStorage` with the facts of the mixed one. A stratified
+for the solar-thermal measure says that the measure includes the bivalent cylinder. In RenoVisor's economics the
+bivalent cylinder is installed by the solar-thermal measure: it is bought in the year the measure is carried out, its
+cost is part of that measure's investment, priced as `DOMESTIC_HOT_WATER_STORAGE` at its volume, and the house's old
+cylinder is a replaced asset under the usual rules (§4.8). The first version of this decision gave
+`StratifiedDHWStorage` the mixed cylinder's row of the equipment register (asset `hot_water_system`, dated by
+heating), which would have made the bivalent cylinder a part of the house the reference already owns. Whether the
+solar-thermal price per m² already includes a cylinder is an open question for the cost-data owner (§4.8, bead
+hisim-solar-price-includes-cylinder-7a3c). A stratified
 cylinder without a collector is not a baseline: the #94 case gas0 with the stratified class halves the standby loss
 (125 against 253 kWh/a) because the backup heats only the upper half, which is a different appliance, not a better
 model of the same one (§7.2). The twins and assemblies without a collector keep the mixed class.
@@ -246,7 +258,8 @@ guide's rule that a new store publishes the temperatures both ends book their fl
   exchanger, as the mixed node assumes today; the coil's loop and the tank water do not mix in reality, only their
   heats).
 - **Port height** `h`: where a coil's inlet or outlet, or a sensor pocket, sits, as a fraction of the tank's height
-  from the bottom (0 = bottom, 1 = top), dimensionless. Its layer is `k = min(floor(h N) + 1, N)`.
+  from the bottom (0 = bottom, 1 = top), dimensionless. Its layer is `k = max(1, ceil(h N))`, capped at N: a height
+  on a layer boundary goes to the layer below it (§4.2).
 - **Tap draw**: the household's warm-water demand, served through the thermostatic mixing valve of stage C
   (`SimpleDHWStorage.mixing_valve_draw`, moved to `hydronics` by §4.8): `m_hot` of tank water leaves the top layer
   and the same mass of mains water at `T_cold` (10 °C) enters the bottom layer.
@@ -310,7 +323,7 @@ components:
 
 **What the stratified class adds.** Only outputs that no default connection of any component names: the N layer
 temperatures `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius` (for plots and tests) and the step's sub-step count
-`NumberOfSubsteps` (dimensionless, for the acceptance measurements of §6 and the plots). T12 allows an output on the
+`NumberOfSubsteps` (dimensionless, for the measurements of §6 and the plots). T12 allows an output on the
 stratified class that the mixed one lacks only if it matches one of these two patterns; everything else must agree.
 
 **The lower pocket is on both classes.** The two lower-pocket outputs (`LowerSensorWaterTemperatureAtStartOfStepInCelsius`,
@@ -341,6 +354,16 @@ heat_transfer_coefficient_in_watt_per_m2_per_kelvin` (0.36 W/(m² K)); `Σ UA_k`
 conduction between layers k and k+1 is `UA_cond = λ_eff A / (H/N)`, with `λ_eff` the effective vertical
 conductivity of water plus wall (§4.7, a configured field with a default of 1.0 W/(m K)): 1.06 W/K for N = 5,
 2.13 W/K for N = 10 and 4.26 W/K for N = 20 on the preset tank.
+
+**A port height is one layer.** A coil's inlet or outlet or a sensor pocket at the height `h` (§3) acts on the
+layer `k = min(N, max(1, ceil(h N)))` (`StratifiedLayers.layer_of_height`, §4.8): a height inside a layer is that
+layer, and a height on the boundary between two layers goes to the layer below it (owner, 2026-11-28), so the bottom
+of the tank (0.0) is layer 1 and the top (1.0) is layer N. With the defaults of §4.7 at N = 10: the backup coil
+enters layer 10 and leaves layer 5, the solar coil enters layer 3 and leaves layer 1, the upper pocket (0.7) is layer
+7 and the lower pocket (0.1) is layer 1, the layer the solar coil leaves from, as at N = 5 (layers 5, 3, 2, 1, 4, 1)
+and at N = 20 (layers 20, 10, 5, 1, 14, 2). The product `h N` is taken as a whole number when it lies within 1e-9 of
+one, so that a floating-point product just above a boundary (`0.07 · 100 = 7.000000000000001`) does not move the port
+up a layer (T14).
 
 ### 4.3 The sub-step: upwind transport, conduction, loss, then buoyancy; the step: n sub-steps
 
@@ -535,15 +558,15 @@ carries:
 
 | Output | The mixed cylinder | The stratified cylinder | Reader |
 |---|---|---|---|
-| `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (renamed by D9) | the step mean `T̄` of the one node | `T̄_ret,1`, the mean over the sub-steps of the primary coil's outlet layer | the backup, as its return; it books `m c (T_sup − T_ret)` |
-| `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius` (renamed by D9) | `T̄` | `T̄_ret,2`, the same for the secondary coil's outlet layer | the collector, as its return |
+| `StepMeanWaterTemperatureToHeatGeneratorInCelsius` (the name stays, D9; each class's description says which mean) | the step mean `T̄` of the one node | `T̄_ret,1`, the mean over the sub-steps of the primary coil's outlet layer | the backup, as its return; it books `m c (T_sup − T_ret)` |
+| `StepMeanWaterTemperatureToSecondaryHeatGeneratorInCelsius` (the same) | `T̄` | `T̄_ret,2`, the same for the secondary coil's outlet layer | the collector, as its return |
 | `WaterMassFlowRateToHeatGenerator`, `…ToSecondaryHeatGenerator` | the flow in, unchanged | the same | the loop's mass check (#1122) |
 | `WaterTemperatureFromHeatGenerator`, `…FromSecondaryHeatGenerator` (outputs) | the supply, echoed | the same | plots |
 | `WaterTemperatureAtStartOfStepInCelsius` | `T0` | the upper sensor pocket's `T0` (§4.6) | the backups' controllers (on/off, hysteresis) |
 | `WaterTemperatureAtEndOfStepInCelsius` | `T_end` | the upper pocket's `T_end` | the backups' part-load controls |
 | `LowerSensorWaterTemperatureAtStartOfStepInCelsius`, `…AtEndOfStepInCelsius` (new, both classes) | `T0`, `T_end` | the lower pocket's `T0` and `T_end` | the solar controller: the differential switch-on against the collector sensor, the full-tank stop, the pump's part-load target; the collector's inlet sensor |
 | `WaterTemperatureOfLayer<k>AtStartOfStepInCelsius`, k = 1 … N (stratified only) | – | N outputs, `T0_k` | plots, tests; no controller |
-| `NumberOfSubsteps` (stratified only) | – | `n` of the pass | the acceptance measurements (§6), plots; no controller |
+| `NumberOfSubsteps` (stratified only) | – | `n` of the pass | the measurements of §6, plots; no controller |
 | `ThermalPowerFromHeatGenerator`, `…FromSecondaryHeatGenerator`, W | `m c (T_sup − T̄)` | `m c (T_sup − T̄_ret,c)`, the sub-steps' heats over `dt` | the energy balance (the tank's side of each loop), KPIs |
 | `ThermalPowerConsumptionDHW`, W, `PRODUCTION` to `HOT_WATER_USE` | `m_hot c (T̄ − T_cold)` | the sum over the sub-steps of `m_hot,i c (T_N,i − T_cold) τ`, over `dt` | the balance, the cost engine's useful heat, KPIs |
 | `ThermalEnergyUnmetDHWInWattHour` | on `T̄` | the sum over the sub-steps | the KPI "Unmet DHW heat demand" |
@@ -562,8 +585,8 @@ at their set temperatures (coupling spec §5) stay as they are. What does not mo
 controllers decide on: the pockets' and the layers' start-of-step values are the committed `T0_k`.
 
 The collector reads the lower pocket's `T0` as `TemperatureCollectorInletAtStartOfStepInCelsius` and the secondary
-coil's sub-step mean as its return; with the default heights the coil's outlet is layer 1 and the lower pocket
-layer 2 at N = 10 (§4.6).
+coil's sub-step mean as its return; with the default heights the coil's outlet and the lower pocket are both layer 1
+at N = 10 (§4.2, §4.6).
 
 **The energy balance and the fluid-loop checks.** The post-run balance (`hisim/postprocessing/energy_balance/check.py`)
 books each coil's loop once from the loop's flow, supply and return, by the supplier's sign (fluid loops spec §3.4):
@@ -588,13 +611,17 @@ the collector's inlet sensor (`:925`) move to the lower pocket's outputs, on bot
 lower pocket repeats the single temperature, so the solar twins' runs with the mixed class do not change. A file may
 wire any controller to either pocket.
 
-With the defaults of §4.7 and N = 10 (`k = min(floor(h N) + 1, N)`): the backup coil enters layer 10 and leaves
-layer 6, the solar coil enters layer 3 and leaves layer 1, the upper pocket (0.7) is layer 8 and the lower pocket
-(0.1) is layer 2, the layer above the solar coil's outlet. The backup charges when layer 8 falls below its aim less
-its hysteresis; the collector's pump switches on when the collector's sensor reads 7 K above layer 2 and stops when
-layer 2 starts a step above 80 °C. A height on a layer boundary belongs to the layer above it; bead
-hisim-stratified-fractional-heights-9b4e places ports at fractional positions, so that the pocket at 0.1 reads the
-temperature at 0.1 of the height and not of a whole layer. The temperature check
+With the defaults of §4.7 and N = 10 (`k = max(1, ceil(h N))`, §4.2): the backup coil enters layer 10 and leaves
+layer 5, the solar coil enters layer 3 and leaves layer 1, the upper pocket (0.7) is layer 7 and the lower pocket
+(0.1) is layer 1, the layer the solar coil leaves from. The backup charges when layer 7 falls below its aim less
+its hysteresis; the collector's pump switches on when the collector's sensor reads 7 K above layer 1 and stops when
+layer 1 starts a step above 80 °C. A height on a layer boundary belongs to the layer below it (owner, 2026-11-28),
+so the lower pocket reads the solar coil's outlet layer at every N, as it does at N = 5. The prototype of §7 used the
+earlier mapping, a boundary height to the layer above (`min(floor(h N) + 1, N)`): at N = 10 its backup coil left
+layer 6, its upper pocket read layer 8 and its lower pocket layer 2, and at N = 20 layers 11, 15 and 3 with the solar
+coil entering layer 6 instead of 5; at N = 5 the two mappings agree for every default height. The measurements of §6
+run with the mapping of §4.2. Bead hisim-stratified-fractional-heights-9b4e places ports at fractional positions, so
+that the pocket at 0.1 reads the temperature at 0.1 of the height and not of a whole layer. The temperature check
 (`check_converged_mean_water_temperature`, 0 to 90 °C) applies to the hottest and the coldest layer.
 
 The tank does not know which controller reads which pocket, so D3 holds: a priority rule (bead hisim-bq3h) is a
@@ -665,8 +692,8 @@ stratified one for its port list, and it would not stop an override from driftin
 `step(t0_per_layer, coil_streams, demand, t_amb, largest_earlier_number_of_substeps) -> LayerStep` (the end
 temperatures, the heat and the sub-step-mean return per coil, the tap's draw, heat and unmet share, the loss, `ΔU`,
 the number of sub-steps `n` used and the largest Courant number), and the pure helpers `number_of_substeps` (the
-combined rule), `through_flows`, `explicit_layer_balance`, `buoyancy_merge`, `layer_of_height`, each with its own
-tests (T1 to T5, T7). The stateless `step` takes the running maximum as an argument and returns the `n` it used; it
+combined rule), `through_flows`, `explicit_layer_balance`, `buoyancy_merge`, `layer_of_height` (§4.2), each with its
+own tests (T1 to T5, T7, T14). The stateless `step` takes the running maximum as an argument and returns the `n` it used; it
 holds no state of its own.
 
 **The state and the running maximum.** The state is `StratifiedTankState` with a tuple of N start temperatures;
@@ -701,10 +728,45 @@ works from the dotted path, as for every class; `hisim energy-system schema` fin
 (`schema_classes.py`); the energy-system loader imports the class path a file states (`classes.py`); the recorder
 writes the class of the instance a Python setup built, so a setup that builds `StratifiedDHWStorage` records it.
 The economics adapter's cost facts (`adapter.py:163`, by class name) and useful-heat source (`:607`) get the entry
-`"StratifiedDHWStorage"` with the same facts, until hisim-economics-ports-25a0 removes those tables. RenoVisor's
-equipment register (`renovisor/economics.py:393`) gets the row for `StratifiedDHWStorage` (`hot_water_system`,
-dated by heating, as the mixed one), and the mapping report's entry for the solar-thermal measure says the measure
-includes the bivalent cylinder (D12).
+`"StratifiedDHWStorage"` with the same facts (asset class `DOMESTIC_HOT_WATER_STORAGE`, sized by the volume), until
+hisim-economics-ports-25a0 removes those tables.
+
+**RenoVisor's economics: the solar-thermal measure buys the bivalent cylinder (D12).** RenoVisor books what a
+measure installs in two places of `hisim/renovisor/economics.py`. The existing-asset register
+(`TwinEquipment.ALL`, `:392`) holds one row per piece of equipment the house has before the package, read from the
+baseline twin; the cylinder's row (`:393`) names `hot_water_system` as the measure that replaces it. When a row's
+measure is in the package, `_equipment_assets` (`:1611`) marks the register entry replaced by the asset class of
+the plan twin's successor (`:1652` to `:1657`), and the engine then charges the successor in the year the package is
+carried out and books the old asset's removal cost and written-off book value through the subject that replaces it
+(`roadmap/cost_spec.md` §4.1, `calculators/context_resolution.py`); `_record_device_subjects` (`:2205`) stamps the
+installed component with the measure's id, which is what the result document's investment build-up lists it
+under. The bivalent cylinder goes through the same two places: the cylinder's row names `solar_thermal_system` as a
+second replacing measure beside `hot_water_system`, the successor lookup finds the plan twin's cylinder under either
+class name (`SimpleDHWStorage` or `StratifiedDHWStorage`), and the stamp gives the installed `StratifiedDHWStorage`
+the id `solar_thermal_system`. So a solar-thermal measure's investment is the collector (`SOLAR_THERMAL_SYSTEM` per
+m², `DeviceAssets`, `:304`) plus the cylinder (`DOMESTIC_HOT_WATER_STORAGE` per litre at the twin's volume, the
+request's `house.hot_water.volume_heating_water_storage_in_liter` or the sized default), both in the year the
+measure is carried out (the measure's own `installation_year` option is on `not_implemented_yet.yaml`, hisim-9mma),
+the old cylinder is written off and removed under the replaced-asset rules, and the result document lists the
+cylinder under the solar measure. The measure's main subject for a reader's quote stays the collector
+(`MainSubjects.BY_ASSET_CLASS`, `:710`): a quote covers the whole job, and the cylinder is one of the measure's
+other subjects, bought at zero under a quote. A package that carries both `hot_water_system` and
+`solar_thermal_system` buys one cylinder, the bivalent one, under the solar measure. The old row for the mixed
+cylinder is unchanged for every house without a collector. The mapping report's entry for the solar-thermal measure
+says the measure includes the bivalent cylinder.
+
+**What the cost data say.** `hisim/cost_database/devices_IE.json` and `devices_DE.json` price `SOLAR_THERMAL_SYSTEM`
+per m² (IE 900 €/m² in 2026 and 950 in 2035, DE 797 in 2024, 800 in 2026 and 850 in 2035, best estimates) and
+`DOMESTIC_HOT_WATER_STORAGE` per litre (IE 16 and 17 €/l, DE 14.51, 14 and 15 €/l). The solar rows' sources
+(`sources.json`: `src_ai_estimates`, "placeholder techno-economic estimates for testing", for IE and DE 2026 and
+2035; `src_capex_30` co2online "Solarthermie Preise", `src_capex_20` gebaeudeforum and `src_capex_24` Renewable
+Energy 2023 for DE 2024; `src_capex_46` and `src_capex_47` for AT) do not say whether the price per m² includes a
+cylinder, and neither do the rows' notes; the cylinder rows are the buffer's row copied (their notes; a price law of
+their own is hisim-4wo2). So the cylinder is priced with `DOMESTIC_HOT_WATER_STORAGE` at its volume, and whether that
+counts a cylinder the solar price already holds is an open question for the cost-data owner: bead
+hisim-solar-price-includes-cylinder-7a3c (P2, under hisim-cost-data-l07) asks it on renovisorissues. The size of the
+question: a 250 l cylinder is 4,000 € at IE's 16 €/l against 3,600 € for a 4 m² collector at 900 €/m², so the
+measure's investment about doubles until the answer is known.
 
 **Cost in the hot path.** O(N · n) arithmetic per pass, no allocation in the sub-step loop. Measured at N = 20 over
 full years (§7.5): with the combined rule the loop takes 1.5 to 1.7 times the mixed cylinder's at 900 s and 2.4 to
@@ -743,17 +805,19 @@ another signal would need: the pockets' end temperatures, the layers' start temp
   cylinder, each repeating an existing column; no KPI moves (PR 3 says so in its description). RenoVisor's houses
   with solar thermal get the bivalent cylinder through the switched base files: on the six #94 cases the collector's
   yield rises from 99 to 171 to 182 to 353 kWh/(m² a) and the solar share from 19 to 38 % to 45 to 67 % (§7.2), with
-  the weather caveat of D15.
+  the weather caveat of D15. A RenoVisor solar-thermal measure's investment grows by the bivalent cylinder (D12,
+  §4.8): `DOMESTIC_HOT_WATER_STORAGE` at the twin's volume, 4,000 € for 250 l at IE's 16 €/l beside 3,600 € for a
+  4 m² collector, so the measure's cost, its payback and the plan's totals move, with the double-counting question of
+  bead hisim-solar-price-includes-cylinder-7a3c open.
 - **Public interfaces.** A new component class with its configuration and preset; the two lower-pocket outputs on
   both classes; the layer and sub-step outputs on the stratified one; the `partner:` lists of the assemblies; the
-  mapping report's sentence on the solar measure; the buffer's field `heat_exchanger_is_present` goes (D7), which
-  touches `hisim/energy_system_v3.schema.json` and two tests, no recorded file. The rename of the return outputs (D9)
-  is a column rename in every DHW twin's results and gets its own PR with the heads-up of
-  `results_and_interfaces.md` §5.
+  mapping report's sentence on the solar measure; the cylinder under the solar measure in the result document's
+  investment build-up; the buffer's field `heat_exchanger_is_present` goes (D7), which touches
+  `hisim/energy_system_v3.schema.json` and two tests, no recorded file. The return outputs keep their names (D9); only
+  their descriptions change.
 - **Goldens and twins.** None re-blessed by PRs 1 to 4. PR 5 re-records the three solar twins with the stratified
   class, re-blesses their goldens at 60 s and 900 s, switches RenoVisor's solar houses through them, and posts the
-  heads-up on renovisorissues (the #94 thread) with the measured yields. PR 6 (the rename) re-records the twins and
-  re-blesses the goldens for the renamed columns, no value changes.
+  heads-up on renovisorissues (the #94 thread) with the measured yields.
 
 ## 6. Verification
 
@@ -793,6 +857,10 @@ Unit tests of the pure functions, `base`, in `tests/test_stratified_dhw_layers.p
 - **T8 refusals at build.** N below 2 or not an integer, a height outside [0, 1], a coil whose outlet lies above its
   inlet, the conduction condition at the step length (N = 40 at 3600 s refused, N = 20 accepted); and no refusal for
   any flow or for a step length of 900 or 3600 s (D6).
+- **T14 `layer_of_height`.** The mapping of §4.2 with its boundary cases: at N = 10 the heights 0.0 and 0.1 are
+  layer 1, 0.5 is layer 5, 0.7 is layer 7, 1.0 is layer 10, and 0.11 and 0.19 are layer 2; at N = 5 the six default
+  heights give layers 5, 3, 2, 1, 4, 1 and at N = 20 layers 20, 10, 5, 1, 14, 2; a product just above a whole number
+  (0.07 at N = 100, `7.000000000000001`) is layer 7, not 8; a height outside [0, 1] is refused.
 
 Component tests, `base`, in `tests/test_stratified_dhw_storage.py` and `tests/test_energy_balance_storages.py`:
 
@@ -824,26 +892,28 @@ Twin tests, `system_setups`, in `tests/test_stratified_cylinder_solar_twins.py`:
   recorded energy-system files once with the stratified class as recorded and once with the cylinder's class path
   replaced by the mixed class and nothing else changed. All runs finish; with the stratified class the collector's
   heat rises, the backup's hot-water heat falls, the tap's delivered heat agrees within 1 %, the unmet hot water
-  does not rise by more than a stated bound, every step closes, the loop checks pass, and the passes per step are
-  reported for both classes.
+  does not rise (the prototype: 2.4 against 12.5 kWh/a on the heat-pump twin, 0 on both for gas, §7.1), every step
+  closes, the loop checks pass, and the passes per step are reported for both classes.
 
-**Acceptance measurements of the implementing PR (PR 5).** Measured by hand over full years, the way the prototype
-measured them (§7), reported in the PR and written into §7; they are the step-length checks of the modelling guide
-(§3) for this component, too slow for CI:
+**Measurements of the implementing PR (PR 5).** Measured by hand over full years, the way the prototype measured
+them (§7), with N = 10 and the port mapping of §4.2, reported in the PR and written into §7; they are the
+step-length checks of the modelling guide (§3) for this component, too slow for CI. The targets named below are
+measurement targets, the figures the PR reports its numbers against (owner, 2026-11-28: first measure, then decide);
+what follows from a number is decided when the number exists, and this spec says nothing about it:
 
-- **A1 convergence.** The combined rule at N = 10 converges on both solar twins at 60, 900 and 3600 s (no pass-limit
-  abort), and the forced steps are those of the controllers (within a few percent of the mixed cylinder's).
-- **A2 tank-side totals.** Collector heat, backup heat, tap heat and standby loss at 900 s within about 1 % and at
-  3600 s within about 1.4 % of the 60 s run, both twins; the balance residual at most 1e-10 Wh per step. The
-  prototype's measured miss at N = 20 is recorded here: on the heat-pump twin the backup heat is +1.13 % at 900 s and
-  +2.62 % at 3600 s (collector −0.56 / −1.29 %), with fixed 60 s sub-steps giving the same (+1.25 / +2.63 %) and
-  N = 5 holding +0.3 / −0.06 % at 900 s and +0.26 % at 3600 s, so the cause is the fine layers resolving the
-  collector's return from the bottom 5 % while the collector's supply and flow are held over the whole step, not the
-  rule; the gas twin holds at both lengths. The PR remeasures at N = 10; if the heat-pump twin misses 1 % there, the
-  PR states the miss and its cause as here, and the owner decides whether the bound or N moves.
+- **A1 convergence.** The combined rule at N = 10 on both solar twins at 60, 900 and 3600 s: whether every run
+  converges (no pass-limit abort), and the forced steps against the mixed cylinder's (the prototype at N = 5:
+  within 5 %, §4.4).
+- **A2 tank-side totals.** Collector heat, backup heat, tap heat and standby loss at 900 s and at 3600 s against the
+  60 s run, both twins, with the targets of about 1 % at 900 s and about 1.4 % at 3600 s; the balance residual per
+  step, target at most 1e-10 Wh. The prototype's measured miss at N = 20 is recorded here: on the heat-pump twin the
+  backup heat is +1.13 % at 900 s and +2.62 % at 3600 s (collector −0.56 / −1.29 %), with fixed 60 s sub-steps
+  giving the same (+1.25 / +2.63 %) and N = 5 holding +0.3 / −0.06 % at 900 s and +0.26 % at 3600 s, so the cause
+  is the fine layers resolving the collector's return from the bottom 5 % while the collector's supply and flow are
+  held over the whole step, not the rule; the gas twin holds at both lengths (§7.3).
 - **A3 the #94 cases.** The six cases of §7.2 at 900 s with N = 10: yield in kWh/(m² a) and solar share, against the
-  N = 5 and N = 20 rows of §7.2 (N = 10 is expected between them: hp4 gave 343 kWh/(m² a) and 45.8 % with fixed
-  60 s sub-steps).
+  N = 5 and N = 20 rows of §7.2 (hp4 gave 343 kWh/(m² a) and 45.8 % at N = 10 with fixed 60 s sub-steps and the
+  prototype's port mapping).
 - **A4 the n distribution.** Per run: the mean `n`, the share of steps at `n = 1`, the largest `n`, the steps where
   the Courant term raised `n` above the floor and where the running maximum did, and the sub-steps per pass; against
   §7.6.
@@ -992,7 +1062,9 @@ combined rule's twin results at 900 and 3600 s against 60 s, N = 20 (E3), the ba
 The 50 l bottom layer of N = 5 mixes the collector's return (inlet 34.1 °C against 28.6 at N = 40 on hp4). The
 20 → 40 differences (1.0 %, 0.8 %) are a third of the 10 → 20 ones; a geometric extrapolation puts the limit about
 0.5 % above N = 40, so N = 10 is about 4 % and N = 20 about 1.5 % below it. Part of the N dependence is the port
-heights snapping to layer boundaries (D8, bead hisim-stratified-fractional-heights-9b4e).
+heights snapping to layer boundaries (D8, bead hisim-stratified-fractional-heights-9b4e). These runs used the
+prototype's port mapping, a boundary height to the layer above (§4.6), under which the backup coil's outlet, the
+upper pocket and the lower pocket lie one layer higher at N = 10 and N = 20 than under the mapping of §4.2.
 
 ### 7.5 Cost (full years, wall seconds of the simulation loop; the cylinder's `i_simulate` including the layer step; E3)
 
@@ -1040,9 +1112,10 @@ guarantee comes from, at about 0.1 point on the totals.
 The eight open questions of the draft of 2026-11-25 were decided by the owner the same day and are D5 to D11 of
 §2: Q1 (above the threshold) and Q2 (a flow exceeding a layer) were D6, one run-time refusal, revised on 2026-11-28;
 Q3 (which storages, the buffer's dead path) is D7; Q4 (N = 1 keeps the mixed node) is moot under D5, the stratified
-class requires N ≥ 2; Q5 (the defaults) is D8; Q6 (the rename) is D9; Q7 (two pockets) is D11; Q8 (hisim-bq3h to P2)
-is D10. Decided by this spec under D5: the lower pocket is on both classes (§4.1); the two classes share the valve and
-the `SimpleWaterStorage` base and nothing else (§4.8); `preset_standard` on both (§4.7).
+class requires N ≥ 2; Q5 (the defaults) is D8; Q6 (the rename) was D9, dropped in the second round of 2026-11-28; Q7
+(two pockets) is D11; Q8 (hisim-bq3h to P2) is D10. Decided by this spec under D5: the lower pocket is on both classes
+(§4.1); the two classes share the valve and the `SimpleWaterStorage` base and nothing else (§4.8); `preset_standard`
+on both (§4.7).
 
 Decided by the owner on 2026-11-26, the two questions that review left open:
 
@@ -1079,12 +1152,35 @@ Decided by the owner on 2026-11-28, after the sub-stepping prototype (the decisi
 - **fpqz.9** (decision 8) closed in PR #1299 for 900 s with the mixed cylinder; its follow-ups are fpqz.10 (the
   3600 s operating point, P3) and the charge-end signal bead. Not this spec's.
 
+Decided by the owner on 2026-11-28, second round, on the rewritten spec:
+
+- **No hypothetical decisions.** "First measure, then we decide": the spec neither pre-decides nor defers a decision
+  on a measurement that has not been made. The measurements of PR 5 (A1 to A5, §6) state what is measured and their
+  targets as measurement targets; the measured miss at N = 20 stays recorded with its cause; what follows from a
+  number is decided when the number exists, and the spec says nothing about it. The sentence that let the owner
+  choose between the bound and N after a miss at N = 10, and the "fewer layers may do" after the fractional heights,
+  are gone.
+- **D9 is dropped.** With sub-stepping both classes publish a mean over the step, so the names
+  `StepMeanWaterTemperatureTo{Heat,SecondaryHeat}GeneratorInCelsius` are true for both and stay: no rename PR, no
+  re-recording for it, no heads-up for it; each class's output description says what its mean is (§4.5). Bead
+  hisim-dhw-return-outputs-rename-653d is closed.
+- **A port height on a layer boundary goes to the layer below it**: `k = max(1, ceil(h N))`, capped at N (§4.2,
+  §4.6, §3). At N = 10 the lower pocket at 0.1 then reads layer 1, the layer the solar coil leaves from, as at N = 5;
+  the backup coil leaves layer 5 and the upper pocket is layer 7. `layer_of_height` keeps its name and its test gets
+  the boundary cases (T14). The measurements of §7 ran with the prototype's mapping (§4.6).
+- **The solar-thermal measure buys the bivalent cylinder** (D12 revised, §4.8): installed by the measure, in the year
+  the measure is carried out, its cost in that measure's investment, priced as `DOMESTIC_HOT_WATER_STORAGE` at its
+  volume; the old cylinder's removal under the replaced-asset rules. The cost sources do not say whether the solar
+  price per m² already includes a cylinder, so bead hisim-solar-price-includes-cylinder-7a3c (P2, under
+  hisim-cost-data-l07) asks the cost-data owner on renovisorissues.
+
 Decided by this spec on 2026-11-28, as the owner's decisions leave it to the text: the 60 s floor is a class constant
 and not a configuration field (§4.4); a flow-free pass runs `n = 1` and does not read the running maximum (§4.4, as
 the prototype did); the conduction condition is checked at build for the full step length (D6); `NumberOfSubsteps` is
-an output of the stratified class (§4.1); D9's rename stays with its descriptions changed (D9); the equipment
-register's row for the stratified class repeats the mixed one's facts (§4.8); the solar twins need no stratified
-assembly (§4.7).
+an output of the stratified class (§4.1); the product `h N` within 1e-9 of a whole number counts as that whole number
+(§4.2); a package with both `hot_water_system` and `solar_thermal_system` buys one cylinder, the bivalent one, under
+the solar measure, and the measure's main subject for a quote stays the collector (§4.8); the solar twins need no
+stratified assembly (§4.7).
 
 ## 9. Beads and pull requests
 
@@ -1092,10 +1188,11 @@ Epic hisim-hydronics-fxix.
 
 | Bead | Content | PR |
 |---|---|---|
-| hisim-hydronics-fxix.1 (P3) | this spec: the buffer's path deleted, the sub-stepped layer step, `StratifiedDHWStorage` with the interface test and the default connections, the controllers' pocket wiring, the solar houses' switch and the acceptance measurements; closes with PR 5 | PR 1 to 5 |
-| hisim-dhw-return-outputs-rename-653d (P3, D9) | the rename of the two return outputs on both classes, with the descriptions of §4.5, the twins re-recorded, the goldens re-blessed, the heads-up on renovisorissues | PR 6 |
+| hisim-hydronics-fxix.1 (P3) | this spec: the buffer's path deleted, the sub-stepped layer step, `StratifiedDHWStorage` with the interface test and the default connections, the controllers' pocket wiring, the solar houses' switch with the cylinder under the solar measure, and the measurements of §6; closes with PR 5 | PR 1 to 5 |
+| hisim-dhw-return-outputs-rename-653d (closed 2026-11-28, D9) | the rename of the two return outputs: dropped, the names are true for both classes; the descriptions of §4.5 are PR 3's | – |
 | hisim-stratified-cylinder-defaults-1eff (P3, D8) | sources the coil and pocket heights and `λ_eff` from manufacturer data sheets, VDI 6002, EN 12977 or similar, and re-checks N = 10 against the sourced heights; names RenoVisor's equipment register | – |
-| hisim-stratified-fractional-heights-9b4e (P3, new, D8) | coil inlets and outlets and sensor pockets at fractional positions within a layer, so that the ports stop snapping to layer boundaries that move with N; then remeasure the layer convergence of §7.4, which may allow fewer layers | – |
+| hisim-stratified-fractional-heights-9b4e (P3, new, D8) | coil inlets and outlets and sensor pockets at fractional positions within a layer, so that the ports stop snapping to layer boundaries that move with N; then remeasure the layer convergence of §7.4 | – |
+| hisim-solar-price-includes-cylinder-7a3c (P2, new, D12, `external`, under hisim-cost-data-l07) | asks the cost-data owner on renovisorissues whether the `SOLAR_THERMAL_SYSTEM` price per m² includes a bivalent cylinder, so the solar measure does not price the cylinder twice | – |
 | hisim-stratified-storage-coarse-0392 (closed 2026-11-28) | the coarse model: superseded by D1's combined rule, with the evidence of §7 | – |
 | hisim-stratified-charge-end-signal-5e39 (P2, D13; on PR #1299's branch) | the heat pump's hot-water part-load rule on a signal that does not jump when the charge front passes the upper pocket | – |
 | hisim-bq3h (P2 since D10, confirmed D14, after the stratified cylinder) | solar priority in the controllers, measured on the stratified cylinder; its gain bounded at about 3 share points on hp4 | – |
@@ -1103,7 +1200,8 @@ Epic hisim-hydronics-fxix.
 | hisim-stratified-buffer-eb26 (P2, §8 Q2; blocked by hisim-hydronics-fxix.1) | the stratified space-heating buffer as a separate class interchangeable with the mixed one, a short spec first | – |
 | hisim-report-states-defaults-41e9 (P3) | the mapping report names the cylinder's volume; unchanged by this spec | – |
 
-No question of §8 stays open, so no `owner-decision` bead is filed.
+No question of §8 waits on the owner, so no `owner-decision` bead is filed; the one open question, the solar price
+and the cylinder, waits on the cost-data owner (`external`).
 
 The pull requests, each small and stacked on the one before (AGENTS.md, "Pull requests and merging"):
 
@@ -1123,10 +1221,8 @@ The pull requests, each small and stacked on the one before (AGENTS.md, "Pull re
    mixed class the lower pocket repeats the single temperature).
 5. **The solar houses switch** (D12): the three recorded solar twins state the stratified class and are re-recorded,
    their goldens re-blessed at 60 s and 900 s; RenoVisor's solar houses follow through the base files, the mapping
-   report's entry for the solar measure says it includes the bivalent cylinder, the equipment register gets the row;
-   T10; the acceptance measurements A1 to A5 at N = 10 over full years, written into §7; the heads-up on
-   renovisorissues (the #94 thread) with the measured yields and the weather caveat of D15. Closes
-   hisim-hydronics-fxix.1.
-6. **The rename of the return outputs** (D9, hisim-dhw-return-outputs-rename-653d): both classes, every reader
-   inside HiSim, the assemblies' bounds, the twins re-recorded, the goldens re-blessed, the heads-up on
-   renovisorissues per `results_and_interfaces.md` §5.
+   report's entry for the solar measure says it includes the bivalent cylinder, the cylinder's row of the equipment
+   register names the solar measure as a replacing measure, the successor lookup and the subject stamp take the
+   stratified class, and the result document lists the cylinder under the solar measure (§4.8); T10; the
+   measurements A1 to A5 at N = 10 over full years, written into §7; the heads-up on renovisorissues (the #94
+   thread) with the measured yields and the weather caveat of D15. Closes hisim-hydronics-fxix.1.

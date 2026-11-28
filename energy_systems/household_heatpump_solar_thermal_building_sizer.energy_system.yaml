@@ -238,5 +238,6 @@ components:
     class: hisim.components.more_advanced_heat_pump.controller_dhw.MoreAdvancedHeatPumpHPLibControllerDHW
     preset: standard
     inputs:
+      - MoreAdvancedHeatPumpHPLib
       - MoreAdvancedHeatPumpHPLibControllerSH
       - DHWStorage

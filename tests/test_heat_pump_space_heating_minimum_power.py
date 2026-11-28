@@ -108,9 +108,9 @@ def test_every_circuit_asks_hplib_with_the_machine_s_one_minimum(
     heat_pump = heat_pump_with_hot_water(position)
     conditions = mild_day_conditions()
 
-    heat_pump.hot_water(conditions, running_for_an_hour())
+    heat_pump.hot_water(conditions, running_for_an_hour(), part_load_ratio=1.0)
     heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
-    heat_pump.hot_water(conditions, running_for_an_hour())
+    heat_pump.hot_water(conditions, running_for_an_hour(), part_load_ratio=1.0)
 
     recorded = heat_pump.minimal_thermal_powers_in_watt
     assert set(recorded["heating_building"]) == {1800.0}
@@ -133,7 +133,7 @@ def test_space_heating_after_hot_water_delivers_the_configured_minimum(position:
     )
 
     before_hot_water = heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
-    heat_pump.hot_water(conditions, running_for_an_hour())
+    heat_pump.hot_water(conditions, running_for_an_hour(), part_load_ratio=1.0)
     after_hot_water = heat_pump.space_heating(conditions, running_for_an_hour(), part_load_ratio=1.0)
 
     assert before_hot_water.thermal_power_space_heating_in_watt == pytest.approx(expected_thermal_power_in_watt)

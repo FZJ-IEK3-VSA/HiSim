@@ -6,6 +6,7 @@ import math
 from typing import ClassVar, Optional, Tuple
 
 from hisim.component import ComponentInput, SingleTimeStepValues
+from hisim.part_load import PartLoadRule
 from hisim.subcomponents.base import Subcomponent
 
 
@@ -232,9 +233,12 @@ class HotWaterPriorityLimit(Subcomponent):
     A charge that has had priority for the maximum time while space heating asks for heat is interrupted for the
     space-heating interval; it then resumes, and repeats this until the tank reaches its target. A charge is never
     interrupted while space heating does not ask for heat (outside the heating season, or a space-heating circuit at
-    its set temperature), and an interval ends early when space heating stops asking. Both times count whole steps,
-    rounded up: with 15 / 15 minutes at 900 s the charge and space heating take turns step by step, at 60 s 15 steps
-    each. A maximum time of 0 s switches the limit off, and hot water has absolute priority.
+    its set temperature), and an interval ends early when space heating stops asking. The charge time counts the share
+    of each step the charge actually runs, its part-load ratio (1 for a whole step, always at and below the part-load
+    threshold); the interval counts whole steps. Both are compared at the start of a step, so they round up to whole
+    steps: with 15 / 15 minutes at 900 s whole-step charges and space heating take turns step by step, at 60 s 15 steps
+    each, and a 900 s charge that runs 0.4 of its first step keeps priority for a second one. A maximum time of 0 s
+    switches the limit off, and hot water has absolute priority.
 
     Sources: heat-pump system controllers interrupt a hot-water charge after an installer-set maximum time and then
     block it for a while, so space heating gets the generator: Vaillant multiMATIC VRC 700 ("Max. cylinder charge
@@ -256,6 +260,7 @@ class HotWaterPriorityLimit(Subcomponent):
         maximum_priority_time_in_seconds: float,
         space_heating_interval_in_seconds: float,
         seconds_per_timestep: float,
+        charged_share_of_step: float,
     ) -> Tuple[bool, HotWaterPriorityTimer]:
         """Return whether the charge runs in this step, and the timer at the step's end.
 
@@ -266,12 +271,15 @@ class HotWaterPriorityLimit(Subcomponent):
         | the limit is off (maximum time 0) or no charge is requested | as requested | idle |
         | space heating asks for heat and an interval is running | no | interval less one step |
         | space heating asks for heat and the charge has had its maximum time | no | full interval less one step |
-        | otherwise (an interval ends early when space heating stops asking) | yes | charge time plus one step |
+        | otherwise (an interval ends early when space heating stops asking) | yes | charge time plus the share run |
 
         A step the charge yields marks the timer ``charge_interrupted``; a step it runs clears the mark.
 
         For example, at 900 s with 15 / 15 minutes and space heating asking throughout, a charge requested on five
-        steps runs on the first, third and fifth and yields the second and fourth to space heating.
+        whole steps runs on the first, third and fifth and yields the second and fourth to space heating; a charge
+        that runs 0.4 of its first step has had 360 s of priority and runs the second step as well. Why the share: a
+        charge that stops inside a step at its target has spent only that share of the step on hot water, as the
+        same charge at 60 s would have.
 
         Args:
             timer: The timer at the start of the step.
@@ -281,10 +289,16 @@ class HotWaterPriorityLimit(Subcomponent):
                 switches the limit off.
             space_heating_interval_in_seconds: How long space heating has the generator after an interruption, in s.
             seconds_per_timestep: The step length, in s.
+            charged_share_of_step: The share of the step the charge runs if it runs, its part-load ratio, from 0 to 1;
+                1 for a controller whose charges run whole steps.
 
         Returns:
             Whether the charge runs in this step, and the timer at the step's end.
+
+        Raises:
+            ValueError: If ``charged_share_of_step`` lies outside [0, 1] or is NaN.
         """
+        PartLoadRule.validated_ratio(charged_share_of_step, "The hot-water priority limit's charged share of the step")
         if maximum_priority_time_in_seconds <= 0.0 or not charge_requested:
             return charge_requested, HotWaterPriorityTimer()
         if space_heating_requested and (
@@ -302,7 +316,7 @@ class HotWaterPriorityLimit(Subcomponent):
                 charge_interrupted=True,
             )
         return True, HotWaterPriorityTimer(
-            charge_time_in_seconds=timer.charge_time_in_seconds + seconds_per_timestep,
+            charge_time_in_seconds=timer.charge_time_in_seconds + charged_share_of_step * seconds_per_timestep,
             space_heating_interval_left_in_seconds=0.0,
             charge_interrupted=False,
         )

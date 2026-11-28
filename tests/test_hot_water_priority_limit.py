@@ -56,6 +56,7 @@ class PrioritySequence:
                 maximum_priority_time_in_seconds=maximum_priority_time_in_seconds,
                 space_heating_interval_in_seconds=space_heating_interval_in_seconds,
                 seconds_per_timestep=seconds_per_timestep,
+                charged_share_of_step=1.0,
             )
             runs.append(charges)
         return runs
@@ -132,6 +133,7 @@ def test_a_step_without_a_requested_charge_resets_the_timer() -> None:
         maximum_priority_time_in_seconds=900.0,
         space_heating_interval_in_seconds=900.0,
         seconds_per_timestep=900.0,
+        charged_share_of_step=1.0,
     )
     assert not charges
     assert timer == HotWaterPriorityTimer()
